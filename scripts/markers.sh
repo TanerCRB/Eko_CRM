@@ -78,6 +78,14 @@ inblock {
   next
 }
 blocks == 0 && /^\*\*Verdict:/ && prose == "" { prose = $0 }
+# The "Undecidable — for the human" section: every id it names must reach the block too.
+blocks == 0 && /^## / { insec = ($0 ~ /^## Undecidable/) }
+blocks == 0 && insec && !/^## / {
+  s = $0
+  while (match(s, /(^|[^A-Za-z0-9-])[KU]-[0-9]+/)) {
+    id = substr(s, RSTART, RLENGTH); sub(/^[^KU]*/, "", id); secids[id] = 1; s = substr(s, RSTART + RLENGTH)
+  }
+}
 /^## [A-Z]+-[0-9]+[[:space:]]+(—|–|-)[[:space:]]+(Critical|High|Medium|Low|critical|high|medium|low)([[:space:]]|$)/ {
   s = $0; sub(/^## [A-Z]+-[0-9]+[[:space:]]+(—|–|-)[[:space:]]+/, "", s); sub(/[[:space:]].*/, "", s); count[tolower(s)]++
 }
@@ -96,6 +104,9 @@ END {
   else if (role in allowed && index(allowed[role], "|" verdict "|") == 0) bad("verdict \"" verdict "\" is not one the " role " gives")
   if (!("undecidable" in field)) bad("undecidable is missing — write \"none\" when there is nothing")
   und = normlist(field["undecidable"])
+  # Items are ids (K-02, U-01, rule 7), never a sentence: a sentence can't be matched to anything.
+  if (und != "none") { n = split(und, it, ","); for (i = 1; i <= n; i++) if (it[i] !~ /^([KU]-[0-9]+|rule|[0-9]+)$/) { bad("undecidable items must be ids (K-xx, U-xx, rule <n>), not text: \"" it[i] "\""); break } }
+  for (id in secids) if (index("," und ",", "," id ",") == 0) bad("the Undecidable section names " id ", the block doesn't list it")
   f = field["findings"]; ok = 1
   split("critical high medium low", sev, " ")
   for (i = 1; i <= 4; i++) {
@@ -263,6 +274,30 @@ $(block reviewer PASS K-04 0 0 0 1)"
 $(block reviewer STOP none 0 1 0 1)"
   expect "block counts differ from the headings"     1 "counts 2 high, the report has 1" verdict "$REV_PROSE
 $(block reviewer STOP K-04 0 2 0 1)"
+
+  # The Undecidable section against the block.
+  expect "an item only in the Undecidable section"   1 "the Undecidable section names K-02, the block doesn't list it" verdict "**Verdict: PASS** — **UNDECIDABLE: K-01**
+## S-01 — Low — rule 27 — x
+
+## Undecidable — for the human
+- **K-01:** no QA report was given.
+- **K-02:** the wording is the human's judgement.
+
+$(block invariant-guardian PASS K-01 0 0 0 1)"
+  expect "the section and the block agree"           0 "invariant-guardian	PASS	K-01,K-02" verdict "**Verdict: PASS** — **UNDECIDABLE: K-01, K-02**
+## S-01 — Low — rule 27 — x
+
+## Undecidable — for the human
+- **K-01:** no QA report was given.
+- **K-02:** the wording is the human's judgement.
+
+## Checked and clean
+- K-03 holds: test x.
+
+$(block invariant-guardian PASS 'K-01, K-02' 0 0 0 1)"
+  expect "a sentence as an undecidable item"         1 "undecidable items must be ids" verdict "**Verdict: STOP** — **UNDECIDABLE: who can trigger the runner**
+## B-01 — High — x
+$(block security-auditor STOP 'who can trigger the runner' 0 1 0 0)"
 
   # The block against the contract.
   expect "PASS with a medium finding (Guardian)"     1 "PASS with a high or medium finding" verdict "**Verdict: PASS**

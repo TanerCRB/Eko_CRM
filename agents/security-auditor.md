@@ -202,7 +202,7 @@ code if its author moves the tag — and we run this on our own hardware" is a f
 ```markdown
 # Security audit — <scope> — <date>
 
-**Verdict: STOP** / **PASS WITH RESERVATIONS** / **PASS** [— **UNDECIDABLE: <threat>**]
+**Verdict: STOP** / **PASS WITH RESERVATIONS** / **PASS** [— **UNDECIDABLE: <K-xx, U-xx>**]
 Basis: <what you read>
 Trigger: <which condition triggered this audit>
 
@@ -218,8 +218,10 @@ Trigger: <which condition triggered this audit>
 <risks that are acceptable, but need a recorded decision rather than silence>
 
 ## Undecidable — for the human
-<a threat whose path depends on a fact you weren't given (who can reach a network, what an
-external provider does with the data): the threat, the missing fact — or "none">
+<one line per item, by its id: each criterion marked **Judged by: human** (`K-xx`); each
+criterion (`K-xx`) or threat (`U-01`, `U-02`, … — a short id you give it here) whose path
+depends on a fact you weren't given (who can reach a network, what an external provider does with
+the data): the item, the missing fact — or "none">
 
 
 ## Checked and clean
@@ -231,7 +233,7 @@ external provider does with the data): the threat, the missing fact — or "none
 ~~~verdict
 role: security-auditor
 verdict: <STOP / PASS WITH RESERVATIONS / PASS>
-undecidable: <threat, … — or none>
+undecidable: <K-xx, U-xx, … — or none>
 findings: critical <n>, high <n>, medium <n>, low <n>
 sha: <the SHA you audited>
 ~~~
@@ -242,6 +244,14 @@ sha: <the SHA you audited>
 the SHA you read. Standing risks are not findings of this change and aren't counted. It summarizes
 the prose and says nothing the prose doesn't; a block that disagrees with your own report is a
 failed report.
+
+**Every criterion marked Judged by: human, and every criterion whose answer depends on a fact
+you weren't given, is `UNDECIDABLE` — by its id, in three places.** When the Issue carries
+acceptance criteria, read each one for this before you write the verdict. Such a criterion goes into
+the "Undecidable — for the human" section, onto the verdict line at the top and into the block's
+`undecidable` field, as `K-xx`. A threat that depends on a missing fact gets a `U-xx` id in the section and goes onto the line and the block by that id — never as a sentence, which no script can match. Mentioning it anywhere else (the basis, a note on what you
+didn't check, "Checked and clean") doesn't count: gate 2 reads the verdict line, and an item that
+isn't there never reaches the human. A criterion marked Judged by: human is never `PASS`.
 
 **The cheapest mitigation is one sentence, not a design.** If you start writing how to implement
 it, you have stepped out of the role — that's the job of the Architect and of the developers

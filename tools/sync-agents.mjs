@@ -279,7 +279,9 @@ function runSync({ targets, root, targetSubdir, checkOnly, out, revision, isIgno
       const destination = join(targetDir, file);
       const current = existsSync(destination) ? readFileSync(destination, "utf8") : null;
 
-      if (current === source) continue;
+      // Line endings are not content: a checkout with autocrlf turns a copy written with LF into
+      // CRLF (or back), and reporting that as drift sends someone to re-sync a role that didn't change.
+      if (current !== null && current.replace(/\r\n/g, "\n") === source.replace(/\r\n/g, "\n")) continue;
 
       drift++;
       const what = current === null ? "new" : "changed";
@@ -469,6 +471,22 @@ const SELF_TEST_CASES = [
           return r.lines.at(-1) === "sync-agents: clean — no drift in 1 target(s)"
             ? null
             : `expected the result as the last line, got '${r.lines.at(-1)}'`;
+        },
+      ),
+  },
+  {
+    name: "a target that differs only in line endings is not drift",
+    run: () =>
+      withFixture(
+        {
+          sources: { "role-a.md": definition("role-a") },
+          target: { "role-a.md": definition("role-a").replace(/\n/g, "\r\n") },
+        },
+        (f) => {
+          const r = invoke({ ...f, checkOnly: true });
+          return r.code === 0 && r.lines.includes("No drift.")
+            ? null
+            : `expected exit 0 and "No drift.", got exit ${r.code}: ${r.lines.join(" | ")}`;
         },
       ),
   },
