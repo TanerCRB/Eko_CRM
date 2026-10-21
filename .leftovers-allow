@@ -1,0 +1,4 @@
+# CLI tools: printing their result to the console is their job, not debug output.
+tools/*.mjs
+# Hook with a --self-test that reports its cases on the console.
+scripts/cost-capture.mjs
