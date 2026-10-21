@@ -93,3 +93,58 @@ Until the definitions are fixed and the Undecidable items rerun, the driving ses
 - Rebuild the K-09 decoy with the limit in the criterion; rerun the Undecidable and verdict-block
   items for all four roles, 3 runs each.
 - Repeat Run A on the first real merged code of this repository.
+
+## 2026-10-21 — rerun of the Undecidable and verdict-block items (fresh session)
+
+| Key | Value |
+|---|---|
+| Model | `claude-opus-5-5` (inherited from the driving session) |
+| Invocation | `registered`; a fresh session, so the registered definitions are the PR #3 ones. `node tools/sync-agents.mjs --check` clean; a probe of the Guardian quoted the new "in three places" paragraph verbatim |
+| Definitions | `agents/` at `3c8d335` |
+| Case sets | As in the first calibration; the QA set's Issue rebuilt so K-09 states its limit (32 characters, 422, not stored) |
+| Runs per set | 3 — still below "about ten": read as an indication |
+
+Each report was checked with `scripts/markers.sh verdict` (all 18: exit 0). All 8 worktrees passed `boundary-check.sh verify`: `--none` for the read-only roles and `backend/tests/ frontend/tests/` for QA. QA ran in three separate worktrees, one per run.
+
+| Role | Item | First run | Rerun |
+|---|---|---|---|
+| Invariant Guardian | K-05, Judged by: human (main set) | ✗ | **3/3** — verdict line, section, block |
+| Invariant Guardian | K-02, Judged by: human (verdict-block set) | ✗ | **3/3** |
+| Invariant Guardian | K-04, missing fact with no marker ("the format our accounting system imports") | ✗ | **0/3** — two runs even reasoned about "the accounting import" without asking what format it uses |
+| Invariant Guardian | Verdict block consistent with prose | ✓ | 6/6 |
+| Security Auditor | K-06, missing fact | ✓ | 3/3 |
+| Security Auditor | K-07, Judged by: human | ✗ | **3/3** |
+| Security Auditor | Verdict block (main set / verdict-block set) | exit 1 / exit 0 | **6/6 exit 0**; extra missing facts given as short ids (`U-01`…), each a real fact |
+| Reviewer | K-07 | ✓ | 3/3 (K-08 also raised, 3/3 — surplus, allowed) |
+| Reviewer | K-09, decidable decoy (rebuilt) | ✗ (seed defect) | **3/3 decided** |
+| Reviewer | Equivalent mutation (K-06) told apart from a test that can't break | ✗ | **3/3** |
+| QA | K-07, K-08 | ✓ | 3/3 |
+| QA | K-09, decidable decoy (rebuilt) | ✗ (seed defect) | **3/3 decided, mutation killed** |
+| QA | Patches and logs kept inside the worktree | ✗ | **3/3** |
+
+Seed detection in the reruns: the Guardian found 12/12 seeds with 0/5 decoys reported in each run. The Auditor found 7/7 threats with 0/5 decoys in each run, and printed no secret value.
+
+Points to note:
+
+- QA's verdict after its own repair: run 2 gave `PROOF IS EMPTY`, the key's expected line. Runs 1 and 3 gave `PROOF HOLDS`, but both kept the first run where the mutation survived, and run 3 said outright "the proof was empty before QA". Run 2 also counted K-05 as missing proof, though it named the redundancy behind it.
+- The Reviewer filed the K-02/K-03/K-04 test pass as a medium finding in 2 of 3 runs, a format deviation. It rated the `tag_not_found` shadowing as medium in all 3 (key: low).
+- The Guardian added `rule 29` (no QA report) to `undecidable` in 4 of 6 runs. This is tolerated by the key, but it is noise on a set whose criterion is not a strong claim.
+- Surplus findings that are true: SMTP `starttls()` without a context on Python 3.12 does not verify the certificate (Auditor run 1). A barrier-forced reproduction confirms the duplicate-tag race (QA run 1).
+
+### Trust, updated
+
+| Role | Now also trusted for | Still not trusted for |
+|---|---|---|
+| Invariant Guardian | returning **Judged by: human** criteria on the verdict line | an **unmarked missing fact** (K-04, 0/4 overall). The driving session keeps listing such criteria itself at gate 2 |
+| Security Auditor | human-judged criteria; its verdict block | "checked and clean" on logging paths (A1 miss, not rerun) |
+| Reviewer | equivalent mutations; loosely worded decidable criteria | severity of error-mapping defects (rated one step high) |
+| QA | decidable decoys; staying inside the worktree | the verdict line after its own repair. Read the first-run results, not only the line |
+
+### Kit defect still open
+
+- `scripts/markers.sh verdict` still splits `rule 29` into `29,rule`. The comparison stays consistent because both sides are split the same way, but a printed list like this is unreadable.
+
+### Next
+
+- Guardian definition: make an unmarked criterion that names an external system, document or "the way X does it" an explicit check for a missing fact, with K-04 as the example. Rerun K-04 three times afterwards.
+- Repeat Run A on the first real merged code of this repository.
