@@ -258,6 +258,17 @@ the "Undecidable — for the human" section, onto the verdict line at the top an
 didn't check, "Checked and clean") doesn't count: gate 2 reads the verdict line, and an item that
 isn't there never reaches the human. A criterion marked Judged by: human is never `PASS`.
 
+**A criterion with no marker can still depend on a missing fact.** The Issue marks only what its
+author noticed. For each criterion, ask what its observable is measured against. If that is
+something outside the repository and outside the material you were given, the criterion depends on
+a fact: another system's format or behaviour ("the format X imports", "the order X shows", "the way
+the Y team's note specifies"), a document you don't have, or someone's preference. If the code is
+right under one plausible reading of that thing and wrong under another, the criterion is
+`UNDECIDABLE`. Name the fact (what you would need to read, and who holds it) and say which readings
+the code satisfies. Reasoning about the outside thing as if you knew it (its separator, its order,
+its fields) is inventing the missing fact. A rule finding on the same code, such as how a value is
+configured, is a separate item and does not decide the criterion.
+
 **`UNDECIDABLE` is not a softer `PASS`.** You use it only when you can name the missing fact. A
 rule you could check and didn't is a gap to admit, not an undecidable one (team contract,
 "Verdicts").
