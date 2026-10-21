@@ -1,0 +1,961 @@
+---
+description: Eko_CRM — drives a task through the full process, from Issue to PR, with stops at the human gates
+argument-hint: <Issue link or #N> [phase: analysis|code|verification|pr|closure]
+allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task, TodoWrite
+---
+
+# Task: $1
+
+You are driving **one** task through the process. Argument `$1` points at the Issue (full URL or
+`#N`). Optional `$2` says which phase to start from — without it, you determine the phase yourself
+from the Issue's state, the branch, and open PRs.
+
+Environment: the repository is private, so `WebFetch` on an Issue returns 404 — read Issues with
+`gh` only. On Windows run the scripts through Git Bash (`bash scripts/<name>.sh`), never through
+PowerShell.
+
+## Overriding rules
+
+- **Status is raised by evidence, not conviction.** You don't check off the task and you don't
+  raise its status.
+- **You don't commit or push without an explicit request.** Never merge a pull request. The only
+  exception is a closed list of commits you make without asking, all local, on a task branch —
+  never on `main` — and none pushed without a request:
+  - **bookkeeping commits** — the plan-number reservation (step 2) and the role-cost register row
+    ("How you talk to the human", point 3); each touches only its one file;
+  - **verification checkpoints** — the developer's state before QA (step 10a) and QA's tests after
+    QA (step 11a); each holds exactly the paths that role's report lists. A checkpoint is what
+    makes the evidence refer to one fixed version of the code: mutations are measured against it
+    and every report names its SHA;
+  - **the gate-3 documentation commit** (step 21) — the register entries the roles proposed, on its
+    own branch; the human's merge of its PR is the gate.
+
+  Anything outside this list goes back to the rule.
+- **Gates 1, 2 and 3 belong to the human.** You work up to them, prepare the material, and
+  **stop**.
+- The agent environment's configuration (synchronized roles, commands, shared settings) is not
+  changed as part of a task — it changes through its own pull request. Any directory explicitly
+  marked as outside the repository (e.g. a prototype with live credentials) is out of reach.
+- A task that writes code works in its own working directory (worktree). The main checkout stays
+  on the main branch.
+- **Assignment for the duration of the work.** You start working a task → you assign the Issue to
+  yourself. You stop working it — a STOP gate, a collision, a merged PR, anything else — → you
+  unassign yourself, even when the Issue stays open and unclosed. When every session acts on the
+  same account, the assignment can't say *which* session holds the task — the "Task started"
+  comment from step 0 does, and a "Task stopped — <reason>" comment releases it.
+- **If you maintain a queryable code index/graph** (built without an LLM, e.g. an AST) — use it
+  first for questions about code relationships (what calls X, where is Y used, a module map, the
+  impact of a change) instead of manual searching. Questions about documentation/architecture are
+  usually outside what such an index covers.
+
+Keep a TODO list with the steps below — one entry per step, so it's visible where the process
+currently stands.
+
+## How you call a role
+
+Roles (`analyst`, `architect`, `developer-backend`, `developer-frontend`, `qa`, `invariant-guardian`, `reviewer`,
+`security-auditor`, `product-owner`) **may not be a registered subagent type** in the session you
+launch this command from — the agent environment reads the role-definition directory from the
+current session's working directory, and the session may have started somewhere else (see
+`FrameworkDoc.md`, section 4). Check this before the first call; if the subagent type doesn't
+exist:
+
+Call the role through the environment's general-purpose execution mechanism (e.g.
+`subagent_type: general-purpose` in Claude Code), and take the role's content (system prompt) from
+its definition file — read it and paste it as the first part of the prompt, ahead of the task
+context (Issue, impact map, criteria). This applies to **every** role invocation in this process.
+
+**This is a weaker mode, and you treat it as one.** A registered role gets the `tools` field of
+its definition enforced by the environment; a general-purpose call gets whatever tools the
+general-purpose mechanism has — the pasted text only *asks* the role not to write. The contract
+defines a role by the tools it doesn't have (team contract, §1), so in this mode you restore the
+boundary mechanically: **run the write-boundary check around every role call**, not only the
+Architect and QA — for the read-only roles with `--none` (nothing may change). Record the
+invocation mode in the cost register (`registered` / `general-purpose`): calibration results hold
+for the mode they were measured in. Prefer registering the roles (run the command from the product
+repository) whenever you can.
+
+**Subagent model — the same as yours**, if you're calling the role through the general-purpose
+mechanism: the model field in the role definition file does not apply automatically in this mode.
+**Raising the model requires the human's consent** — treat it like any other question: say which
+role and why (task complexity, risk of missing something), and wait for the decision instead of
+silently escalating based on the field in the role file alone.
+
+## How you talk to the human
+
+This process stops on the human three times. Each stop costs their time — that's why every message
+to them has two mandatory properties.
+
+### 1. Every question and every decision comes with a recommendation
+
+Never a bare list of options. Shape:
+
+```
+Question: <what needs to be decided>
+Options:  A — <consequence>.  B — <consequence>.
+Recommendation: A, because <reason>.
+What would change it: <what I don't know>
+```
+
+A list of options with no pick shifts the thinking work back onto the human — that's the opposite
+of what a gate is for. Base the recommendation on evidence from this task (a test, a measurement,
+a register row, an architectural decision), not on general best practice. When there's no
+evidence, say so plainly and recommend **how to get it**.
+
+A recommendation **is not a decision** — you still stop and wait. This applies everywhere you ask:
+gates 1, 2 and 3, choosing an implementation variant, a mutation that survived, red CI of uncertain
+cause, a collision with someone else's work.
+
+### 2. Keep the conversation with the human terse, keep artifacts in full language
+
+If your environment has a compressed-communication mode (no filler, no pleasantries, no hedging,
+all technical content kept verbatim) — turn it on for messages to the human in this window.
+
+**The boundary is hard: the compression applies ONLY to the conversation in the window.** You
+always write Issue and comment content, commit messages, pull request descriptions,
+documentation, architectural decisions, and code comments in full, careful language. Those are
+artifacts someone else reads, six months from now.
+
+You also drop the compression anywhere it creates ambiguity: a warning about an irreversible
+action, a step order where a dropped conjunction changes the meaning, anything touching security
+or personal data. After such a passage, go back to the compressed mode.
+
+The same boundary holds for the language (team contract, "How to write" section): answer the human
+in the language they write in, but write every artifact in English, unless the human explicitly
+names another language — a conversation held in Polish is not such a choice. Pass the artifact
+language to every role you invoke.
+
+### 3. After every role invocation — a row in the cost register
+
+If you keep a role-cost register (see `FrameworkDoc.md`, section 6) — after every invocation of
+any of the eight roles, record one row: date, role, task, phase, **model**, **invocation**
+(`registered` / `general-purpose`), complexity, tokens, tool calls, time, **fix round**, **rework
+cause**, notes.
+
+**One file per row, not one shared table.** Write each row as its own small file, e.g.
+`docs/cost-register/<date>_<task>_<phase>_<role>_<n>.json`, and build the table from the
+directory when you need it. A shared append-only table makes two parallel tasks append at the
+same spot and conflict on every merge; separate files never conflict, so the merge step needs no
+special rule for them.
+
+**Model** — the model the role actually ran on, from the measured record (below), not from the
+role file.
+Roles inherit the calling session's model, so the same role can run on different models across
+tasks; without this column a cost or quality difference between two runs can't be told apart
+from a model difference. A role's calibration result holds only for the model it was run on (see
+`calibration/README.md`).
+
+**Rework cause** — filled only on a run that repeats earlier work (a fix after `STOP`, a
+re-verification): which finding caused it and **which earlier role could have caught it** (the
+Developer's self-check, the Guardian, the Analyst's criteria, nobody). This is the data for
+deciding where to move checks earlier; leave it empty on first runs.
+
+**Fix round** — `0` on every call before the first `STOP`, then the number of the round the call
+belongs to (see "Round limit"). Without it the rework rows of one task cannot be told apart, and
+the round limit cannot be checked against what actually happened.
+
+**The numbers come from the measured record, not from the call's result.** The Agent tool's
+`totalTokens` and `usage` cover the final request only, and a background call returns none. When
+the role stops, the `scripts/cost-capture.mjs` hook (copied from the process repository's
+`process/hooks/cost-capture.mjs`, see `process/bootstrap-guide.md`) sums its transcript into
+`$(git rev-parse --git-common-dir)/cost-capture/<agentId>.json`; the call's result gives you the
+`agentId` at launch. Copy model, tokens, token split, `tokensSource`, tool calls and seconds from
+that record, set `"measured": "record"`, and add the fields only you can judge. No record, or a
+record that says `"no data"` — write `"no data"` in those columns and `"measured": "by hand"`, with
+the reason in the notes, instead of guessing: an empty field with a reason is better than a
+made-up number — the same rule as with the completion proof.
+
+**Complexity is different — it's your judgment call, not a measured number.** Set it *before* the
+call (number of files in scope / number of acceptance criteria / number of open questions / whether
+there's a schema change or a new architectural decision): Low, Medium, or High. Don't confuse this
+column with the evidence columns next to it — it's deliberately subjective.
+
+The entry doesn't block any gate and isn't part of the task's completion criteria — it's a
+separate, parallel process-cost register.
+
+**Commit the row file immediately, as its own small commit of just that one file, on the task branch in
+the task's worktree** — don't wait for the `pr` phase. This is one of the two pre-authorized
+bookkeeping commits (see "Overriding rules"); it never goes to `main` directly and is not pushed
+without a request. Reason: an uncommitted file on a shared checkout isn't evidence — it's just the
+belief that something was written down, and it disappears the moment someone else's parallel work
+switches that checkout. A single small commit doesn't get in the way of further work, and it
+survives removing the worktree and other people's operations on other checkouts. The row reaches
+`main` together with the task's pull request.
+
+## Task journal and hand-offs
+
+A long task outlives your context: a compaction or a cleared session leaves you with the Issue,
+the labels and `git log`, but not with which role ran on which checkpoint and what it said. The
+**task journal** is the short memory that survives, kept in the task's worktree:
+
+- `.task/journal.md`, ignored by git (`.task/` in the product repository's `.gitignore`, see
+  `process/bootstrap-guide.md`). Created in step 0, right after the worktree, with one header line:
+  `# Task #<N> — <identifier> — branch <branch> — started <UTC time>`.
+- One line appended after every completed step — a role call, a checkpoint, a check, a gate stop,
+  a clarification round, a human answer:
+  ```
+  <UTC time> | <phase> | step <n> | <role or action> | <result> | <SHA or -> | next: <step and what>
+  2026-10-14T11:42Z | verification | step 11 | qa | PROOF HOLDS | 4f1c2a9 | next: step 11a, QA checkpoint
+  ```
+- Append-only. An earlier line is never edited; a correction is a new line that says what it
+  corrects.
+- **It is not evidence.** Nothing in a PR, a report or a register cites it, and it doesn't replace
+  the cost register. It tells you where to look, not what is true.
+
+**Reports go to files, not into your context.** When a role returns, save its full report as
+`.task/handoff/<step>-<role>-<n>.md` and append the journal line; keep only the verdict and the
+path in your own working memory. A later role that needs the report gets the path and an
+instruction to read it, not a pasted copy. "What an evaluating role gets" still decides **which**
+files it gets — a hand-off file holds a role's report, never your conversation with a role or
+your reasoning about it.
+
+Two limits come with an ignored directory. The write-boundary check can't see it, so **no role
+writes in `.task/`** — you write the files after the role returns. And it disappears with the
+worktree in step 25: whatever must outlive the task goes into the Issue, the PR or a register.
+
+**A SessionStart hook puts the journal back** after a start, a clear or a compaction:
+`scripts/task-journal-context.sh` (copied from the process repository's
+`process/hooks/task-journal-context.sh`, see `process/bootstrap-guide.md`) prints the journal's last
+lines and the next step it names, in a task worktree only. Without the hook, read the journal
+yourself first — step 0 says how.
+
+## Phase markers and verdict blocks
+
+The journal is your memory; the Issue is everyone's. **Every phase event you record on the Issue
+carries one hidden marker**, as the comment's last line, so "has this already happened?" is
+answered by a script, not by reading prose:
+
+```
+<!-- ninefold:event=<name> sha=<HEAD or the SHA the event is about> [<key>=<value> …] -->
+```
+
+| Event | Posted with | Keys |
+|---|---|---|
+| `task-started` | the pin comment, step 0 | `operator=<login>` (older tasks may lack it) |
+| `task-stopped` | the "Task stopped — <reason>" comment | — |
+| `scope-locked` | the fingerprint comment at gate 1, and the amendment at gate 2 | `gate=1` or `gate=2`, `hash=<fingerprint>` |
+| `gate-reached` | a short "Gate <n> reached — waiting on the human" comment when you stop at a gate | `gate=1`, `2` or `3` |
+| `verified` | a "Verified at <SHA>" comment after the QA checkpoint, step 11a | — |
+| `verdict` | a one-line "<role>: <verdict> at <SHA>" comment after each evaluating role | `role`, `verdict`, `undecidable`, `findings` |
+| `reverify` | a "Re-verification, round <n>" comment when a fix round starts | `round=<n>` |
+
+Values carry no spaces: `verdict=pass-with-reservations`, `undecidable=K-02,K-04` or `none`,
+`findings=<critical>,<high>,<medium>,<low>`.
+
+**Read the events before you repeat a step.** On a resumed task, and before posting any event:
+
+```bash
+gh issue view <N> --repo TanerCRB/Eko_CRM --json comments --jq '.comments[].body' \
+  | scripts/markers.sh events -
+```
+
+An event already listed for the same SHA and keys means the step happened: continue after it,
+don't post it again, and don't rerun a role whose `verdict` for that SHA is already there. Exit 1
+— a malformed marker, an unknown event — goes to the human; you never edit or delete a comment to
+fix it. Markers inside quoted lines and code blocks don't count, so quoting a comment is safe.
+
+**Every evaluating role's report ends with a verdict block** (team contract, §3a). When the role
+returns, check the saved report before anything uses it:
+
+```bash
+scripts/markers.sh verdict .task/handoff/<step>-<role>-<n>.md
+```
+
+It prints the role, verdict, `UNDECIDABLE` items, finding counts and SHA, and those are what the
+`verdict` event carries. Exit 1 — no block, a missing field, a block that contradicts the report's
+own prose, a verdict the contract doesn't allow for those findings — means the report is not
+usable: send it back to the role once with the script's message, and if the second report fails
+too, stop and tell the human. A role whose block names a SHA other than the one it was given read
+the wrong code. You never fix the block or the prose yourself.
+
+---
+
+## Step 0 — Recon
+
+```bash
+gh issue view <N> --repo TanerCRB/Eko_CRM --json number,title,body,labels,state,assignees,comments
+gh pr list --repo TanerCRB/Eko_CRM --state open --json number,title,headRefName,isDraft
+git branch -a --list '*<identifier>*'
+ls -d ../Eko_CRM-* 2>/dev/null
+```
+
+**Resuming a task — the journal first, then what overrules it.** If the task's worktree already
+exists and has a journal (you were compacted, cleared, or called with a phase in `$2`), read
+`.task/journal.md` before anything else and check it against what can't be wrong:
+
+```bash
+git merge-base --is-ancestor <each SHA the journal names> HEAD && echo on-branch
+gh issue view <N> --repo TanerCRB/Eko_CRM --json labels --jq '.labels[].name'
+git status --short
+```
+
+Every SHA on the branch, the last line's phase matching the Issue's state label, and a working
+tree that fits the last step → continue from the step the last line names. Anything else → the
+labels and `git log` win: say out loud which journal line disagrees and with what, append a
+correction line, and continue from the step they show. A worktree with no journal is
+reconstructed from the labels, the Issue's comments and `git log`, and gets a new journal whose
+first entry says "reconstructed" — never re-run a role just to refill it.
+
+Determine and **say out loud**, before you go any further:
+
+- the task's identifier from the plan and whether it exists in the plan register,
+- labels: state, role, deviation from an architectural decision, waiting-on-human,
+- whether work is already in progress — an open PR, a branch, someone else's worktree.
+
+**Work already in progress elsewhere = stop.** A PR with a merge conflict looks abandoned, but
+usually isn't (see `FrameworkDoc.md`, section 4, "Phase 0 — Recon"). You don't delete working
+directories you didn't create. If you yourself have a stale assignment on this Issue from a
+previous session — unassign it, you're not working it now.
+
+**The "analysis" state label does not automatically mean "needs new work."** It happens that the
+described problem was already fixed by earlier, unrelated work, and the submission simply was
+never closed. Before you start implementation, check whether the *Definition of done* condition is
+already met by the current code. If it is — the right reaction is to close the submission with
+evidence (a quoted test/code reference), not to reimplement the same thing.
+
+Once the above rules out a collision and you're moving ahead, assign the Issue to yourself and
+**create the task's worktree on its own branch now**, before the first role call (the rules for
+where to create it are in step 6). Until gate 1 the branch carries only bookkeeping commits — the
+number reservation and the cost-register rows of the analysis roles; code enters it only after
+gate 1. If gate 1 rejects the task, the branch and worktree are removed like at closure. Start the
+task journal in the new worktree now (see "Task journal and hand-offs").
+
+**Pin what the task runs on, and who runs it.** Post one comment on the Issue:
+
+```bash
+ROLES=$(cat .claude/agents/*.md .claude/commands/task.md | git hash-object --stdin)
+OPERATOR=$(gh api user --jq .login)
+gh issue comment <N> --repo TanerCRB/Eko_CRM --body \
+  "Task started — session: <session id>, worktree: <path>, branch: <branch>, roles: $ROLES, operator: @$OPERATOR
+<!-- ninefold:event=task-started sha=$(git rev-parse HEAD) operator=$OPERATOR -->"
+```
+
+The **operator** is the account this session acts under, which is the person who drives the
+agents. Gate 2 compares it with who approves (team contract, §3, "Who may approve gate 2").
+
+The fingerprint covers the synchronized roles and this command; every cost-register row carries
+it (`roles`). Before each role call, recompute it: if it changed mid-task (someone ran the sync, or
+edited the command), **stop and ask** — finishing a task under two versions of a role makes its
+evidence incomparable, and switching is a decision, not a side effect. The session and worktree in
+the comment answer what an assignment can't when every session acts on the same account: *which*
+session holds the task. A second session finding such a comment with no later "Task stopped" comment
+treats the task as taken (step 0, "work already in progress elsewhere = stop").
+
+---
+
+## Phase `analysis` — up to gate 1
+
+1. **Is the Story complete?** The Issue should have: a task identifier, *What and why*,
+   *Definition of done* (an observable condition), *Out of scope (explicit)*, a basis in the
+   documentation. The Product Owner role fills gaps — it creates/fixes the Issue with the initial
+   state label and **doesn't** move on. If it returns a clarification round, run the round (see
+   "Clarification round" below) before anything else.
+2. **Plan task number** — if the task isn't in the plan yet, reserve a number through the dedicated
+   mechanism (see `FrameworkDoc.md`, section 9, on identifiers as a shared resource), as a
+   separate bookkeeping commit on the task branch, before the actual work.
+3. **Analyst role** — acceptance criteria and the *Definition of done* row. Every criterion has an
+   observable carrier, a contrast, and a named mutation meant to kill it. Verdict: `READY FOR GATE
+   1`, `NEEDS ANSWERS` (run the clarification round, then call the Analyst again) or `STORY NEEDS
+   MORE WORK`.
+4. **Architect role** — **unless the fast lane applies** (see "Fast lane: when the Architect is
+   skipped" below). Impact map onto architectural decisions. Three outcomes: fits / needs a
+   deviation / needs a new decision. A deviation is an Issue with the corresponding label and a
+   draft decision in "Draft — pending approval" status. **After the call, run the write-boundary
+   check** (see "Write-boundary check" below) with the architecture decisions directory as the
+   only allowed path.
+5. **GATE 1 — STOP.** Gather in one message: the criteria, the impact map, the open questions
+   (each with options and consequences, not "should we do X?"), the Analyst's edge sweep — the
+   lines it proposes for *Out of scope* and the edges it turned into questions — and every
+   criterion marked **Judged by: human**, so the human knows at gate 1 which answers will come
+   back to them at gate 2, and the *Clarifications* record — what was asked before this gate and
+   what the human answered. A *Gaps in the Story* that isn't empty means the task isn't at gate 1
+   yet. Before you stop, write the criteria into the Issue, lint them, and post the scope
+   fingerprint (see "Scope lock" below) — what the human approves is what gets locked:
+   ```bash
+   gh issue view <N> --repo TanerCRB/Eko_CRM --json body --jq .body \
+     | scripts/evidence-chain.sh lint -
+   ```
+   Exit 1 — a criterion without a contrast, a mutation or a *Judged by*, an ID used twice, more
+   than seven criteria — means the task isn't at gate 1 yet: the Analyst fixes the criteria, you
+   don't. A warning (fewer than four) goes into the gate-1 message. Exit 2 is a STOP. You wait
+   for the human's decision
+   and for the move to the implementation phase. Without this, you don't enter the `code` phase.
+   **You don't remove the waiting-on-human label yourself** — removing it is equivalent to making
+   the decision. Unassign yourself — you're waiting on the human, not working.
+
+### Clarification round
+
+The Product Owner and the Analyst can't talk to the human — they return questions, and you run the
+round (team contract, §3b). One message per round:
+
+- the questions exactly as the role returned them, at most five, in its order, each with its
+  options and the recommended one first — you don't add your own, merge two roles' rounds into one
+  list, or drop the recommendation;
+- the round's number for that role, and that a third round doesn't exist: what stays unanswered
+  goes to *Gaps in the Story*.
+
+Ask in the form your environment offers for a quick answer (a choice list, if it has one).
+Unassign yourself and apply `waiting-on-human` while you wait — it is a question only the human
+can answer, the same as at a gate.
+
+**Write every answer into the Issue before calling the role again.** First where it acts — the
+*Definition of done*, *Out of scope* or the description, when the answer changes them — then one
+line in the Issue's *Clarifications* section as the record:
+
+```
+C-2 (Analyst, round 1, <date>): <question> — <answer, in the human's words or the option chosen>
+```
+
+Then call the role again with the updated Issue. A question the human chose not to answer is
+recorded the same way, with "not answered". A round whose answers you only passed to the next
+role call, without the Issue, didn't happen: the next session can't see it, and neither can the
+human at gate 1. The *Clarifications* record goes into the gate-1 message, so the approval covers
+the answers too; anything the answers changed in the *Definition of done* or *Out of scope* is
+locked with them.
+
+### Scope lock
+
+The human approves a scope at gate 1, and the same scope has to reach gate 2. An Issue can be
+edited at any time, by anyone, without a trace in the task's evidence — so the approved scope is
+pinned by a fingerprint, the same way step 0 pins the roles.
+
+**What is locked:** the Issue's *Definition of done* and *Out of scope* sections, and the
+acceptance criteria. At step 5 you append the Analyst's *Criteria* section to the Issue body,
+verbatim, between two marker lines, so the criteria live in the Issue and not only in a report:
+
+```
+### Acceptance criteria
+<!-- criteria:start -->
+<the Analyst's criteria, K-01 … K-0n>
+<!-- criteria:end -->
+```
+
+**The fingerprint** is a hash of exactly those three parts, read back from the Issue.
+`scripts/scope-check.sh` does the extraction — the same script the task-status command and the
+`label-guard` workflow call, so all three agree on what the scope is:
+
+```bash
+SCOPE=$(gh issue view <N> --repo TanerCRB/Eko_CRM --json body --jq .body \
+  | scripts/scope-check.sh hash -)
+gh issue comment <N> --repo TanerCRB/Eko_CRM --body \
+  "Scope for gate 1 — fingerprint: $SCOPE
+<!-- ninefold:event=scope-locked sha=$(git rev-parse HEAD) gate=1 hash=$SCOPE -->"
+```
+
+Exit 1 means a locked part or a marker is missing, and the message names it: the Issue can't be
+locked as it stands, so fix the body before gate 1, not the check.
+
+The lock is the fingerprint in the **latest** "Scope for gate 1" or "Scope amended at gate 2"
+comment (`gh issue view <N> --json comments --jq '.comments[].body' | scripts/scope-check.sh
+locked -`); the human's move past gate 1 is what makes it binding. You post a fingerprint comment in two places only — at gate 1, and when
+gate 2 amends the criteria (step 19). Posting one anywhere else is re-locking the scope on your own,
+which is passing a gate.
+
+**Checked at the start of every phase after gate 1** — entering `code`, before QA (step 11),
+before pushing (step 15) — and in the gate-2 message: recompute `SCOPE` and compare. A mismatch
+means the scope changed after the human approved it, however small the edit looks. Stop: move the
+Issue back to `state:decision` with `waiting-on-human`, post the new fingerprint, and tell the
+human which part changed — the Issue's edit history shows the difference. Work goes on only after
+they approve the changed scope at gate 1 again. You never "repair" the Issue back to the locked
+text yourself: which version is right is the human's decision.
+
+**Between those checks, the `label-guard` workflow watches.** On every edit of an Issue past gate
+1 it recomputes the fingerprint with the same script and, on a mismatch, comments and goes red —
+also on a task nobody is driving. Its comment is a finding, not a lock: it never carries the
+"Scope for …" wording, so it can't re-lock anything. You handle it like a mismatch you found.
+
+A gap the criteria don't settle is not a reason to edit them either. The Developer records it as
+an assumption (role definition, "Assumptions"), and the human decides it at gate 2.
+
+### Fast lane: when the Architect is skipped
+
+Cost should scale with risk, not with the number of tasks — the same principle that makes the
+Security Auditor conditional. The Architect is skipped only when **every** trigger below is clean,
+checked mechanically against the files the task will touch (from the Analyst's criteria and the
+Issue), not judged:
+
+- **no risk class** on the files the task will touch. The **architecture-sensitive paths**
+  register (`docs/architecture/architecture-sensitive-paths.md`) maps each sensitive glob to the
+  decisions that govern it and to its risk classes: schema, dependencies, auth, money and the
+  rest. `scripts/risk-check.sh` reads it, so this trigger is a script's answer, not a judgement:
+  ```bash
+  printf '%s\n' <each file the task will touch> | scripts/risk-check.sh classes --paths -
+  ```
+  Any line of output is a class, and the Architect runs. Exit 2 means the register couldn't be
+  read, and the Architect runs too;
+- no new or changed public API surface (endpoint, contract type, event);
+- the Product Owner raised no deviation label and the Analyst named no "unproven foundation".
+
+If any trigger fires, or you can't tell which files the task will touch, the Architect runs.
+Otherwise you write a **fast-lane record** as a comment on the Issue: "Architect skipped —
+triggers checked: <each trigger, clean>; paths expected: <list>". At gate 1 the human approves
+that record together with the criteria — **an approved record takes the place of the impact map**
+for the Developer's entry condition. The human can require the Architect anyway; that's a gate-1
+decision, not a failure of the fast lane.
+
+**The record is checked again against the real diff** at step 10a. If the implementation touched
+any trigger, the record no longer holds: `scripts/risk-check.sh classes "$BASE" "$CHECKPOINT"`
+prints a class, or an API contract changed. The task then goes back to the Architect before
+verification, and through gate 1 again for what changed.
+
+**Turn the fast lane on only with data.** Before enabling it, count in the cost register how often
+the Architect returned "fits, nothing to add" on tasks that would have passed all the triggers.
+If that's not nearly always, the triggers are missing something — fix the list before skipping
+anyone. Record the fast-lane skip in the cost register as a row with 0 tokens and the note
+"skipped: fast lane", so the saving and any later rework it caused are both visible.
+
+---
+
+## Phase `code` — implementation
+
+Entry condition: criteria **and** either an impact map or an approved fast-lane record exist, the
+Issue carries the implementation-phase label, and the scope lock holds (see "Scope lock"). Anything
+missing = go back to the `analysis` phase; a broken lock = back to gate 1.
+
+6. **Working directory.** Already created in step 0 — confirm you're working in it. A task that
+   writes: its own worktree on its own branch, the branch name carries the task identifier. A
+   task that only reads stays on the main branch. Worktrees go next to the main checkout, as
+   `../Eko_CRM-<identifier>`, on a branch named `<identifier>-<short-slug>`. **Only ever
+   create the worktree somewhere your quality tools (formatter, linter) actually scan** — a
+   directory excluded from their reach by default (e.g. because it holds the agent tool's own
+   configuration) hands back a green check that checked nothing (see `FrameworkDoc.md`, section
+   9).
+7. **Developer role** — `developer-backend` for a change under `backend/`, `developer-frontend`
+   for a change under `frontend/`; a task that touches both calls both, backend first (the API
+   contract is the backend's), each with the Issue, impact map, and criteria. It follows this
+   order:
+   - a schema change before code, backward compatible, in stages (expand → deploy code →
+     contract), only through the migration tool the first architecture decision adopts;
+   - the API contract is a Pydantic schema on the backend side; the frontend consumes it through
+     one typed client module, never through ad-hoc `fetch` calls with hand-written types;
+   - validation is the backend's: frontend validation is a convenience, never the only check;
+   - personal data (contact details, notes about people) is never written to logs, error
+     messages or test fixtures copied from real data;
+   - time from an injected clock source, stored with a time zone; formatting through one helper
+     per side;
+   - code comments in the artifact language — English unless the human explicitly named another —
+     not in the language of the conversation; identifiers and log messages always in English (see
+     the team contract, "How to write" section);
+   - a new configuration threshold / new rule comes with an entry in the relevant register.
+   - TODO (domain, gate 1 of the first Story): the domain rules this order must follow.
+8. **Tests per criterion, each written before the code it proves and seen failing first** (see
+   the role's definition file, Method, section 3), against real infrastructure wherever a fake
+   has no credible equivalent. The test count before and after the change belongs in the report;
+   an unexplained drop is a finding, and so is a test the report says passed at its first run.
+9. **Local quality gates** (from the worktree root; run the side the task touched, both if it
+   touched both):
+   ```bash
+   (cd backend && ruff check . && mypy . && pytest)
+   (cd frontend && pnpm lint && pnpm typecheck && pnpm test --run && pnpm build)
+   node tools/check-links.mjs                 # if any Markdown was touched
+   ```
+   If the full test run sometimes gets killed in the background before the result is written —
+   run it so you actually wait for it to finish, not unattended in the background.
+10. **Developer report** in the format from the role's definition file, with a mandatory "What
+    this change does not prove" section, the list of paths it changed, the assumption ledger, and
+    proposed entries for gate 3. The Developer doesn't commit and doesn't check anything off.
+
+10a. **Checkpoint and sync — before any verification.** Evidence is only worth something if it
+    describes the code that will be merged, so fix that code first:
+    ```bash
+    git add -- <exactly the paths listed in the developer report>
+    git status --short                       # nothing else staged or modified — say it out loud
+    git commit -m "checkpoint: <identifier> developer"     # local, not pushed
+    git fetch origin main
+    git log HEAD..origin/main --oneline      # how many commits main has ahead — say it out loud
+    git merge origin/main                    # into the task branch, NOT the other way around
+    ```
+    Anything left uncommitted that the report doesn't list is a finding — stop and ask, don't
+    commit it along. Merge conflicts follow the rules of step 15. A merge that brought something
+    in repeats the local gates from step 9. **`CHECKPOINT` = `git rev-parse HEAD`** — every
+    verification step below refers to it.
+    **Fast-lane tasks:** check the fast-lane triggers again, now against the real diff
+    (`git diff --name-only origin/main...HEAD`). Any trigger fires → back to the Architect before
+    verification (see "Fast lane").
+    **Every task:** `scripts/layer-check.sh origin/main "$CHECKPOINT"` (see "Layer check"). Exit 1
+    goes to the Architect before verification, fast lane or not.
+
+10b. **Test-weakening check — before QA.** `scripts/weakening-check.sh origin/main "$CHECKPOINT"`
+    (see "Test-weakening check" below). Exit 1 = **automatic STOP**: QA does not start on a
+    checkpoint whose diff removes a test or an assertion, adds a skip or a suppression, or lowers
+    a threshold, until the human has decided on every finding.
+
+10c. **Leftovers check — before QA.** `scripts/leftovers-check.sh origin/main "$CHECKPOINT"`
+    (see "Leftovers check" below). Exit 1 = back to the Developer, not to the human: the copy and
+    draft files, debug output and commented-out code go, or each deliberate one gets a
+    `leftovers-allow: <reason>` the reviewers will read. Then a new developer checkpoint.
+
+---
+
+## Phase `verification` — before gate 2
+
+11. **QA role**, on the clean checkpoint, once the scope lock still holds — adds a contrast test, runs a mutation by removing the
+    mechanism, and records whether the test **actually failed**. The mutation label is derived
+    from the task identifier, never from a separate counter (see `FrameworkDoc.md`, section
+    9). A mutation that survived is a result to report, not to hide. Rows for the capability
+    register are created as a **proposal**. QA restores production files from `HEAD` and returns
+    every mutation as a patch against `CHECKPOINT` (`Base: <SHA>`); it goes into the PR's Mutation
+    section as is. **Run the write-boundary check around the call** with the test directories
+    (`backend/tests/`, `frontend/tests/`) as the only allowed paths — a mutation left un-reverted, staged or committed shows up here, not
+    at gate 2.
+
+11a. **QA checkpoint.** Commit QA's test changes — the paths its report lists, all inside the
+    test directory — as `checkpoint: <identifier> qa`. **`VERIFIED` = `git rev-parse HEAD`**: the
+    one version the reading roles audit and the PR must carry. Run the test-weakening check again
+    on `VERIFIED` — QA only adds tests, so any finding not already decided at step 10b is QA's,
+    and it is a `STOP` like any other. Run the leftovers check on `VERIFIED` too; a finding there
+    goes back to QA.
+
+12. **Invariant Guardian role** — audits `VERIFIED` against the hard rules. Verdict `PASS` /
+    `STOP`. On `STOP` you go back to the `code` phase; the verdict goes into the PR description
+    unsmoothed.
+13. **Reviewer role** — design flaws outside the rule list: concurrency, retries, load, behavior
+    at boundaries.
+14. **Security Auditor role** — **conditionally**, when the diff touches an area of elevated risk
+    (see the role's definition file, "When to run you" section) — code that calls a language
+    model or gives one tools is part of that set. Outside it, you don't run it. The register makes
+    the floor mechanical: `scripts/risk-check.sh classes "$BASE" "$VERIFIED"` printing any class
+    except `money` means the Auditor runs. Exit 2 means it runs too. A change the register doesn't
+    map can still meet a trigger in the role's list. That list is the ceiling: when it applies,
+    you run the role, and you propose the missing row to the human.
+
+Call roles 12–14 **in parallel** — they read, they write nothing. Give each one `VERIFIED` and
+the diff `origin/main...VERIFIED`; **every report states the SHA it read**. A report that names
+another SHA, or none, doesn't count for gate 2.
+
+**What an evaluating role gets, and what it doesn't.** It gets the contract and the artifact: the
+Issue (Story, criteria, *Out of scope*), the impact map or fast-lane record, `VERIFIED` and the
+diff, and the reports of earlier evaluating roles only where its definition asks for them. The
+producer's **account** of the change — the developer report, the PR description — goes last in
+the prompt, under a heading that says it is a set of claims to check after reading the code. It
+**never** gets the producer's reasoning: your conversation with the Developer, why it chose one
+approach over another, what it tried and dropped. An evaluator that reads the author's reasoning
+first tends to judge whether the reasoning is sound, not whether the code is.
+
+### Write-boundary check
+
+A role's `tools` declaration can't restrict writes to a directory (see the team contract, §2a),
+so the boundary is checked mechanically by you, around the call, not by a human at the gate. Use
+`scripts/boundary-check.sh` (copied from the process repository's
+`process/scripts/boundary-check.sh`, see `process/bootstrap-guide.md`, step 4):
+
+```bash
+T=$(mktemp -d)                                         # outside the tree
+scripts/boundary-check.sh snapshot "$T/state"          # immediately BEFORE the role call
+# ... role call ...
+scripts/boundary-check.sh verify "$T/state" backend/tests/ frontend/tests/   # immediately AFTER; the allowed prefixes
+```
+
+It compares `HEAD`, the index and the whole working tree (new files included), so an edit hidden
+by `git add` or by a commit during the call is caught too; its `--self-test` shows each of those
+cases failing. Exit 1 = **automatic STOP**: report the paths to the human and do not continue
+with the role's result. Exit 2 = the check couldn't run — also a STOP, never "clean". You don't
+revert the paths yourself — a human decides whether it was a mutation left behind or a
+deliberate edit out of role. "boundary-check: clean" goes into the role's cost-register notes, so
+the check leaves a trace that it ran. It sees what git sees — ignored files and anything outside
+the repository are out of its reach.
+
+### Test-weakening check
+
+The Developer never weakens or removes a test (hard stop 6 in the role's definition file), and a
+weakened suite empties the mutation evidence without anyone noticing: a mutation "killed" by a
+test that no longer runs, or skipped by a suppression comment, proves nothing. So this is checked
+mechanically too, with `scripts/weakening-check.sh` (copied from the process repository's
+`process/scripts/weakening-check.sh`, see `process/bootstrap-guide.md`, step 4):
+
+```bash
+scripts/weakening-check.sh origin/main "$CHECKPOINT"   # step 10b
+scripts/weakening-check.sh origin/main "$VERIFIED"     # step 11a
+```
+
+It reads only what the task changed (`origin/main...<SHA>`) and reports, with file and line: a
+test file deleted or moved out of the test paths, a test file losing more assertions than it
+gains, a new skip/only/ignore marker, a new lint/type/coverage/mutation-tool suppression in any
+file, a threshold in a coverage or mutation-tool config lowered or removed. Its `--self-test`
+shows each of those failing next to ordinary changes that must pass.
+
+Exit 1 = **automatic STOP**: put the findings in front of the human verbatim. A finding is a
+question, not a verdict — deleting the tests of a feature the Story removes is legitimate. The
+human either sends it back to the Developer or accepts it as a **recorded exception** (team
+contract, §3a), written in the PR description as `Exception <identifier>/weakening-<n> — …`; the run that follows still shows the same
+finding, and the exception is what lets the task go on. Exit 2 = the check couldn't run — also a
+STOP, never "clean". "weakening-check: clean" goes into the Developer's cost-register notes.
+
+It sees patterns, not intent: a looser expected value or a broader matcher passes it. Those stay
+with QA and the Reviewer. The patterns are an example for common stacks — adapt them when you
+copy the script, together with its self-test cases.
+
+### Layer check
+
+Which code may depend on which is the Architect's design, and a line that breaks it compiles,
+passes the tests and reads fine in review. So the rule is checked mechanically, with
+`scripts/layer-check.sh` (copied from the process repository's `process/scripts/layer-check.sh`,
+see `process/bootstrap-guide.md`, step 4). It reads the layer table (`docs/architecture/layer-dependencies.md`,
+template in `process/registers/layer-dependencies.md`): each layer's glob, the prefixes other code refers
+to it by, and the layers it must not depend on.
+
+```bash
+scripts/layer-check.sh origin/main "$CHECKPOINT"   # step 10a
+```
+
+It reads only the lines the task added, takes the references they make (`using`, `import`,
+`require`, `from … import`), and reports each one from a layer to a layer it must not depend on,
+with file, line and rule. A relative import is resolved against the file and matched by the glob.
+
+Exit 1 = **to the Architect**, before QA starts. The Architect either sends it back to the
+Developer with the design the task should follow, or changes the table, a decision the human
+merges like any other. A dependency the human lets through as it is becomes a recorded exception
+(team contract, §3a), `Exception <identifier>/layer-<n> — …`, like a weakening finding. Exit 2 = the
+check couldn't run: the table is missing, has only placeholders, names an unknown layer, or a
+changed file falls under two layers. That is a STOP, never "clean". "layer-check: clean" goes into
+the Developer's cost-register notes.
+
+It reads lines, not a compiled graph: a fully qualified name with no `using`, reflection, a
+dynamic import, a transitive dependency and a rule broken before the task all pass it. The
+Architect still reads the design.
+
+### Leftovers check
+
+An agent leaves things behind that a reviewer reading for meaning is the wrong instrument to
+find: a `Price.copy.cs`, a `handler_final.ts`, a `console.log`, a block of commented-out code. So
+they are found mechanically, with `scripts/leftovers-check.sh` (copied from the process
+repository's `process/scripts/leftovers-check.sh`, see `process/bootstrap-guide.md`, step 4):
+
+```bash
+scripts/leftovers-check.sh origin/main "$CHECKPOINT"   # step 10c
+scripts/leftovers-check.sh origin/main "$VERIFIED"     # step 11a
+```
+
+It reads only what the task added (`origin/main...<SHA>`) and reports, with file and line: a new
+file or rename target whose name marks a copy or a draft, an added line of debug output, and a
+block of added comment lines that read as code. Its `--self-test` shows each of those failing next
+to ordinary changes that must pass: prose comments, a method named `print_report`, an old debug
+line the task didn't touch.
+
+Exit 1 = **back to the role that wrote it**, the Developer at 10c and QA at 11a. Unlike the
+weakening check, this is not a question for the human: a deliberate case is marked in the code,
+`leftovers-allow: <reason>` on the line or on the comment above a block, or a glob in
+`.leftovers-allow` for a whole path. The marker stays in the diff, so the Reviewer reads every one.
+An allow with no reason doesn't count. Exit 2 = the check couldn't run — a STOP, never "clean".
+"leftovers-check: clean" goes into the Developer's cost-register notes. The pre-push hook runs the
+same check on every pushed branch, so a change made outside `/task` meets it too.
+
+It sees patterns, not intent: a logger left at debug level, or a scratch file with an ordinary
+name, passes it. The patterns are an example for common stacks — adapt them when you copy the
+script, together with its self-test cases.
+
+### Re-verification after a `STOP`
+
+A fix is new code: the Developer's changes go into a new `checkpoint: <identifier> fix`, QA's into
+a new QA checkpoint, and the resulting `VERIFIED` replaces the old one. Reports tied to the old SHA
+stay valid only for the parts the fix didn't touch.
+
+The Developer gets every `STOP` report in full and answers each finding by the role's procedure
+for receiving findings (Method, section 8): `FIXED` with a test, `DISPUTED` with evidence, or
+`NEEDS A HUMAN`. Pass a `DISPUTED` finding back to the role that raised it together with the
+evidence; if the role still holds it, it goes to the human — like any disagreement between roles.
+A `NEEDS A HUMAN` finding stops the loop until the human answers.
+
+After the Developer fixes the findings, **don't rerun every evaluating role on the whole change
+by default.** Rerun:
+
+- each role that returned `STOP`, given its previous report and the **diff of the fix** (not the
+  whole branch) — its question is "are my findings resolved, and did the fix break anything
+  nearby";
+- the Invariant Guardian on the diff of the fix, always — a fix is new code, and new code can
+  break a fixed rule;
+- QA, if the fix touched a mechanism a mutation was run against — the old mutation result no
+  longer describes the code.
+
+A role that returned `PASS` and whose area the fix didn't touch is not rerun. **Fall back to a
+full rerun** when the fix touches files outside the previous findings, or when two roles disagree
+on the same facts — then each needs the full picture. Say which variant you chose and why in the
+message to the human.
+
+### Round limit
+
+A **fix round** is one return from `qa` to `implementation` on a `STOP`: the Developer's fix and
+the re-verification after it, however many findings it carries. Count rounds per task from the
+first `VERIFIED`. These are not rounds: a `DISPUTED` finding passed back with no code change, the
+re-verification in step 15 after `main` moved, and a return from gate 2 on the human's PR
+feedback.
+
+**Two rounds, then the human.** In the source project one round cost 29–36% of the task's final
+cost (`FrameworkDoc.md`, section 6), so a second round brings the task close to double what
+it would have cost without either. A third `STOP` rarely means the code needs one more fix. More
+often the criteria, the impact map or the size of the task were wrong, and no fix round can
+repair that. **The loop also stops at once, in any round, when a finding the Developer marked
+`FIXED` comes back unresolved** — the fix missed what the finding meant, and a second attempt
+at the same reading costs a round and teaches nothing.
+
+When the loop stops:
+1. Leave the Issue in `state:implementation`, apply `waiting-on-human`, and unassign yourself.
+2. Do not start another round.
+3. The message to the human lists every round: its findings, the verdicts, and what each
+   re-verification found. It ends with a recommendation in the usual shape:
+
+```
+Question: the fix loop on <identifier> hit its limit — how do we go on?
+Options:  A — split the task: the part that passed goes on, the rest is a new Story.
+          B — back to the Analyst or the Architect: a criterion or the impact map is wrong.
+          C — a recorded exception for the open findings (owner, reason, date), then gate 2.
+          D — one more round, with a reason this one will converge.
+Recommendation: <A–D>, because <evidence from the rounds>.
+What would change it: <…>
+```
+
+The limit is the kit's default. Change it in your copy only on your own cost register's numbers:
+the `fixRound` field (see `process/registers/cost-register.md`) shows how often a third round would have
+converged.
+
+---
+
+## Phase `pr`
+
+15. **Is the evidence still about this code?** `main` may have moved during verification, and a
+    change that merges without conflict can still invalidate a mutation or a risk assessment — a
+    shared authorization mechanism rewritten on `main` leaves every test green and every old
+    report wrong. Check before pushing:
+    ```bash
+    git fetch origin main
+    git log VERIFIED..origin/main --oneline   # what main brought since verification — say it out loud
+    git merge origin/main                     # into the task branch, NOT the other way around
+    git diff --name-only VERIFIED HEAD        # everything that differs from the audited version
+    ```
+    If the last command lists **only** bookkeeping files (cost-register rows), the evidence
+    stands. If it lists any production, test, schema or configuration file, the reports tied to
+    `VERIFIED` no longer cover the code: rerun verification for the incoming diff by the rules of
+    "Re-verification after a `STOP`" — the Guardian always, QA when a mutated mechanism or its
+    tests changed — and set a new `VERIFIED`. Green CI on the new head does not replace this.
+    **No conflict** — carry on, after checking the scope lock once more: an Issue edited during
+    verification sends the task back to gate 1, not to the PR.
+    **Conflict in the role-cost register** — shouldn't happen with one file per row. If your
+    register is still a single shared table, this is the known mechanical pattern: both sides
+    appended a row at the same spot, neither is a duplicate. You resolve it **yourself, without a
+    gate**: keep BOTH rows (never drop either side), order chronologically from the rows' content
+    — and consider moving to one file per row.
+    **Conflict in any other file** — STOP. This isn't mechanical; escalate to the human with a
+    recommendation (see "How you talk to the human"), don't resolve it yourself.
+    A merge that actually brought something in (a non-empty `git log` above) repeats the local
+    gates from step 9 — the main branch may have brought a code change, not just a register entry.
+16. **Push only on an explicit request.** The code is already in the checkpoint commits; any
+    further commit lists paths explicitly, never everything at once. Push from the worktree — if
+    the pre-push hook validates the whole tree, someone else's unmerged work blocks the push.
+17. **PR with the full template.** Sections: the quoted completion condition and its evidence; the
+    mutation result, its patch and base; the contrast test; the Guardian's verdict, unsmoothed;
+    the invariants touched by this change; the scope left out of this PR; the `UNDECIDABLE`
+    criteria and the Developer's assumptions, each waiting for the human's decision at gate 2 —
+    with one `K-<n> — test:` line per test, one `K-<n> — removed: … — result: …` line per
+    mutation and one `K-<n> — decision:` line per human-judged criterion, in the template's format
+    (taken from the Developer's Criteria table and QA's Mutations table), so the evidence chain can
+    be checked;
+    the recorded exceptions, one line each in the format of the team contract, §3a;
+    **`Verified at:
+    <VERIFIED SHA>`**. The PR refers to the Issue with **`Refs #<N>`, never a closing keyword** —
+    merging this PR must leave the Issue open for gate 3 (see step 21). A field you can't fill
+    stays empty with a reason. "N/A" with no justification is worse than empty.
+18. **CI.** Wait for the required checks. Before calling red CI a defect, rule out environmental
+    causes: missing checks from a merge conflict, a container image pull failure, a timeout on
+    the hosting platform's endpoints, an executor that dropped out (a failure with no log, a step
+    with a null result), a dependent service alive but not yet ready, secrets not reaching an
+    automated bot, a green status computed against a stale base after the main branch moved on.
+    Ruled all of them out → it is a defect: the Developer takes it through the root-cause
+    procedure (the role's definition file, Method, section 7), never a re-run until it turns
+    green.
+19. **GATE 2 — STOP.** The human approves the merge. You don't merge yourself. The message names
+    `VERIFIED`, the PR head SHA, and every commit between them (expected: bookkeeping only) — if
+    anything else is there, the gate is not ready. **Every `UNDECIDABLE` from any role is listed
+    in that message as its own question** — the criterion, the fact the role said was missing,
+    what the tests show, and your recommendation. The human's answer on each goes into the PR
+    description; one left unanswered means the gate is not ready. **So is every assumption in
+    the Developer's ledger** — what was unclear, what was assumed, the test that shows it, and
+    your recommendation — and the message states whether the scope lock still holds. **It names
+    the operator** from the `task-started` marker, and the team contract's rule on who may approve
+    gate 2. Under "a second person", it says plainly that the operator is not the one to merge.
+    Unassign yourself.
+
+    **What the human's answer on an assumption does.** Accepted — the assumed behavior becomes
+    part of the scope. Rejected — the human's answer says what the behavior must be instead, and
+    the task goes back to `code` (a return on PR feedback, not a fix round). Either way you
+    append an amendment line under the criterion it concerns, inside the criteria markers —
+    `Amended at gate 2, <date>, A-02: <the behavior now required>` — and post a new fingerprint as
+    "Scope amended at gate 2 — A-02 — fingerprint: <hash>", with the `scope-locked` marker
+    (`gate=2`) as its last line. The human's answer is the approval;
+    writing it down is the only edit you make to the criteria, and the new fingerprint is what
+    the next check compares against. An accepted assumption with no test behind it gets one before
+    merge, like any criterion.
+
+    **Recorded exceptions are checked, not trusted.** Every finding the human lets through
+    without a fix — a `STOP` finding, a reservation, a weakening finding — is one line in the
+    PR's *Recorded exceptions* section, in the team contract's format (§3a), with the owner and
+    the date the human gave. Before the gate-2 message, read them back:
+    ```bash
+    gh pr view <M> --repo TanerCRB/Eko_CRM --json body --jq .body \
+      | scripts/exception-check.sh -
+    ```
+    Exit 1 — an exception already expired, or a line that isn't in the format — means the gate is
+    not ready: put the lines in front of the human, never fix a date or an owner yourself. An
+    exception the check reports as expiring soon goes into the message as a question: the merge may
+    land after the date it names. Exit 2 is a STOP, never "no exceptions". A finding with no line
+    at all is not an exception; it is a finding, and it blocks.
+
+    **The evidence chain is checked, not trusted.** Every criterion judged by a test names a test
+    that exists in the tree and has a mutation that killed it; every criterion judged by a human
+    has the human's decision; every test, mutation and decision line names a criterion the Issue
+    has. From the worktree, on `VERIFIED`:
+    ```bash
+    gh issue view <N> --repo TanerCRB/Eko_CRM --json body --jq .body > .task/issue.md
+    gh pr view <M> --repo TanerCRB/Eko_CRM --json body --jq .body > .task/pr.md
+    scripts/evidence-chain.sh chain .task/issue.md .task/pr.md
+    ```
+    Exit 1 means the gate is not ready. A missing link goes back to the role that owes it — a
+    test to the Developer, a mutation to QA. A `SURVIVED` mutation is a question for the human:
+    it stays a finding of the check even after they let it through, so only a recorded exception
+    line for it makes that red result acceptable. One exception to that: when
+    `scripts/risk-check.sh classes "$BASE" "$VERIFIED"` prints `schema` or `money`, a `SURVIVED`
+    mutation can't be let through. It goes back to the Developer and QA until a test kills it,
+    because a wrong migration or a wrong amount is the defect nobody notices until it has spread.
+    You never write a link the reports don't support.
+    Exit 2 is a STOP. The check sees that a test exists and that a mutation was reported, not that
+    the test proves the criterion — that is still QA's and the Reviewer's work.
+
+---
+
+## Phase `closure` — after merge
+
+20. **If you maintain a queryable code index/graph — refresh it before gate 3.** Applies only to
+    code files; if the index doesn't exist yet, skip this step — don't set one up from scratch
+    here.
+21. **GATE 3 — a documentation PR for the human to decide on.** After the merge the Issue is
+    **still open**, in the gate-3 state (`state:evidence` + `waiting-on-human`, see
+    `process/sdlc-flow.md`) — that is what keeps it in the one filter the human watches. On a separate
+    branch from the updated `main`, commit the entries the roles proposed — checking off the task
+    in the plan with a "Done <date>" row, the row in the activity/capability register, mutation
+    rows linking the patches in the merged PR, every recorded exception from the PR copied
+    verbatim into the exception register (`docs/architecture/exception-register.md`) — as one
+    documentation commit (the last pre-authorized commit, see "Overriding rules"). Every entry
+    links the specific test or artifact it rests on; an entry without one isn't written. An
+    exception's evidence is the PR it was accepted in. If the code PR fixed a finding that already
+    had an entry in the exception register, that entry is removed in the same commit. On the human's request, push it and
+    open the PR with **`Closes #<N>`**. **The human's review and merge of that PR is gate 3** —
+    reading each entry against its evidence is the decision; you never merge it, and it is the
+    merge that closes the Issue.
+22. **Ratcheted numeric counters** (e.g. a test counter), if you keep one — write the measured
+    values **only on the main branch, after a full run**. On a task branch, report-only mode,
+    no write.
+23. **Labels** — closing the Issue through the gate-3 documentation PR does not remove process
+    labels (see `FrameworkDoc.md`, section 7). The human sets `state:closed` and removes
+    `waiting-on-human` when approving gate 3. Check that the assignment is removed — if it never
+    came off at any gate, remove it now.
+24. **Notify the other repository** — not applicable: Eko_CRM is a single repository, backend and
+    frontend included.
+25. **Clean up the working directory** — release any held handles/build-process servers first,
+    only then remove the worktree.
+
+---
+
+## Result
+
+At the end of every phase, one message: what passed, what's pending, whose decision it's waiting
+on, and what the next action is. Compressed per the "How you talk to the human" section — no
+spelling out options, every question with a recommendation and a reason.
