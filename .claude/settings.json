@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "deny": ["Bash(gh pr merge:*)", "Bash(git push --force:*)", "Bash(git push -f:*)"],
+    "ask": ["Bash(git push:*)"]
+  },
+  "hooks": {
+    "SessionStart": [
+      { "matcher": "startup|clear|compact",
+        "hooks": [ { "type": "command",
+                     "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/task-journal-context.sh\"" } ] }
+    ],
+    "SubagentStop": [
+      { "hooks": [ { "type": "command",
+                     "command": "node \"$CLAUDE_PROJECT_DIR/scripts/cost-capture.mjs\"" } ] }
+    ]
+  }
+}

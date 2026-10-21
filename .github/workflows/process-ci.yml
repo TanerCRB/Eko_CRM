@@ -1,0 +1,70 @@
+# The process checks of this repository: the scripts the task command runs between roles, the
+# sync tools, the label manifest, the Issue/PR templates and the Markdown links. Backend and
+# frontend workflows are added with the first code (docs/PLAN.md).
+#
+# No `paths` filter on pull_request, on purpose: a workflow skipped by a path filter reports no
+# status at all, and once its job is a required check, a PR touching only other paths hangs
+# forever on "Expected — Waiting for status to be reported"
+# (process/ci-and-branch-protection.md, section 1).
+name: process-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Read-only token: nothing here writes to the repository, comments on PRs, or publishes anything.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    name: process-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Actions pinned to full commit SHAs, not tags: a tag can be moved to different code after
+      # it was reviewed; a SHA can't. The comment names the tag the SHA was taken from.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Runner
+        run: echo "Running on GitHub-hosted ubuntu-latest (no self-hosted runner in this repository)."
+
+      - name: Syntax check
+        run: |
+          for f in tools/*.mjs scripts/*.mjs; do node --check "$f"; done
+          for f in scripts/*.sh .githooks/pre-push; do bash -n "$f"; done
+
+      # Method 3 from calibration/README.md: each check proves on built-in contrast cases that it
+      # still fires, before any of its green results is worth anything.
+      - name: Self-tests
+        run: |
+          node tools/sync-agents.mjs --self-test
+          node tools/sync-github.mjs --self-test
+          node tools/check-links.mjs --self-test
+          node scripts/cost-capture.mjs --self-test
+          for f in scripts/*.sh; do bash "$f" --self-test; done
+
+      - name: Registers read
+        run: |
+          bash scripts/layer-check.sh HEAD HEAD
+          bash scripts/risk-check.sh classes --paths - < /dev/null
+          bash scripts/exception-check.sh docs/architecture/exception-register.md
+
+      - name: Label manifest and templates are valid, templates in sync
+        run: |
+          node tools/sync-github.mjs --validate
+          node tools/sync-github.mjs --check
+
+      - name: Relative Markdown links resolve
+        run: node tools/check-links.mjs
