@@ -15,6 +15,10 @@ decisions (EKO-1-01). The Architect revises them when ADR-0001/ADR-0002 are acce
 | `backend/migrations/**` | schema | pending ADR-0002 | expand → deploy → contract |
 | `backend/app/auth/**` | auth | pending | authentication, the shared access dependency, permissions |
 | `backend/app/api/**` | auth, personal-data | pending ADR-0001 | every endpoint is an access decision over personal data |
+| `backend/app/main.py` | auth | pending ADR-0001 | wires the app-wide access dependency and the error handling |
+| `backend/app/domain/**` | personal-data | pending ADR-0001 | the contact model and what it keeps out of logs |
+| `backend/app/services/**` | personal-data | pending ADR-0001 | every read and write of contacts goes through here |
+| `frontend/src/**` | personal-data | pending ADR-0001 | renders contacts and will carry the session token |
 | `backend/app/core/settings.py` | secrets | pending ADR-0001 | the one place configuration and secrets are read |
 | `backend/app/integrations/**` | external, personal-data | — | adapters to external systems receive personal data |
 | `backend/pyproject.toml` | dependencies | — | backend package manifest |

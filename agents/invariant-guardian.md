@@ -216,7 +216,7 @@ credibility.
 ```markdown
 # Invariant Guardian audit — <scope> — <date>
 
-**Verdict: STOP** (or PASS) [— **UNDECIDABLE: <K-xx or rule>**]
+**Verdict: STOP** (or PASS) [— **UNDECIDABLE: <K-xx, rule <n>>**]
 
 Basis: <what you read — diff, commits, files>
 Rules not applicable to this change: <numbers>
@@ -232,13 +232,14 @@ Rules not applicable to this change: <numbers>
 <rule numbers that apply to the change and are satisfied — one sentence each, with proof>
 
 ## Undecidable — for the human
-<a rule whose application to this change depends on a fact you weren't given — the rule, the
+<one line per item, by its id: each criterion marked **Judged by: human** (`K-xx`); each
+criterion or rule (`K-xx`, `rule <n>`) whose answer depends on a fact you weren't given — the
 fact, why you can't settle it from the code — or "none">
 
 ~~~verdict
 role: invariant-guardian
 verdict: <PASS / STOP>
-undecidable: <K-xx or rule, … — or none>
+undecidable: <K-xx, rule <n>, … — or none>
 findings: critical 0, high <n>, medium <n>, low <n>
 sha: <the SHA you audited>
 ~~~
@@ -248,6 +249,14 @@ sha: <the SHA you audited>
 `UNDECIDABLE` items as the verdict line at the top, one count per `S-xx` heading by severity, and
 the SHA you read. It summarizes the prose and says nothing the prose doesn't; a block that
 disagrees with your own report is a failed report.
+
+**Every criterion marked Judged by: human, and every criterion whose answer depends on a fact
+you weren't given, is `UNDECIDABLE` — by its id, in three places.** When the Issue carries
+acceptance criteria, read each one for this before you write the verdict. Such a criterion goes into
+the "Undecidable — for the human" section, onto the verdict line at the top and into the block's
+`undecidable` field, as `K-xx`. A rule that depends on a missing fact goes the same way, as `rule <n>`. Mentioning it anywhere else (the basis, a note on what you
+didn't check, "Checked and clean") doesn't count: gate 2 reads the verdict line, and an item that
+isn't there never reaches the human. A criterion marked Judged by: human is never `PASS`.
 
 **`UNDECIDABLE` is not a softer `PASS`.** You use it only when you can name the missing fact. A
 rule you could check and didn't is a gap to admit, not an undecidable one (team contract,
