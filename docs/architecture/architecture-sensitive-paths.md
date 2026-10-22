@@ -34,6 +34,18 @@ own rows.
 | `**/Dockerfile*` | dependencies | ADR-0001; pending ADR-0004 | container images |
 | `Dockerfile*` | dependencies | ADR-0001; pending ADR-0004 | container images at the repository root (`**/Dockerfile*` needs a slash) |
 | `*compose*.y*ml` | dependencies, secrets | pending ADR-0004 | container composition |
+| `.dockerignore` | secrets | ADR-0001; pending ADR-0004 | what enters the image build context at the root (`**/.dockerignore` needs a slash) |
+| `**/.dockerignore` | secrets | ADR-0001; pending ADR-0004 | what enters the image build context; a dropped `.env` line bakes secrets into an image |
+| `frontend/index.html` | dependencies, personal-data | ADR-0001; pending ADR-0003, ADR-0005 | a script tag here runs in the SPA beside personal data and the session token |
+| `frontend/public/**` | dependencies, personal-data | ADR-0001; pending ADR-0003, ADR-0005 | static files served unbundled from the SPA's origin |
+| `.npmrc` | dependencies, secrets | ADR-0001 | registry, ignore-scripts, auth tokens at the repository root (`**/.npmrc` needs a slash) |
+| `**/.npmrc` | dependencies, secrets | ADR-0001 | registry, ignore-scripts, auth tokens |
+| `frontend/pnpm-workspace.yaml` | dependencies | ADR-0001 | onlyBuiltDependencies, overrides, catalogs |
+| `**/.pnpmfile.cjs` | dependencies | ADR-0001 | pnpm install hooks run arbitrary code and rewrite manifests |
+| `backend/uv.toml` | dependencies | ADR-0001 | package index URL and resolver settings |
+| `uv.toml` | dependencies | ADR-0001 | uv also reads a uv.toml from parent directories |
+| `**/ruff.toml` | pipeline | ADR-0001 | per-layer banned-api config (ADR-0001-C11); weakening it silently drops layer enforcement |
+| `frontend/tsconfig*.json` | pipeline | ADR-0001 | `strict` (ADR-0001-C3) |
 | `.github/workflows/**` | pipeline | — | who runs what, with which secrets |
 | `.githooks/**` | pipeline | — | the pre-push guard on `main` |
 | `scripts/**` | pipeline | — | the process checks the task command and CI rely on |
