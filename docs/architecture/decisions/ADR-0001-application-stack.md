@@ -48,7 +48,10 @@ follows:
   **build-time only**: the production frontend image serves static files and contains no Node.js
   runtime.
 - Configuration and secrets reach the backend only as environment variables read in one place,
-  `backend/app/core/settings.py`; nothing is read from host paths outside the container.
+  `backend/app/core/settings.py`; nothing is read from host paths outside the container. "Read"
+  covers every route to the process environment — `os.environ` in any import form, `os.getenv`,
+  a pydantic-settings `BaseSettings` class, a dotenv loader — so none of them appears in another
+  file under `backend/app/`.
 
 The container runtime, image composition, HTTPS exposure, the static file server and secret
 handling are **not** decided here — forward reference: ADR-0004 (EKO-1-03, #16).
@@ -72,8 +75,23 @@ reset.
 
 The API is JSON over HTTP(S). The OpenAPI document that FastAPI generates from the Pydantic schemas
 is the single description of that contract; the frontend's typed client in `frontend/src/api/`
-follows it. Points in time cross the API as RFC 3339 strings with an explicit offset; a value
-without an offset is rejected at the boundary. Calendar dates (no time) cross as `YYYY-MM-DD`.
+follows it. Three kinds of time value cross the API, and each has one form:
+
+- **An instant** (a point in time the system produced or received, e.g. a change or sync
+  timestamp) crosses as an RFC 3339 string with an explicit offset, in both directions. A request
+  value without an offset is rejected at the boundary: every Pydantic field holding an instant is
+  typed `AwareDatetime` (or an equivalent that refuses naive values), never plain `datetime`.
+- **A wall time entered by a user** (e.g. a visit's start and end as typed into a form) crosses as
+  a local date `YYYY-MM-DD` and a local time `HH:MM`, with no offset and no zone; both mean
+  Europe/Warsaw. The frontend does not convert it to an instant. The backend resolves it to an
+  instant and rejects an ambiguous or nonexistent local time (ADR-0002, "Wall time entered by a
+  user").
+- **A calendar date** with no time of day crosses as `YYYY-MM-DD`, meaning a Europe/Warsaw date.
+
+The frontend displays every instant and every date in the `Europe/Warsaw` zone named explicitly,
+never in the browser's or device's zone, and derives no Europe/Warsaw date or wall time from the
+browser's zone; a user whose device is set to another zone sees the same values as a user in
+Poland.
 
 ### Repository layout and layers
 
@@ -82,7 +100,8 @@ backend/
   pyproject.toml, uv.lock, Dockerfile
   app/                 Python package `app`; imports are absolute (`app.<layer>`)
     main.py            application factory; wires the access dependency and error handling
-    core/              settings.py — the one place configuration and secrets are read
+    core/              settings.py — the one place configuration and secrets are read;
+                       clock.py — the one source of "now" and "today" (ADR-0002)
     domain/            entities and rules; knows no storage, transport or external system
     services/          use cases; call domain, data and integrations
     data/              persistence (ADR-0002)
@@ -117,6 +136,15 @@ Backend imports between layers are absolute (`from app.data …`): `scripts/laye
 resolve Python relative imports, so relative imports are banned by lint rather than left
 unchecked.
 
+`scripts/layer-check.sh` also misses a layer imported as a member of the package
+(`from app import data`), because it reads only the module name `app`. The same rules are
+therefore enforced a second time by ruff's banned-api rule (flake8-tidy-imports, `TID251`), scoped
+to each layer's directory and listing the layers that layer must not depend on, so every import
+form — `from app import data`, `import app.data`, `from app.data import x`,
+`import app.data as d` — is a lint error where the table forbids it. The layer table above is the
+source; the ruff configuration follows it, and a difference between the two is a defect in the
+ruff configuration.
+
 ### Background work
 
 Visit synchronisation needs work outside a request (VIS-6 latency, VIS-7 retry of Unsynchronised
@@ -131,7 +159,9 @@ forced to add a broker.
 ### Forward references (not decided here)
 
 - ADR-0003 (#15) — identity server product and its storage, login flow, roles, deactivation.
-- ADR-0004 (#16) — container runtime and composition, HTTPS, secret handling, backup and restore.
+- ADR-0004 (#16) — container runtime and composition, HTTPS, secret handling, backup and restore;
+  when and by which single process schema migrations run on deploy and restart, and how
+  expand → deploy → contract is carried out across releases.
 - ADR-0005 (#17) — personal data: which modules hold it, logging, retention, archiving vs. erasure.
 - ADR-0006 (#18) — Google Calendar integration and the background-work mechanism.
 
@@ -159,7 +189,10 @@ Identifier and acceptance criterion only.
 | ADR-0001-C7 | A test fetches the backend's OpenAPI document and gets a valid OpenAPI 3.x document. |
 | ADR-0001-C8 | `ruff check backend` runs with relative imports banned (rule `TID252`, `ban-relative-imports = "all"`) and exits 0. |
 | ADR-0001-C9 | `bash scripts/layer-check.sh origin/main HEAD` exits 0 on every pull request that changes `backend/app/` or `frontend/src/`. |
-| ADR-0001-C10 | No file under `backend/app/` other than `backend/app/core/settings.py` reads the process environment: `grep -rn "os.environ" backend/app` and `grep -rn "getenv" backend/app` list only that file. |
+| ADR-0001-C10 | No file under `backend/app/` other than `backend/app/core/settings.py` reads the process environment: `grep -rl -e environ -e getenv -e putenv -e pydantic_settings -e BaseSettings -e dotenv backend/app` lists only that file (the pattern catches `os.environ`, `from os import environ`, `os.getenv`, a pydantic-settings import or `BaseSettings` subclass, and a dotenv loader). |
+| ADR-0001-C11 | `ruff check backend` reports `TID251` on each line of a fixture file placed in `backend/app/domain/` that contains, one per line, `from app import data`, `import app.data`, `from app.data import x` and `import app.data as d`, and exits non-zero; the same four lines in a fixture under `backend/app/services/` produce no `TID251`. For every row of the layer table, each layer in "Must not depend on" is banned in that layer's directory: a fixture `from app import <forbidden>` in each layer directory is reported. |
+| ADR-0001-C12 | A test walks every request and response model reachable from the application's routes and finds no field whose annotation is, or contains, plain `datetime.datetime` (instants are `AwareDatetime`); and a test sending an instant without an offset (`2026-10-25T02:30:00`) to each endpoint that accepts an instant gets HTTP 422. |
+| ADR-0001-C13 | With the test process's zone set to a zone other than Europe/Warsaw (`TZ=America/New_York`), a Vitest test renders the instant `2026-10-24T23:30:00Z` as 25 October 2026, 01:30 and `2026-03-29T01:00:00Z` as 29 March 2026, 03:00; and `grep -rnF -e ".getFullYear(" -e ".getMonth(" -e ".getDate(" -e ".getDay(" -e ".getHours(" -e ".getMinutes(" -e "getTimezoneOffset" frontend/src` returns nothing (no date part read in the browser's zone). |
 
 ## Addenda
 
