@@ -5,8 +5,8 @@
   "description": "Standalone Eko CRM P2 design study with synthetic data",
   "scripts": {
     "start": "node serve.cjs",
-    "test": "node --test tests/domain.test.cjs",
-    "check": "node --check serve.cjs && node --check src/domain.js && node --check src/fixtures.js && node --check src/components.js && node --check src/app.js"
+    "test": "node --test tests/domain.test.cjs tests/locale.test.cjs",
+    "check": "node --check serve.cjs && node --check src/domain.js && node --check src/fixtures.js && node --check src/locale-pl.js && node --check src/components.js && node --check src/app.js"
   },
   "engines": { "node": ">=20" }
 }
