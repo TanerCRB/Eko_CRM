@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-22",
+  "task": "EKO-1-01",
+  "phase": "verification",
+  "role": "reviewer",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "fcc16932611cd45b88c05cc8208ae01161f6b3a3",
+  "complexity": "Medium",
+  "agentId": "a16ef7b05c30bedaf",
+  "tokens": 679345,
+  "tokenSplit": { "input": 30, "output": 753, "cacheWrite": 68909, "cacheRead": 609653 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 15,
+  "seconds": 392,
+  "fixRound": 1,
+  "reworkCause": "re-verification after reviewer STOP at 9b2d309 (R-01..R-07)",
+  "notes": "STOP at f44f78d, UNDECIDABLE K-04, 1 medium (frontend today) and 3 low (grep controls, ambiguity test, nested ruff config); boundary-check: clean (--none, shared)"
+}
