@@ -1,6 +1,8 @@
 # Eko_CRM
 
-CRM application (domain detail is TODO — filled in at gate 1 of the first Story). Monorepo:
+Internal CRM for one agricultural sales company: reps' customers (farmers), field visits synced
+with Google Calendar, notes and follow-up actions, visit dashboard — scope, rules and requirement
+identifiers in [`docs/product/project-brief.md`](docs/product/project-brief.md). Monorepo:
 `backend/` (Python 3.12, FastAPI, Pydantic) and `frontend/` (React + TypeScript, Vite, pnpm). No
 code yet; the first task is the stack and persistence decisions (`docs/PLAN.md`, `EKO-1-01`).
 
