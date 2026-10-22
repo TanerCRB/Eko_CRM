@@ -76,11 +76,16 @@ background synchronisation running beside the web process (ADR-0001, "Background
 
 - A wall time a user enters reaches the backend as a local date and a local time with no offset
   (ADR-0001, Constraint 3), meaning Europe/Warsaw. One domain function resolves it to an instant
-  with `zoneinfo` `Europe/Warsaw`, and rejects it with a validation error (HTTP 422):
-  - **ambiguous** — the local time occurs twice (the repeated hour in October): resolving it with
-    `fold=0` and with `fold=1` gives two different UTC offsets;
-  - **nonexistent** — the local time is skipped (the missing hour in March): converting the
-    resolved instant back to Europe/Warsaw does not return the same local date and time.
+  with `zoneinfo` `Europe/Warsaw`, and rejects it with a validation error (HTTP 422) that names
+  which of the two reasons applies. The function resolves the local date and time with `fold=0`
+  and with `fold=1`, converts each resulting instant back to Europe/Warsaw, and compares the local
+  date and time it gets (ignoring `fold`) with the input. The two conditions are disjoint:
+  - **nonexistent** — the local time is skipped (the missing hour in March): for at least one
+    `fold` value the round trip does not return the input's local date and time (in the gap,
+    PEP 495 gives the two `fold` values different offsets, and neither round-trips);
+  - **ambiguous** — the local time occurs twice (the repeated hour in October): for both `fold`
+    values the round trip returns the input's local date and time, and the two give different UTC
+    offsets.
 - Only the resolved instant is stored. The frontend never chooses the offset, so a device set to
   another zone cannot shift the stored instant.
 - An instant that arrives already resolved (e.g. from an external calendar) is stored as given;
@@ -164,7 +169,7 @@ Identifier and acceptance criterion only.
 | ADR-0002-C12 | Every PostgreSQL image reference in the repository is pinned: `grep -rhoE "postgres:[^[:space:]\"'@]+" --include="*.y*ml" --include="Dockerfile*" --include="*.py" .` prints only tags matching `^postgres:18\.[0-9]+-[a-z]+$`, and any reference without a tag carries `@sha256:`. |
 | ADR-0002-C13 | `grep -rniF -e "datetime.now(" -e "utcnow(" -e "date.today(" -e "datetime.today(" -e "time.time(" -e "time.time_ns(" -e "func.now(" -e "current_date" -e "current_time" -e "localtime" -e " now()" -e "(now()" -e "=now()" -e ",now()" -e "'now()" -e "\"now()" backend/app` lists only lines in `backend/app/core/clock.py` (`current_time` also matches `CURRENT_TIMESTAMP`; `localtime` also matches `LOCALTIMESTAMP` and `time.localtime`). |
 | ADR-0002-C14 | With the process zone and the database session zone both UTC, a test fixes the clock at `2026-10-22T22:30:00Z` (00:30 on 23 October in Warsaw) and gets "today" = `2026-10-23` with day range `[2026-10-22T22:00:00Z, 2026-10-23T22:00:00Z)`; fixed at `2026-12-31T23:30:00Z` it gets `2027-01-01`. |
-| ADR-0002-C15 | A test of the wall-time resolver: `2026-10-25` `01:30` resolves to `2026-10-24T23:30:00Z`; `2026-10-25` `03:30` to `2026-10-25T02:30:00Z`; `2026-03-29` `03:00` to `2026-03-29T01:00:00Z`; `2026-10-25` `02:30` (ambiguous) and `2026-03-29` `02:30` (nonexistent) are rejected; an endpoint receiving either rejected value answers HTTP 422 and stores nothing. |
+| ADR-0002-C15 | A test of the wall-time resolver: `2026-10-25` `01:30` resolves to `2026-10-24T23:30:00Z`; `2026-10-25` `03:30` to `2026-10-25T02:30:00Z`; `2026-03-29` `03:00` to `2026-03-29T01:00:00Z`; `2026-10-25` `02:30` is rejected with the reason ambiguous and `2026-03-29` `02:30` with the reason nonexistent (the test asserts the reason for each input, not only the rejection); an endpoint receiving either rejected value answers HTTP 422 and stores nothing. |
 
 ## Addenda
 

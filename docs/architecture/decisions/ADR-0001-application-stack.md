@@ -89,9 +89,27 @@ follows it. Three kinds of time value cross the API, and each has one form:
 - **A calendar date** with no time of day crosses as `YYYY-MM-DD`, meaning a Europe/Warsaw date.
 
 The frontend displays every instant and every date in the `Europe/Warsaw` zone named explicitly,
-never in the browser's or device's zone, and derives no Europe/Warsaw date or wall time from the
-browser's zone; a user whose device is set to another zone sees the same values as a user in
-Poland.
+never in the browser's or device's zone; a user whose device is set to another zone sees the same
+values as a user in Poland.
+
+**The frontend's "today" and its day and week bounds come from one helper module,**
+`frontend/src/time/warsaw.ts`. It takes the current instant from the browser's clock and is the
+only frontend code that turns an instant into a Europe/Warsaw calendar date, wall time or display
+text, always through `Intl.DateTimeFormat` with `timeZone: 'Europe/Warsaw'`. "Today", the days of
+the My day date strip (EKO-4-01), and the bounds of the DSH-1 presets (today, the Mon–Sun week and
+the longer periods) are computed there from that Europe/Warsaw date. No other frontend code derives
+a calendar date or a wall time from an instant — neither in UTC (`toISOString`, the `getUTC*`
+getters, `Date.UTC`) nor in the device's zone (the local `get*` getters, a date library's
+local-zone functions such as date-fns `format` or `startOfWeek`, `toLocale*String`,
+`Intl.DateTimeFormat` without `timeZone`, `Temporal.Now`, `new Date(y, m, d)`). The helper imports
+none of the frontend layers (`fe-api`, `fe-components`, `fe-features`), so each of them may use it.
+
+The helper is chosen over taking "today" from the backend's clock (e.g. returned by the API)
+because the date strip and the presets then render without a prior request and roll over at
+midnight without a reload or a refetch. Its cost: the frontend's date follows the device's clock
+(not its zone), so a device whose clock is off by minutes can, in those minutes around midnight,
+show a different "today" than the one the backend's clock uses for due-today and overdue
+(ADR-0002); the backend's comparison stays authoritative.
 
 ### Repository layout and layers
 
@@ -113,6 +131,7 @@ backend/
 frontend/
   package.json, pnpm-lock.yaml, vite.config.ts, Dockerfile
   src/api/  src/components/  src/features/
+  src/time/warsaw.ts   the one source of "today" and of Europe/Warsaw dates (Constraint 3)
   tests/               mirrors src/
 ```
 
@@ -193,6 +212,7 @@ Identifier and acceptance criterion only.
 | ADR-0001-C11 | `ruff check backend` reports `TID251` on each line of a fixture file placed in `backend/app/domain/` that contains, one per line, `from app import data`, `import app.data`, `from app.data import x` and `import app.data as d`, and exits non-zero; the same four lines in a fixture under `backend/app/services/` produce no `TID251`. For every row of the layer table, each layer in "Must not depend on" is banned in that layer's directory: a fixture `from app import <forbidden>` in each layer directory is reported. |
 | ADR-0001-C12 | A test walks every request and response model reachable from the application's routes and finds no field whose annotation is, or contains, plain `datetime.datetime` (instants are `AwareDatetime`); and a test sending an instant without an offset (`2026-10-25T02:30:00`) to each endpoint that accepts an instant gets HTTP 422. |
 | ADR-0001-C13 | With the test process's zone set to a zone other than Europe/Warsaw (`TZ=America/New_York`), a Vitest test renders the instant `2026-10-24T23:30:00Z` as 25 October 2026, 01:30 and `2026-03-29T01:00:00Z` as 29 March 2026, 03:00; and `grep -rnF -e ".getFullYear(" -e ".getMonth(" -e ".getDate(" -e ".getDay(" -e ".getHours(" -e ".getMinutes(" -e "getTimezoneOffset" frontend/src` returns nothing (no date part read in the browser's zone). |
+| ADR-0001-C14 | With the test process's zone set to `TZ=America/New_York` and Vitest's fake time, a test of `frontend/src/time/warsaw.ts` gets "today" = `2026-10-23` at `2026-10-22T22:30:00Z`, "today" = `2027-01-01` at `2026-12-31T23:30:00Z`, and "this week" = `2026-10-26` to `2026-11-01` at `2026-10-25T23:30:00Z`; `grep -rnF -e "toISOString" -e "getUTC" -e "Date.UTC" -e "toLocale" -e "Intl.DateTimeFormat" -e "Temporal." -e "date-fns" -e "dayjs" -e "luxon" -e "'moment" -e "\"moment" frontend/src` lists only lines in that file; and `grep -rnE "new Date\([^)]*," frontend/src` lists only lines in that file. |
 
 ## Addenda
 
