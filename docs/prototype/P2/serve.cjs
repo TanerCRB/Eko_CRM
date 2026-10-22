@@ -18,4 +18,4 @@ const server = http.createServer((req, res) => {
   });
 });
 server.on('error', error => { console.error(`Preview server: ${error.message}`); process.exitCode = 1; });
-server.listen(port, '127.0.0.1', () => console.log(`Local: http://127.0.0.1:${port}`));
+server.listen(port, '127.0.0.1', () => console.log(`Local: http://127.0.0.1:${port}`)); // leftovers-allow: show the local preview URL to the person starting the demo
