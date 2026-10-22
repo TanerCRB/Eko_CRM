@@ -1,0 +1,157 @@
+/*
+ * Eko_CRM design tokens — prototype P1.
+ * Source of truth for colour, type, spacing, radius and motion. Mirrored in ../handoff/tokens.json.
+ * Components (components.css) read only these custom properties, never raw values.
+ *
+ * Palette idea: rapeseed yellow (Polish fields in May) as the single accent, loam brown-black as
+ * the ink of every primary action, a cool field-frost paper. Green is reserved for the "Held"
+ * state, so it keeps its meaning instead of decorating.
+ */
+
+:root {
+  /* ---- Base palette ---- */
+  --c-loam-900: #241c15;   /* ink, primary buttons */
+  --c-loam-700: #4a3c30;
+  --c-loam-500: #7a6a5c;   /* secondary text */
+  --c-loam-300: #b9aea3;
+  --c-frost-50: #f2f3f1;   /* page background */
+  --c-frost-100: #e7e9e5;
+  --c-frost-200: #d6d9d3;  /* borders */
+  --c-white: #ffffff;
+  --c-rapeseed-500: #e6c21b; /* accent: now line, active nav, awaiting decision */
+  --c-rapeseed-200: #f6e7a0;
+  --c-rapeseed-50: #fcf7dc;
+  --c-held-600: #2f6b3f;   /* Held / Done */
+  --c-held-50: #e4f0e6;
+  --c-plan-600: #2c5a86;   /* Planned / In progress */
+  --c-plan-50: #e3edf6;
+  --c-alert-600: #b3261e;  /* Overdue, errors */
+  --c-alert-50: #fbe9e7;
+
+  /* ---- Semantic roles ---- */
+  --bg: var(--c-frost-50);
+  --surface: var(--c-white);
+  --surface-sunk: var(--c-frost-100);
+  --border: var(--c-frost-200);
+  --border-strong: var(--c-loam-300);
+  --text: var(--c-loam-900);
+  --text-muted: var(--c-loam-500);
+  --text-on-ink: var(--c-frost-50);
+  --ink: var(--c-loam-900);
+  --ink-hover: var(--c-loam-700);
+  --accent: var(--c-rapeseed-500);
+  --accent-soft: var(--c-rapeseed-50);
+  --accent-line: var(--c-rapeseed-200);
+  --focus: var(--c-plan-600);
+
+  /* State colours — one pair (fg, bg) per domain state */
+  --st-planned-fg: var(--c-plan-600);
+  --st-planned-bg: var(--c-plan-50);
+  --st-held-fg: var(--c-held-600);
+  --st-held-bg: var(--c-held-50);
+  --st-cancelled-fg: var(--c-loam-500);
+  --st-cancelled-bg: var(--c-frost-100);
+  --st-awaiting-fg: #6b5400;
+  --st-awaiting-bg: var(--c-rapeseed-50);
+  --st-overdue-fg: var(--c-alert-600);
+  --st-overdue-bg: var(--c-alert-50);
+  --st-manager-fg: #5b3f7a;   /* attribution of manager notes/actions (ACC-6) */
+  --st-manager-bg: #efe8f6;
+
+  /* Furrow hatch: the visual motif for "needs your decision" and "not yet in Google" */
+  --hatch: repeating-linear-gradient(135deg, transparent 0 6px, rgba(230, 194, 27, .35) 6px 9px);
+  --hatch-muted: repeating-linear-gradient(135deg, transparent 0 6px, rgba(122, 106, 92, .18) 6px 8px);
+
+  /* ---- Type ---- */
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  /* Scale: 1.2 minor third from 16px; body never below 15px (outdoor phone use) */
+  --fs-xs: .8125rem;  /* 13 — meta only */
+  --fs-sm: .9375rem;  /* 15 */
+  --fs-md: 1rem;      /* 16 — body */
+  --fs-lg: 1.2rem;    /* 19 */
+  --fs-xl: 1.44rem;   /* 23 */
+  --fs-2xl: 1.728rem; /* 28 */
+  --fs-3xl: 2.488rem; /* 40 — the today clock */
+  --lh-tight: 1.15;
+  --lh-body: 1.5;
+  --fw-regular: 400;
+  --fw-bold: 700;
+  --fw-display: 650;
+
+  /* ---- Space (4px grid) ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --gutter: 16px;
+  --measure: 68ch;
+
+  /* ---- Radius: hierarchy, not one value ---- */
+  --r-control: 6px;   /* inputs, buttons */
+  --r-surface: 10px;  /* panels, dialogs */
+  --r-chip: 999px;    /* state chips only */
+
+  /* ---- Elevation: only floating layers get a shadow ---- */
+  --shadow-float: 0 12px 32px rgba(36, 28, 21, .18), 0 2px 6px rgba(36, 28, 21, .10);
+
+  /* ---- Motion ---- */
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --dur-fast: 120ms;
+  --dur: 220ms;
+
+  /* ---- Layout ---- */
+  --rail-w: 232px;
+  --tabbar-h: 64px;
+  --tap: 44px;        /* minimum touch target */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17130f;
+    --surface: #211b16;
+    --surface-sunk: #2b241e;
+    --border: #3a3129;
+    --border-strong: #5a4d41;
+    --text: #efebe6;
+    --text-muted: #b2a69a;
+    --text-on-ink: #17130f;
+    --ink: #efe3b0;
+    --ink-hover: #f6e7a0;
+    --accent-soft: #2e2810;
+    --accent-line: #5a4c10;
+    --focus: #8ab6e0;
+    --st-planned-fg: #8ab6e0; --st-planned-bg: #1c2a38;
+    --st-held-fg: #8fc79c;    --st-held-bg: #1b2b1f;
+    --st-cancelled-fg: #a2978c; --st-cancelled-bg: #2b241e;
+    --st-awaiting-fg: #f0d75a; --st-awaiting-bg: #2e2810;
+    --st-overdue-fg: #f0928a; --st-overdue-bg: #3a1c19;
+    --st-manager-fg: #c9aee6; --st-manager-bg: #2d2238;
+    --shadow-float: 0 12px 32px rgba(0, 0, 0, .5);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17130f;
+  --surface: #211b16;
+  --surface-sunk: #2b241e;
+  --border: #3a3129;
+  --border-strong: #5a4d41;
+  --text: #efebe6;
+  --text-muted: #b2a69a;
+  --text-on-ink: #17130f;
+  --ink: #efe3b0;
+  --ink-hover: #f6e7a0;
+  --accent-soft: #2e2810;
+  --accent-line: #5a4c10;
+  --focus: #8ab6e0;
+  --st-planned-fg: #8ab6e0; --st-planned-bg: #1c2a38;
+  --st-held-fg: #8fc79c;    --st-held-bg: #1b2b1f;
+  --st-cancelled-fg: #a2978c; --st-cancelled-bg: #2b241e;
+  --st-awaiting-fg: #f0d75a; --st-awaiting-bg: #2e2810;
+  --st-overdue-fg: #f0928a; --st-overdue-bg: #3a1c19;
+  --st-manager-fg: #c9aee6; --st-manager-bg: #2d2238;
+  --shadow-float: 0 12px 32px rgba(0, 0, 0, .5);
+}

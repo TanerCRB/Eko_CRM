@@ -1,0 +1,249 @@
+/*
+ * Eko_CRM components — prototype P1.
+ * Framework-agnostic classes (prefix `ek-`, BEM-lite: block, block__part, block--variant).
+ * Every value comes from tokens.css. One class per concern keeps specificity flat: no element
+ * selectors combined with classes, no IDs.
+ */
+
+/* ---------- Base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--fs-md);
+  line-height: var(--lh-body);
+  font-variant-numeric: tabular-nums;
+}
+h1, h2, h3 { font-family: var(--font-display); font-weight: var(--fw-display); line-height: var(--lh-tight); margin: 0; letter-spacing: -.01em; }
+p { margin: 0; }
+a { color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.ek-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.ek-h1 { font-size: var(--fs-2xl); }
+.ek-h2 { font-size: var(--fs-xl); }
+.ek-h3 { font-size: var(--fs-lg); }
+.ek-muted { color: var(--text-muted); }
+.ek-meta { font-size: var(--fs-xs); color: var(--text-muted); }
+
+/* ---------- Icon ---------- */
+.ek-icon { width: 20px; height: 20px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ek-icon--sm { width: 16px; height: 16px; }
+
+/* ---------- Button ---------- */
+.ek-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  min-height: var(--tap); padding: 0 var(--sp-4);
+  border: 1px solid var(--border-strong); border-radius: var(--r-control);
+  background: var(--surface); color: var(--text);
+  font: inherit; font-weight: var(--fw-bold); font-size: var(--fs-sm);
+  cursor: pointer; text-decoration: none; white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.ek-btn:hover { background: var(--surface-sunk); }
+.ek-btn--primary { background: var(--ink); border-color: var(--ink); color: var(--text-on-ink); }
+.ek-btn--primary:hover { background: var(--ink-hover); border-color: var(--ink-hover); }
+.ek-btn--danger { color: var(--st-overdue-fg); border-color: currentColor; }
+.ek-btn--danger:hover { background: var(--st-overdue-bg); }
+.ek-btn--ghost { border-color: transparent; background: transparent; }
+.ek-btn--ghost:hover { background: var(--surface-sunk); }
+.ek-btn--sm { min-height: 34px; padding: 0 var(--sp-3); font-size: var(--fs-xs); }
+.ek-btn--icon { width: var(--tap); padding: 0; }
+.ek-btn[disabled], .ek-btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.ek-btn-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+/* ---------- Form ---------- */
+.ek-field { display: grid; gap: var(--sp-1); }
+.ek-field__label { font-size: var(--fs-sm); font-weight: var(--fw-bold); }
+.ek-field__hint { font-size: var(--fs-xs); color: var(--text-muted); }
+.ek-field__error { font-size: var(--fs-xs); color: var(--st-overdue-fg); font-weight: var(--fw-bold); }
+.ek-field__warn { font-size: var(--fs-xs); color: var(--st-awaiting-fg); background: var(--st-awaiting-bg); padding: var(--sp-1) var(--sp-2); border-radius: 4px; }
+.ek-input, .ek-select, .ek-textarea {
+  width: 100%; min-height: var(--tap); padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border-strong); border-radius: var(--r-control);
+  background: var(--surface); color: var(--text); font: inherit;
+}
+.ek-textarea { min-height: 96px; resize: vertical; }
+.ek-input[aria-invalid="true"], .ek-select[aria-invalid="true"] { border-color: var(--st-overdue-fg); box-shadow: inset 0 0 0 1px var(--st-overdue-fg); }
+.ek-input:focus-visible, .ek-select:focus-visible, .ek-textarea:focus-visible { outline: none; border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
+.ek-form-grid { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.ek-form-grid__wide { grid-column: 1 / -1; }
+.ek-check { display: inline-flex; align-items: center; gap: var(--sp-2); min-height: var(--tap); cursor: pointer; }
+.ek-check input { width: 18px; height: 18px; accent-color: var(--ink); }
+.ek-fieldset { border: 1px solid var(--border); border-radius: var(--r-surface); padding: var(--sp-4); margin: 0; display: grid; gap: var(--sp-4); }
+.ek-fieldset__legend { font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-lg); padding: 0 var(--sp-2); }
+
+/* ---------- State chip (visit states, action statuses, flags) ---------- */
+.ek-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 10px; border-radius: var(--r-chip);
+  font-size: var(--fs-xs); font-weight: var(--fw-bold); line-height: 1.6; white-space: nowrap;
+  color: var(--st-planned-fg); background: var(--st-planned-bg);
+}
+.ek-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.ek-chip--held, .ek-chip--done { color: var(--st-held-fg); background: var(--st-held-bg); }
+.ek-chip--cancelled { color: var(--st-cancelled-fg); background: var(--st-cancelled-bg); text-decoration: line-through; }
+.ek-chip--awaiting { color: var(--st-awaiting-fg); background: var(--hatch), var(--st-awaiting-bg); }
+.ek-chip--overdue { color: var(--st-overdue-fg); background: var(--st-overdue-bg); }
+.ek-chip--todo { color: var(--text); background: var(--surface-sunk); }
+.ek-chip--manager { color: var(--st-manager-fg); background: var(--st-manager-bg); }
+/* Flags are not states: outlined, no dot */
+.ek-flag {
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px;
+  border: 1px dashed var(--border-strong); border-radius: var(--r-chip);
+  font-size: var(--fs-xs); color: var(--text-muted); white-space: nowrap;
+}
+.ek-flag--unsynced { border-style: solid; background: var(--hatch-muted); }
+
+/* ---------- Count badge ---------- */
+.ek-count {
+  display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px;
+  border-radius: var(--r-chip); background: var(--st-overdue-fg); color: var(--c-white);
+  font-size: 12px; font-weight: var(--fw-bold);
+}
+.ek-count--accent { background: var(--accent); color: var(--c-loam-900); }
+
+/* ---------- Surface / panel ---------- */
+.ek-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-surface); }
+.ek-panel__head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-4) var(--sp-4) 0; }
+.ek-panel__body { padding: var(--sp-4); }
+
+/* ---------- Banner (page-level notices: reconnect, awaiting decision) ---------- */
+.ek-banner {
+  display: flex; align-items: flex-start; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-surface); border: 1px solid var(--border-strong); background: var(--surface);
+}
+.ek-banner__body { flex: 1; display: grid; gap: 2px; }
+.ek-banner__title { font-weight: var(--fw-bold); }
+.ek-banner--decision { border-color: var(--accent); background: var(--hatch), var(--accent-soft); }
+.ek-banner--warn { border-color: var(--st-overdue-fg); background: var(--st-overdue-bg); }
+.ek-banner--info { background: var(--surface-sunk); border-color: var(--border); }
+
+/* ---------- List rows ---------- */
+.ek-list { list-style: none; margin: 0; padding: 0; }
+.ek-row {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--border);
+  text-decoration: none; color: inherit;
+}
+.ek-list > li:first-child > .ek-row, .ek-list > .ek-row:first-child { border-top: 0; }
+.ek-row--link { cursor: pointer; }
+.ek-row--link:hover { background: var(--surface-sunk); }
+.ek-row__main { min-width: 0; display: grid; gap: 2px; }
+.ek-row__title { font-weight: var(--fw-bold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ek-row__aside { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; justify-content: flex-end; }
+
+/* ---------- Avatar (initials; owner of a record) ---------- */
+.ek-avatar {
+  display: inline-grid; place-items: center; width: 36px; height: 36px; flex: none;
+  border-radius: 50%; background: var(--surface-sunk); color: var(--text);
+  font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-sm);
+}
+.ek-avatar--manager { background: var(--st-manager-bg); color: var(--st-manager-fg); }
+
+/* ---------- Table (desktop lists, dashboard) ---------- */
+.ek-table-wrap { overflow-x: auto; }
+.ek-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.ek-table th { text-align: left; font-weight: var(--fw-bold); color: var(--text-muted); padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--border-strong); white-space: nowrap; }
+.ek-table td { padding: var(--sp-3); border-bottom: 1px solid var(--border); vertical-align: middle; }
+.ek-table td.ek-num, .ek-table th.ek-num { text-align: right; }
+.ek-table tbody tr:hover { background: var(--surface-sunk); }
+
+/* ---------- Tabs / segmented ---------- */
+.ek-seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--surface-sunk); border-radius: calc(var(--r-control) + 3px); flex-wrap: wrap; }
+.ek-seg__btn { border: 0; background: transparent; font: inherit; font-size: var(--fs-sm); padding: 6px var(--sp-3); border-radius: var(--r-control); cursor: pointer; color: var(--text-muted); min-height: 36px; }
+.ek-seg__btn[aria-pressed="true"], .ek-seg__btn[aria-selected="true"] { background: var(--surface); color: var(--text); font-weight: var(--fw-bold); box-shadow: 0 1px 2px rgba(36,28,21,.12); }
+
+/* ---------- Contact (phone / e-mail with "who it reaches" note, CUS-1) ---------- */
+.ek-contact { display: grid; grid-template-columns: auto 1fr auto; gap: var(--sp-3); align-items: center; padding: var(--sp-2) 0; }
+.ek-contact__value { font-weight: var(--fw-bold); text-decoration: none; }
+.ek-contact__value:hover { text-decoration: underline; }
+.ek-contact__note { font-size: var(--fs-xs); color: var(--text-muted); }
+.ek-contact__primary { font-size: var(--fs-xs); color: var(--st-held-fg); font-weight: var(--fw-bold); }
+
+/* ---------- Note + actions (NOT-*, ACT-*) ---------- */
+.ek-note { border-left: 3px solid var(--border-strong); padding: var(--sp-1) 0 var(--sp-1) var(--sp-4); display: grid; gap: var(--sp-2); }
+.ek-note--manager { border-left-color: var(--st-manager-fg); }
+.ek-note__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--text-muted); }
+.ek-note__text { max-width: var(--measure); white-space: pre-wrap; }
+.ek-action {
+  display: grid; grid-template-columns: 1fr auto; gap: var(--sp-2) var(--sp-3); align-items: center;
+  padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-control); background: var(--surface);
+}
+.ek-action--overdue { border-left: 4px solid var(--st-overdue-fg); }
+.ek-action__desc { font-weight: var(--fw-bold); }
+.ek-action__meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; font-size: var(--fs-xs); color: var(--text-muted); }
+
+/* ---------- Day agenda (the signature element) ----------
+ * Hour rails like field strips; visits sit in their real time slot; a rapeseed line marks now.
+ * Height is proportional: --hour-h per hour, --start-h is the first rail. */
+.ek-agenda { position: relative; --hour-h: 64px; padding-left: 56px; }
+.ek-agenda__hour { position: relative; height: var(--hour-h); border-top: 1px solid var(--border); }
+.ek-agenda__hour:nth-child(even) { background: color-mix(in srgb, var(--surface-sunk) 45%, transparent); }
+.ek-agenda__label { position: absolute; left: -56px; top: -9px; width: 48px; text-align: right; font-size: var(--fs-xs); color: var(--text-muted); }
+.ek-agenda__visit {
+  position: absolute; left: 64px; right: var(--sp-2);
+  display: flex; flex-direction: column; gap: 2px; overflow: hidden;
+  padding: 6px var(--sp-3); border-radius: var(--r-control);
+  background: var(--st-planned-bg); border-left: 4px solid var(--st-planned-fg);
+  color: var(--text); text-decoration: none; font-size: var(--fs-sm); cursor: pointer;
+}
+.ek-agenda__visit:hover { filter: brightness(.97); }
+.ek-agenda__visit--held { background: var(--st-held-bg); border-left-color: var(--st-held-fg); }
+.ek-agenda__visit--cancelled { background: var(--st-cancelled-bg); border-left-color: var(--st-cancelled-fg); color: var(--text-muted); text-decoration: line-through; }
+.ek-agenda__visit--awaiting { background: var(--hatch), var(--st-awaiting-bg); border-left-color: var(--accent); }
+.ek-agenda__visit--unsynced { box-shadow: inset 0 0 0 1px var(--border-strong); background-image: var(--hatch-muted); }
+.ek-agenda__visit-title { font-weight: var(--fw-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ek-agenda__now { position: absolute; left: 56px; right: 0; height: 0; border-top: 3px solid var(--accent); z-index: 2; pointer-events: none; }
+.ek-agenda__now::before { content: ""; position: absolute; left: -7px; top: -8px; width: 13px; height: 13px; border-radius: 50%; background: var(--accent); }
+.ek-agenda__now-label { position: absolute; left: -56px; top: -11px; width: 48px; text-align: right; font-size: var(--fs-xs); font-weight: var(--fw-bold); }
+
+/* ---------- Dialog / sheet ---------- */
+.ek-dialog { border: 0; padding: 0; border-radius: var(--r-surface); background: var(--surface); color: var(--text); box-shadow: var(--shadow-float); width: min(560px, calc(100vw - 2 * var(--gutter))); max-height: calc(100dvh - 48px); }
+.ek-dialog::backdrop { background: rgba(36, 28, 21, .45); }
+.ek-dialog[open] { animation: ek-rise var(--dur) var(--ease); }
+.ek-dialog__head { padding: var(--sp-5) var(--sp-5) 0; display: grid; gap: var(--sp-2); }
+.ek-dialog__body { padding: var(--sp-4) var(--sp-5); display: grid; gap: var(--sp-4); }
+.ek-dialog__foot { padding: 0 var(--sp-5) var(--sp-5); display: flex; flex-wrap: wrap; gap: var(--sp-2); justify-content: flex-end; }
+.ek-dialog--decision { border-top: 6px solid var(--accent); }
+@media (max-width: 600px) {
+  .ek-dialog { margin: auto 0 0; width: 100vw; max-width: 100vw; border-radius: var(--r-surface) var(--r-surface) 0 0; }
+  .ek-dialog__foot { flex-direction: column-reverse; }
+  .ek-dialog__foot .ek-btn { width: 100%; }
+}
+/* Choice card inside a decision dialog: the two answers to "reschedule or cancel" */
+.ek-choice { display: grid; grid-template-columns: auto 1fr; gap: var(--sp-1) var(--sp-3); align-items: start; padding: var(--sp-3); border: 1px solid var(--border-strong); border-radius: var(--r-control); cursor: pointer; }
+.ek-choice:has(input:checked) { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.ek-choice input { margin-top: 4px; accent-color: var(--ink); width: 18px; height: 18px; }
+.ek-choice__title { font-weight: var(--fw-bold); }
+.ek-choice__hint { grid-column: 2; font-size: var(--fs-xs); color: var(--text-muted); }
+
+/* ---------- Toast ---------- */
+.ek-toast-region { position: fixed; z-index: 50; left: 50%; bottom: calc(var(--tabbar-h) + var(--sp-4)); transform: translateX(-50%); display: grid; gap: var(--sp-2); width: min(420px, calc(100vw - 2 * var(--gutter))); pointer-events: none; }
+.ek-toast { background: var(--ink); color: var(--text-on-ink); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-control); box-shadow: var(--shadow-float); font-size: var(--fs-sm); animation: ek-rise var(--dur) var(--ease); pointer-events: auto; }
+@media (min-width: 900px) { .ek-toast-region { bottom: var(--sp-5); } }
+
+/* ---------- Empty state ---------- */
+.ek-empty { display: grid; gap: var(--sp-3); justify-items: start; padding: var(--sp-6) var(--sp-4); border: 1px dashed var(--border-strong); border-radius: var(--r-surface); }
+
+/* ---------- Key-value (customer details) ---------- */
+.ek-kv { display: grid; grid-template-columns: minmax(110px, max-content) 1fr; gap: var(--sp-2) var(--sp-4); margin: 0; }
+.ek-kv dt { color: var(--text-muted); font-size: var(--fs-sm); }
+.ek-kv dd { margin: 0; }
+
+/* ---------- Stat (dashboard metric) ---------- */
+.ek-stat { display: grid; gap: 2px; padding: var(--sp-3) var(--sp-4); border-left: 4px solid var(--st-planned-fg); }
+.ek-stat__value { font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-2xl); line-height: 1; }
+.ek-stat__label { font-size: var(--fs-sm); color: var(--text-muted); }
+.ek-stat--held { border-left-color: var(--st-held-fg); }
+.ek-stat--moved { border-left-color: var(--border-strong); border-left-style: dashed; }
+.ek-stat--cancelled { border-left-color: var(--st-cancelled-fg); }
+.ek-stat--awaiting { border-left-color: var(--accent); }
+
+@keyframes ek-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+}

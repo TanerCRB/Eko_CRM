@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Eko CRM — UI kit P1</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap">
+  <link rel="stylesheet" href="assets/tokens.css">
+  <link rel="stylesheet" href="assets/components.css">
+  <style>
+    /* Gallery layout only */
+    .kit { max-width: 1080px; margin: 0 auto; padding: var(--sp-6) var(--gutter) var(--sp-7); display: grid; gap: var(--sp-7); }
+    .kit__head { display: grid; gap: var(--sp-2); max-width: var(--measure); }
+    .kit__sec { display: grid; gap: var(--sp-4); }
+    .kit__sec > p { max-width: var(--measure); color: var(--text-muted); }
+    .kit__demo { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; padding: var(--sp-5); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-surface); }
+    .kit__demo--col { display: grid; align-items: start; }
+    .kit__code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; color: var(--text-muted); }
+    .swatches { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .swatch { border: 1px solid var(--border); border-radius: var(--r-control); overflow: hidden; background: var(--surface); }
+    .swatch__color { height: 64px; }
+    .swatch__meta { padding: var(--sp-2) var(--sp-3); display: grid; font-size: var(--fs-xs); }
+    .type-row { display: grid; grid-template-columns: 140px 1fr; gap: var(--sp-4); align-items: baseline; padding: var(--sp-2) 0; border-top: 1px solid var(--border); }
+    .icons { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+    .icons > div { display: grid; justify-items: center; gap: var(--sp-1); padding: var(--sp-3); font-size: var(--fs-xs); color: var(--text-muted); }
+    .icons .ek-icon { width: 28px; height: 28px; color: var(--text); }
+    .theme-switch { justify-self: start; }
+  </style>
+</head>
+<body>
+<main class="kit">
+  <header class="kit__head">
+    <h1 class="ek-h1">Eko CRM — UI kit</h1>
+    <p class="ek-muted">Tokeny i komponenty prototypu P1. Klasy z prefiksem <code>ek-</code> pochodzą z <code>assets/components.css</code>, wartości z <code>assets/tokens.css</code>. Każdy komponent odpowiada przyszłemu komponentowi w <code>frontend/src</code> (mapa w README).</p>
+    <button class="ek-btn ek-btn--sm theme-switch" id="theme">Przełącz motyw jasny/ciemny</button>
+  </header>
+
+  <section class="kit__sec" aria-labelledby="s-color">
+    <h2 class="ek-h2" id="s-color">Kolor</h2>
+    <p>Rzepakowy żółty to jedyny akcent: linia „teraz”, aktywna nawigacja, decyzje do podjęcia. Przyciski główne mają kolor ziemi. Zielony należy tylko do stanu „Odbyta” i statusu „Zrobione”.</p>
+    <div class="swatches" id="swatches"></div>
+  </section>
+
+  <section class="kit__sec" aria-labelledby="s-type">
+    <h2 class="ek-h2" id="s-type">Typografia</h2>
+    <p>Bricolage Grotesque do nagłówków; Atkinson Hyperlegible Next do tekstu — krój projektowany z myślą o czytelności, ważny przy telefonie w słońcu na polu. Cyfry tabelaryczne wszędzie, tekst nie mniejszy niż 15 px poza metadanymi.</p>
+    <div class="kit__demo kit__demo--col">
+      <div class="type-row"><span class="kit__code">--fs-3xl / 40</span><span style="font-family:var(--font-display);font-weight:750;font-size:var(--fs-3xl);line-height:1">11:40</span></div>
+      <div class="type-row"><span class="kit__code">ek-h1 / 28</span><span class="ek-h1">Gospodarstwo Rolne Tomasz Jędrzejak</span></div>
+      <div class="type-row"><span class="kit__code">ek-h2 / 23</span><span class="ek-h2">Notatki i akcje</span></div>
+      <div class="type-row"><span class="kit__code">ek-h3 / 19</span><span class="ek-h3">Następna wizyta, 12:30</span></div>
+      <div class="type-row"><span class="kit__code">body / 16</span><span>Pszenica ozima po przezimowaniu w dobrym stanie. Pyta o termin dostawy saletry.</span></div>
+      <div class="type-row"><span class="kit__code">ek-meta / 13</span><span class="ek-meta">Racot, ul. Główna 3, 64-000 Kościan</span></div>
+    </div>
+  </section>
+
+  <section class="kit__sec" aria-labelledby="s-btn">
+    <h2 class="ek-h2" id="s-btn">Przyciski</h2>
+    <p>Etykieta mówi, co się stanie. Minimalna wysokość 44 px (dotyk). Wersja <code>--sm</code> tylko w gęstych listach na desktopie.</p>
+    <div class="kit__demo">
+      <button class="ek-btn ek-btn--primary" data-i="plus">Zaplanuj wizytę</button>
+      <button class="ek-btn" data-i="phone">Zadzwoń</button>
+      <button class="ek-btn ek-btn--ghost">Szczegóły</button>
+      <button class="ek-btn ek-btn--danger">Archiwizuj</button>
+      <button class="ek-btn" disabled>Przenieś zaznaczonych</button>
+      <button class="ek-btn ek-btn--sm" data-i="plus">Dodaj akcję</button>
+      <button class="ek-btn ek-btn--icon ek-btn--ghost" aria-label="Kopiuj" data-i="copy"></button>
+    </div>
+  </section>
+
+  <section class="kit__sec" aria-labelledby="s-state">
+    <h2 class="ek-h2" id="s-state">Stany i flagi</h2>
+    <p>Stan to pigułka z kropką — wizyta ma dokładnie jeden. Flaga to obrys bez kropki — może się dołożyć do stanu. Kreskowanie „bruzdą” oznacza coś, co czeka: na decyzję lub na synchronizację.</p>
+    <div class="kit__demo">
+      <span class="ek-chip ek-chip--planned">Zaplanowana</span>
+      <span class="ek-chip ek-chip--held">Odbyta</span>
+      <span class="ek-chip ek-chip--cancelled">Odwołana</span>
+      <span class="ek-chip ek-chip--awaiting">Czeka na decyzję</span>
+      <span class="ek-flag" data-i="moved">Przeniesiona</span>
+      <span class="ek-flag ek-flag--unsynced" data-i="cloudOff">Niezsynchronizowana</span>
+    </div>
+    <div class="kit__demo">
+      <span class="ek-chip ek-chip--todo">Do zrobienia</span>
+      <span class="ek-chip ek-chip--planned">W toku</span>
+      <span class="ek-chip ek-chip--done">Zrobione</span>
+      <span class="ek-chip ek-chip--cancelled">Anulowane</span>
+      <span class="ek-chip ek-chip--overdue">Zaległa</span>
+      <span class="ek-chip ek-chip--manager">Kierownik</span>
+      <span class="ek-count">3</span>
+    </div>
+  </section>
+
+  <section class="kit__sec" aria-labelledby="s-form">
+    <h2 class="ek-h2" id="s-form">Formularze</h2>
+    <p>Błąd mówi, co poprawić; ostrzeżenie o duplikacie nie blokuje zapisu. Walidacja pojawia się po opuszczeniu pola, nie w trakcie pierwszego wpisywania.</p>
+    <div class="kit__demo kit__demo--col">
+      <div class="ek-form-grid" style="width:100%">
+        <div class="ek-field"><label class="ek-field__label" for="k1">Nazwa</label><input class="ek-input" id="k1" value="Jan Pietrzak"></div>
+        <div class="ek-field"><label class="ek-field__label" for="k2">NIP</label><input class="ek-input" id="k2" value="778-104-51-23" aria-invalid="true"><span class="ek-field__error">Ten NIP ma błędną cyfrę kontrolną. Sprawdź, czy nie ma literówki.</span></div>
+        <div class="ek-field"><label class="ek-field__label" for="k3">Województwo</label><select class="ek-select" id="k3"><option>wielkopolskie</option></select><span class="ek-field__hint">Opcjonalne, ale musi być poprawne.</span></div>
+        <div class="ek-field ek-form-grid__wide"><label class="ek-field__label" for="k4">Nowa notatka</label><textarea class="ek-textarea" id="k4" placeholder="Co ustaliliście? Czego potrzebuje klient?"></textarea></div>
+      </div>
+      <span class="ek-field__warn">Klient „Jan Pietrzak” w miejscowości Pobiedziska już istnieje.</span>
+      <div class="ek-btn-row"><label class="ek-check"><input type="radio" name="p" checked>Główny</label><label class="ek-check"><input type="checkbox">Zaznacz</label></div>
+    </div>
+  </section>
+
+  <section class="kit__sec" aria-labelledby="s-banner">
+    <h2 class="ek-h2" id="s-banner">Banery</h2>
+    <p>Komunikaty na poziomie strony. Decyzja (VIS-11) i utrata dostępu do Google (VIS-8) pokazują się na każdej stronie.</p>
+    <div class="kit__demo kit__demo--col">
+      <div class="ek-banner ek-banner--decision" data-i="alert"><div class="ek-banner__body"><span class="ek-banner__title">Wizyta usunięta w Google czeka na Twoją decyzję</span><span>Hodowla Bydła Mleczarz, wczoraj 14:00</span></div><button class="ek-btn ek-btn--sm ek-btn--primary">Zdecyduj</button></div>
+      <div class="ek-banner ek-banner--warn" data-i="cloudOff"><div class="ek-banner__body"><span class="ek-banner__title">Dostęp do kalendarza Google wygasł</span><span>Wizyty zapisują się w aplikacji. Stany wizyt się nie zmieniają.</span></div><button class="ek-btn ek-btn--sm ek-btn--primary">Połącz ponownie</button></div>
+      <div class="ek-banner ek-banner--info" data-i="cloud"><div class="ek-banner__body"><span class="ek-banner__title">Kalendarz Google nie jest połączony</span><span>Wizyty działają bez niego.</span></div></div>
+    </div>
+  </section>
+
+  <section class="kit__sec" aria-labelledby="s-agenda">
+    <h2 class="ek-h2" id="s-agenda">Agenda dnia</h2>
+    <p>Element rozpoznawczy: godziny jak pasy pola, wizyty w swoim prawdziwym slocie, rzepakowa linia „teraz”. Wysokość proporcjonalna do czasu (<code>--hour-h</code>).</p>
+    <div class="kit__demo kit__demo--col">
+      <div class="ek-agenda" style="--hour-h:56px">
+        <div class="ek-agenda__hour"><span class="ek-agenda__label">08:00</span></div>
+        <div class="ek-agenda__hour"><span class="ek-agenda__label">09:00</span></div>
+        <div class="ek-agenda__hour"><span class="ek-agenda__label">10:00</span></div>
+        <div class="ek-agenda__hour"><span class="ek-agenda__label">11:00</span></div>
+        <div class="ek-agenda__hour"><span class="ek-agenda__label">12:00</span></div>
+        <a class="ek-agenda__visit ek-agenda__visit--held" style="top:15px;height:54px"><span class="ek-agenda__visit-title">Gospodarstwo Rolne Tomasz Jędrzejak</span><span class="ek-meta">08:15–09:15 · Odbyta</span></a>
+        <a class="ek-agenda__visit ek-agenda__visit--awaiting" style="top:85px;height:40px"><span class="ek-agenda__visit-title">Hodowla Bydła Mleczarz — czeka na decyzję</span></a>
+        <a class="ek-agenda__visit ek-agenda__visit--unsynced" style="top:197px;height:54px"><span class="ek-agenda__visit-title">Agro-Brzozowski sp. j.</span><span class="ek-meta">11:30–12:30 · Zaplanowana · niezsynchronizowana</span></a>
+        <div class="ek-agenda__now" style="top:168px"><span class="ek-agenda__now-label">11:00</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="kit__sec" aria-labelledby="s-note">
+    <h2 class="ek-h2" id="s-note">Notatka, akcja, kontakt</h2>
+    <p>Wpis kierownika ma fioletowy znacznik wszędzie, gdzie się pojawia (ACC-6). Akcja zaległa ma czerwoną krawędź; „zaległa” jest wyliczana, nie jest statusem.</p>
+    <div class="kit__demo kit__demo--col">
+      <article class="ek-note ek-note--manager">
+        <div class="ek-note__head"><strong>Marek Zając</strong><span class="ek-chip ek-chip--manager">Kierownik</span><span>wczoraj 16:00</span></div>
+        <p class="ek-note__text">Klient dzwonił do biura w sprawie reklamacji partii z jesieni.</p>
+        <div class="ek-action ek-action--overdue"><span class="ek-action__desc">Oddzwonić w sprawie reklamacji</span><span class="ek-row__aside"><span class="ek-chip ek-chip--overdue">Zaległa</span><span class="ek-chip ek-chip--todo">Do zrobienia</span></span><div class="ek-action__meta"><span>termin wczoraj</span><span>dla: Anna Wróbel</span></div></div>
+      </article>
+      <div class="ek-contact" data-i="phone"><div><a class="ek-contact__value" href="#">+48 601 220 341</a><div class="ek-contact__note">Tomasz, właściciel</div></div><span class="ek-contact__primary">główny</span></div>
+    </div>
+  </section>
+
+  <section class="kit__sec" aria-labelledby="s-list">
+    <h2 class="ek-h2" id="s-list">Lista, tabela, statystyka, pusty stan</h2>
+    <div class="ek-panel"><ul class="ek-list">
+      <li><a class="ek-row ek-row--link" href="#"><span class="ek-avatar">AB</span><span class="ek-row__main"><span class="ek-row__title">Agro-Brzozowski sp. j.</span><span class="ek-meta">Kościan</span></span><span class="ek-row__aside"><span class="ek-meta">dziś 12:30</span><span class="ek-chip ek-chip--todo">1 akcja</span></span></a></li>
+      <li><a class="ek-row ek-row--link" href="#"><span class="ek-avatar ek-avatar--manager">MZ</span><span class="ek-row__main"><span class="ek-row__title">Marek Zając</span><span class="ek-meta">Kierownik</span></span><span></span></a></li>
+    </ul></div>
+    <div class="stats" style="display:grid;gap:var(--sp-3);grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+      <div class="ek-panel ek-stat"><span class="ek-stat__value">15</span><span class="ek-stat__label">Zaplanowane</span></div>
+      <div class="ek-panel ek-stat ek-stat--held"><span class="ek-stat__value">8</span><span class="ek-stat__label">Odbyte</span></div>
+      <div class="ek-panel ek-stat ek-stat--moved"><span class="ek-stat__value">3</span><span class="ek-stat__label">Przeniesione</span></div>
+      <div class="ek-panel ek-stat ek-stat--cancelled"><span class="ek-stat__value">1</span><span class="ek-stat__label">Odwołane</span></div>
+      <div class="ek-panel ek-stat ek-stat--awaiting"><span class="ek-stat__value">0</span><span class="ek-stat__label">Czekają na decyzję</span></div>
+    </div>
+    <div class="ek-empty"><p>Na dziś nie masz zaplanowanych wizyt.</p><button class="ek-btn" data-i="plus">Zaplanuj wizytę</button></div>
+    <div class="ek-seg" role="group" aria-label="Przykład"><button class="ek-seg__btn" aria-pressed="true">Otwarte</button><button class="ek-seg__btn" aria-pressed="false">Zaległe</button><button class="ek-seg__btn" aria-pressed="false">Wszystkie</button></div>
+  </section>
+
+  <section class="kit__sec" aria-labelledby="s-dialog">
+    <h2 class="ek-h2" id="s-dialog">Dialog decyzji</h2>
+    <p>Na telefonie dialog staje się arkuszem od dołu, przyciski na całą szerokość, główny na górze.</p>
+    <div><button class="ek-btn ek-btn--primary" id="open-dlg">Pokaż dialog</button></div>
+    <dialog class="ek-dialog ek-dialog--decision" id="dlg" aria-labelledby="dlg-t">
+      <form method="dialog">
+        <div class="ek-dialog__head"><h2 class="ek-h2" id="dlg-t">Usuwasz wizytę</h2><p class="ek-muted">Agro-Brzozowski sp. j., czwartek, 12:30. Co z nią zrobić?</p></div>
+        <div class="ek-dialog__body">
+          <label class="ek-choice"><input type="radio" name="c" checked><span class="ek-choice__title">Przenieś na inny termin</span><span class="ek-choice__hint">Wizyta zostanie oznaczona jako przeniesiona.</span></label>
+          <label class="ek-choice"><input type="radio" name="c"><span class="ek-choice__title">Odwołaj wizytę</span><span class="ek-choice__hint">Liczy się jako odwołana. Notatki zostają przy kliencie.</span></label>
+        </div>
+        <div class="ek-dialog__foot"><button class="ek-btn ek-btn--ghost">Nie usuwaj</button><button class="ek-btn ek-btn--primary">Potwierdź</button></div>
+      </form>
+    </dialog>
+  </section>
+
+  <section class="kit__sec" aria-labelledby="s-icons">
+    <h2 class="ek-h2" id="s-icons">Ikony</h2>
+    <p>24×24, obrys 1,8, zaokrąglone końce. Znak marki: kwiat rzepaku — cztery płatki.</p>
+    <div class="kit__demo" id="brand"></div>
+    <div class="icons" id="icons"></div>
+  </section>
+</main>
+<script src="js/icons.js"></script>
+<script>
+  (function () {
+    const { icon, paths, brandMark } = window.EkoIcons;
+    document.querySelectorAll("[data-i]").forEach((el) => el.insertAdjacentHTML("afterbegin", icon(el.dataset.i, el.classList.contains("ek-flag") ? "ek-icon--sm" : "")));
+    document.getElementById("icons").innerHTML = Object.keys(paths).map((k) => `<div>${icon(k)}<span>${k}</span></div>`).join("");
+    document.getElementById("brand").innerHTML = brandMark.replace('class="brand__mark"', 'width="56" height="56"') + '<span class="ek-h2">Eko CRM</span>';
+    const sw = [
+      ["--c-loam-900", "Ziemia — tusz, przyciski"], ["--c-loam-500", "Ziemia — tekst drugorzędny"], ["--c-frost-50", "Szron — tło"],
+      ["--c-frost-200", "Szron — krawędzie"], ["--c-rapeseed-500", "Rzepak — akcent"], ["--c-rapeseed-50", "Rzepak — tło decyzji"],
+      ["--c-held-600", "Odbyta / Zrobione"], ["--c-plan-600", "Zaplanowana / W toku, fokus"], ["--c-alert-600", "Zaległa, błąd"], ["--st-manager-fg", "Kierownik"],
+    ];
+    const css = getComputedStyle(document.documentElement);
+    document.getElementById("swatches").innerHTML = sw.map(([v, l]) => `<div class="swatch"><div class="swatch__color" style="background:var(${v})"></div><div class="swatch__meta"><strong>${l}</strong><span class="kit__code">${v}<br>${css.getPropertyValue(v).trim()}</span></div></div>`).join("");
+    const dlg = document.getElementById("dlg");
+    document.getElementById("open-dlg").onclick = () => dlg.showModal();
+    document.getElementById("theme").onclick = () => {
+      const r = document.documentElement;
+      const dark = r.dataset.theme ? r.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+      r.dataset.theme = dark ? "light" : "dark";
+    };
+  })();
+</script>
+</body>
+</html>
