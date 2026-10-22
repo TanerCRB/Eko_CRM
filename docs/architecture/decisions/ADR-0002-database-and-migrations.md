@@ -1,6 +1,6 @@
 # ADR-0002 — Database engine, migration tool and data access
 
-**Status:** Draft — pending approval
+**Status:** Accepted 2026-10-22
 <!-- Only a human changes this to "Accepted <YYYY-MM-DD>". -->
 
 ## Context
