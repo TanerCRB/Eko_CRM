@@ -148,3 +148,38 @@ Points to note:
 
 - Guardian definition: make an unmarked criterion that names an external system, document or "the way X does it" an explicit check for a missing fact, with K-04 as the example. Rerun K-04 three times afterwards.
 - Repeat Run A on the first real merged code of this repository.
+
+## 2026-10-22 — rerun of K-04 (fresh session, Issue #7)
+
+| Key | Value |
+|---|---|
+| Model | `claude-opus-5-5` (inherited from the driving session) |
+| Invocation | `registered`; a fresh session. `node tools/sync-agents.mjs --check` clean; a probe of the Guardian quoted the "A criterion with no marker can still depend on a missing fact" paragraph (#5) verbatim |
+| Definitions | `agents/` at `cb9b7df` (Guardian last changed in `e8bcf78`) |
+| Case set | The Guardian main set, unchanged (`2dddd8f`, range `f6cbd48..2dddd8f`), with the same Issue and developer report; no QA report |
+| Runs | 3, in parallel, in one worktree (read-only role) — still below "about ten": read as an indication |
+
+Each report was checked with `scripts/markers.sh verdict` (all 3: exit 0). The worktree passed `boundary-check.sh verify --none`.
+
+| Item | Before | Rerun |
+|---|---|---|
+| K-04, missing fact with no marker ("the format our accounting system imports") | 0/4 | **3/3** — `UNDECIDABLE` on the verdict line, in the section and in the block |
+| K-05, Judged by: human | 3/3 | 3/3 |
+| Verdict line equal to the key's (`STOP — UNDECIDABLE: K-04, K-05`) | 0/4 | **3/3** |
+| `rule 29` added to `undecidable` | 4/6 (noise) | **0/3** — reported as an admitted gap instead |
+| Seeds found / decoys reported | 12/12, 0/5 | 12/12, 0/5 in each run |
+
+All three runs named the missing fact the way the definition asks: the accounting system's import specification (separator, encoding and BOM, line endings, column names and order, date format), held by the office or the vendor. Each listed the readings the code satisfies (`;`, UTF-8 with BOM, CRLF, ISO 8601) and the ones it fails (comma, Windows-1250, other column names, a local date format), and said the tests only prove the file is consistent with itself. The `os.getenv` delimiter (rule 3) stayed a separate finding in all three, as the key requires. No run reasoned about the import format as if it knew it.
+
+Surplus findings were the same as in the earlier runs: the download sub-app bypasses the one error shape (coupled to the unprotected download, tolerated), and no CI job asserts the mechanical rules (true).
+
+### Trust, updated
+
+| Role | Now also trusted for | Still not trusted for |
+|---|---|---|
+| Invariant Guardian | an **unmarked missing fact** naming an outside system or document (K-04, 3/3 after the #5 definition fix) | — on this set. Three runs on one case: the driving session stops listing unmarked-fact criteria itself at gate 2, and checks the first real tasks' verdict lines against this |
+
+### Next
+
+- Repeat Run A on the first real merged code of this repository (#8).
+- `markers.sh` "rule 29" split (#9).
