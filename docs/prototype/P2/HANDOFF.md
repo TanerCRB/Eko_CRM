@@ -46,4 +46,4 @@ The prototype stores only the latest action-status actor. Production must retain
 
 ## Product questions left for design review
 
-Confirm English versus Polish product localisation, the density of the agenda for roughly 200 customers per representative, and how much manager functionality belongs on mobile. These do not block use of the current demo. None of these choices changes the source brief.
+The prototype now uses Polish product localisation. Confirm the density of the agenda for roughly 200 customers per representative and how much manager functionality belongs on mobile. These do not block use of the current demo. None of these choices changes the source brief.

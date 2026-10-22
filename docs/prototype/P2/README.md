@@ -60,4 +60,4 @@ npm test
 
 This is a local design artifact, not product implementation or an accepted architecture decision. It has no authentication, backend, real calendar integration or production data protection. Role behaviour is a UI/domain simulation; every synthetic record is in the browser. Do not enter real customer data. The product remains an online-only web application: the demo's local storage is not a proposed product offline mode.
 
-Artifacts use English according to the repository's team contract. Native browser date controls may use the operating system's language.
+The prototype UI, accessible labels, validation messages, dates and sample content are in Polish, as requested. Technical documentation and domain contracts remain in English. Native browser date controls may use the operating system's language. `src/locale-pl.js` translates unchanged sample content in existing browser saves without resetting user edits or workflow state.

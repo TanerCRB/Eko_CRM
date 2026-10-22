@@ -4,13 +4,21 @@ Date: 2026-10-22. Scope: this local prototype only. This is the author's validat
 
 ## Automated checks
 
-- `npm run check`: syntax checks for the local server and all four browser scripts passed.
-- `npm test`: **20 tests passed**, zero failures, zero skipped tests, using Node's built-in test runner.
+- `npm run check`: syntax checks for the local server and all five browser scripts passed.
+- `npm test`: **24 tests passed**, zero failures, zero skipped tests, using Node's built-in test runner.
 - Local HTTP readiness check: **200** for the demo entry page.
 
 The rule tests cover owner visibility and mutation restrictions; derived held status; changed-start versus changed-duration flags; Google deletion and recovery; unchanged visit state on expiry; disconnected save and reconnect; archive isolation and retained notes; reassignment and historical attribution; note/action ownership; manager closing restrictions; transitions and overdue computation; NIP validation and private conflict wording; duplicate-warning scope; foreign addresses; Warsaw DST conversion; and dashboard counting.
 
 ## Browser walkthrough performed
+
+### Polish localisation follow-up
+
+The UI now uses Polish (`lang="pl"` and `pl-PL` date formatting), including forms, accessible names, notices, status labels, validation and unchanged synthetic sample content. Technical identifiers and domain error contracts remain in English. Four additional tests verify preservation of saved edits and workflow state, Polish country input retaining postcode/NIP rules, error translations and Polish plural forms.
+
+The Polish UI was checked through the local HTTP preview: day agenda, customer list and sheet, translated note content, customer edit form, invalid postcode message, component catalogue, manager statistics and follow-up status options. The mobile menu opened and navigated to follow-ups correctly. At 390 × 844, document width and content width were both 375px (excluding the scrollbar). Browser error/warning logs were empty. The four screenshots were refreshed with the Polish UI, including the desktop view at 1440 × 1000. No saved customer data was changed during this follow-up.
+
+### Original functional walkthrough (before localisation)
 
 The demo was exercised in the Codex in-app Chromium browser through its UI:
 

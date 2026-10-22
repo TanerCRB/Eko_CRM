@@ -30,14 +30,16 @@
     mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 6 9 7 9-7"/>'
   };
   const icon = (name, cls = '') => `<svg class="icon ${escape(cls)}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.leaf}</svg>`;
-  const labels = { planned: 'Planned', held: 'Held', cancelled: 'Cancelled', decision: 'Awaiting decision', todo: 'To do', progress: 'In progress', done: 'Done', moved: 'Moved', unsynced: 'Not synced' };
+  const labels = { planned: 'Zaplanowana', held: 'Odbyta', cancelled: 'Odwołana', decision: 'Oczekuje na decyzję', todo: 'Do zrobienia', progress: 'W toku', done: 'Wykonane', moved: 'Przełożona', unsynced: 'Brak synchronizacji' };
+  const actionLabel = status => status === 'cancelled' ? 'Anulowane' : labels[status];
+  const iconLabels = { sun: 'Słońce', users: 'Klienci', calendar: 'Kalendarz', task: 'Zadanie', chart: 'Statystyki', pin: 'Lokalizacja', note: 'Notatka', leaf: 'Liść', warning: 'Ostrzeżenie', refresh: 'Odśwież', archive: 'Archiwum', phone: 'Telefon' };
   const badge = (status, text) => `<span class="badge badge-${escape(status)}">${icon(status === 'held' || status === 'done' ? 'check' : status === 'decision' || status === 'unsynced' ? 'warning' : status === 'moved' ? 'refresh' : 'clock')}${escape(text || labels[status] || status)}</span>`;
   const button = (text, action, id = '', style = 'secondary', glyph = '') => `<button class="button button-${style}" type="button" data-action="${escape(action)}" data-id="${escape(id)}">${glyph ? icon(glyph) : ''}${escape(text)}</button>`;
   const iconButton = (label, action, id, glyph) => `<button type="button" class="icon-button" aria-label="${escape(label)}" title="${escape(label)}" data-action="${escape(action)}" data-id="${escape(id)}">${icon(glyph)}</button>`;
   const empty = (title, body, action = '') => `<div class="empty">${icon('leaf')}<h3>${escape(title)}</h3><p>${escape(body)}</p>${action}</div>`;
-  const time = instant => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Warsaw', hour: '2-digit', minute: '2-digit' }).format(new Date(instant));
-  const date = (value, options = {}) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Warsaw', day: 'numeric', month: 'short', ...options }).format(new Date(value.length === 10 ? `${value}T12:00:00Z` : value));
+  const time = instant => new Intl.DateTimeFormat('pl-PL', { timeZone: 'Europe/Warsaw', hour: '2-digit', minute: '2-digit' }).format(new Date(instant));
+  const date = (value, options = {}) => new Intl.DateTimeFormat('pl-PL', { timeZone: 'Europe/Warsaw', day: 'numeric', month: 'short', ...options }).format(new Date(value.length === 10 ? `${value}T12:00:00Z` : value));
   const avatar = (name, cls = '') => `<span class="avatar ${escape(cls)}" aria-hidden="true">${escape(name.split(/[ &]+/).slice(0, 2).map(v => v[0]).join(''))}</span>`;
   const field = (label, name, value = '', type = 'text', extra = '') => `<label class="field"><span>${escape(label)}</span><input name="${escape(name)}" type="${type}" value="${escape(value)}" ${extra}></label>`;
-  window.EkoUI = { escape, icon, badge, button, iconButton, empty, time, date, avatar, field, labels };
+  window.EkoUI = { escape, icon, badge, button, iconButton, empty, time, date, avatar, field, labels, actionLabel, iconLabels };
 })();
