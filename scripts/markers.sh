@@ -37,9 +37,10 @@
 # Events and their required keys: task-started, task-stopped, verified, gate-reached (gate=1|2|3),
 # scope-locked (gate=1|2, hash), verdict (role, verdict, undecidable, findings), reverify (round).
 # Values have no spaces (verdict=pass-with-reservations, undecidable=K-02,K-04 or none,
-# findings=0,0,1,0). It prints one line per event, oldest first — name, sha, the other keys — and
-# skips markers in quoted lines ("> …") and in code blocks, so a quoted comment never counts as
-# the event happening twice. A marker that is malformed or names an unknown event is a finding.
+# findings=0,0,1,0); a multi-word item keeps its words joined by a hyphen (undecidable=rule-29).
+# It prints one line per event, oldest first — name, sha, the other keys — and skips markers in
+# quoted lines ("> …") and in code blocks, so a quoted comment never counts as the event happening
+# twice. A marker that is malformed or names an unknown event is a finding.
 #
 # Exit codes: 0 = everything read and consistent, 1 = a finding (on stderr), 2 = the check itself
 # failed (a missing file, a bad argument) — never read that as "consistent".
@@ -60,8 +61,12 @@ read -r -d '' VERDICT_AWK <<'AWK' || true
 function trim(v) { gsub(/^[[:space:]*]+|[[:space:]*]+$/, "", v); return v }
 function normlist(v,   n, a, i, out, seen) {
   v = trim(v); if (tolower(v) == "none" || v == "") return "none"
-  n = split(v, a, /[[:space:],]+/); out = ""
-  for (i = 1; i <= n; i++) if (a[i] != "" && !seen[a[i]]++) out = out (out == "" ? "" : ",") a[i]
+  # Items are separated by commas only: "rule 29" is one item, not two words.
+  n = split(v, a, /,/); out = ""
+  for (i = 1; i <= n; i++) {
+    a[i] = trim(a[i]); gsub(/[[:space:]]+/, " ", a[i])
+    if (a[i] != "" && !seen[a[i]]++) out = out (out == "" ? "" : ",") a[i]
+  }
   # sort, so the order of items never makes a mismatch
   n = split(out, a, ","); for (i = 2; i <= n; i++) { x = a[i]; j = i - 1; while (j > 0 && a[j] > x) { a[j + 1] = a[j]; j-- } a[j + 1] = x }
   out = a[1]; for (i = 2; i <= n; i++) out = out "," a[i]
@@ -105,7 +110,7 @@ END {
   if (!("undecidable" in field)) bad("undecidable is missing — write \"none\" when there is nothing")
   und = normlist(field["undecidable"])
   # Items are ids (K-02, U-01, rule 7), never a sentence: a sentence can't be matched to anything.
-  if (und != "none") { n = split(und, it, ","); for (i = 1; i <= n; i++) if (it[i] !~ /^([KU]-[0-9]+|rule|[0-9]+)$/) { bad("undecidable items must be ids (K-xx, U-xx, rule <n>), not text: \"" it[i] "\""); break } }
+  if (und != "none") { n = split(und, it, ","); for (i = 1; i <= n; i++) if (it[i] !~ /^([KU]-[0-9]+|rule [0-9]+)$/) { bad("undecidable items must be ids (K-xx, U-xx, rule <n>), not text: \"" it[i] "\""); break } }
   for (id in secids) if (index("," und ",", "," id ",") == 0) bad("the Undecidable section names " id ", the block doesn't list it")
   f = field["findings"]; ok = 1
   split("critical high medium low", sev, " ")
@@ -298,6 +303,15 @@ $(block invariant-guardian PASS 'K-01, K-02' 0 0 0 1)"
   expect "a sentence as an undecidable item"         1 "undecidable items must be ids" verdict "**Verdict: STOP** — **UNDECIDABLE: who can trigger the runner**
 ## B-01 — High — x
 $(block security-auditor STOP 'who can trigger the runner' 0 1 0 0)"
+  expect "a multi-word item stays one item"          0 "invariant-guardian	STOP	K-04,rule 29	" verdict "**Verdict: STOP** — **UNDECIDABLE: rule 29, K-04**
+## S-01 — High — rule 3 — x
+$(block invariant-guardian STOP 'K-04,  rule   29' 0 1 0 0)"
+  expect "the words of an item in another order"     1 "the block lists undecidable \"rule 29\", the prose \"29 rule\"" verdict "**Verdict: STOP** — **UNDECIDABLE: 29 rule**
+## S-01 — High — rule 3 — x
+$(block invariant-guardian STOP 'rule 29' 0 1 0 0)"
+  expect "a bare number is not an id"                1 "undecidable items must be ids" verdict "**Verdict: STOP** — **UNDECIDABLE: 29**
+## S-01 — High — rule 3 — x
+$(block invariant-guardian STOP 29 0 1 0 0)"
 
   # The block against the contract.
   expect "PASS with a medium finding (Guardian)"     1 "PASS with a high or medium finding" verdict "**Verdict: PASS**
