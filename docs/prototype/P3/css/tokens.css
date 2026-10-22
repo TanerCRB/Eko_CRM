@@ -1,0 +1,162 @@
+/*
+ * Eko_CRM prototype P3 — design tokens.
+ * Mirrored in handoff/tokens.json. Components read only these custom properties.
+ *
+ * Direction: white paper and a dark green "cab" band, like the operator's seat of a tractor
+ * looking out over a field in October. Signal red (the enamel of Polish farm machinery) is
+ * reserved for one meaning — something needs a decision now. Field green is the primary action
+ * and the "held" state. Two Polish typefaces: Brygada 1918 for the voice, Lato for the work.
+ */
+@layer tokens {
+  :root {
+    /* ---- Base palette ---- */
+    --ink: #1c201e;
+    --band: #20302a;
+    --band-raised: #2c4237;
+    --paper: #ffffff;
+    --mist: #eef1ec;
+    --mist-deep: #e1e6dd;
+    --rule: #d3d8d0;
+    --rule-strong: #a9b1a8;
+    --muted: #5c665f;
+    --signal: #c0202a;
+    --signal-wash: #fbe9ea;
+    --field: #1f6e47;
+    --field-wash: #e3f1e8;
+    --amber: #9a6306;
+    --amber-wash: #fbf0d9;
+
+    /* ---- Roles ---- */
+    --bg: var(--paper);
+    --surface-2: var(--mist);
+    --surface-3: var(--mist-deep);
+    --text: var(--ink);
+    --text-muted: var(--muted);
+    --text-on-band: #f3f5f1;
+    --text-on-band-muted: #aab8ae;
+    --border: var(--rule);
+    --border-strong: var(--rule-strong);
+    --primary: var(--field);
+    --primary-hover: #185a3a;
+    --on-primary: #ffffff;
+    --link: #184f86;
+
+    /* ---- States (one meaning each) ---- */
+    --state-planned: var(--ink);
+    --state-planned-wash: var(--paper);
+    --state-held: var(--field);
+    --state-held-wash: var(--field-wash);
+    --state-cancelled: var(--muted);
+    --state-cancelled-wash: var(--mist);
+    --state-awaiting: var(--signal);
+    --state-awaiting-wash: var(--signal-wash);
+    --state-late: var(--signal);
+    --state-late-wash: var(--signal-wash);
+    --state-progress: var(--amber);
+    --state-progress-wash: var(--amber-wash);
+    --state-manager: var(--band);
+    --state-manager-wash: #e4ebe6;
+
+    /* ---- Type ---- */
+    --font-display: "Brygada 1918", "Georgia", "Times New Roman", serif;
+    --font-text: "Lato", "Segoe UI", system-ui, sans-serif;
+    /* 1.25 scale from 16 */
+    --t-13: 0.8125rem;
+    --t-15: 0.9375rem;
+    --t-16: 1rem;
+    --t-20: 1.25rem;
+    --t-25: 1.5625rem;
+    --t-31: 1.953rem;
+    --t-39: 2.441rem;
+    --lh-text: 1.5;
+    --lh-display: 1.15;
+    --w-regular: 400;
+    --w-bold: 700;
+
+    /* ---- Space ---- */
+    --s-1: 4px;
+    --s-2: 8px;
+    --s-3: 12px;
+    --s-4: 16px;
+    --s-5: 24px;
+    --s-6: 32px;
+    --s-7: 48px;
+    --gutter: 16px;
+    --measure: 66ch;
+
+    /* ---- Radius: controls small, floating layers larger, chips almost square ---- */
+    --r-control: 4px;
+    --r-chip: 2px;
+    --r-sheet: 8px;
+
+    /* ---- Elevation: only floating layers ---- */
+    --shadow-sheet: 0 16px 40px rgba(28, 32, 30, 0.22);
+
+    /* ---- Motion ---- */
+    --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --dur-quick: 140ms;
+    --dur-base: 240ms;
+
+    /* ---- Sizes ---- */
+    --band-h: 56px;
+    --tap: 44px;
+    --content-max: 1240px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141916;
+      --surface-2: #1d2420;
+      --surface-3: #27302b;
+      --text: #e8ece8;
+      --text-muted: #9ba69e;
+      --border: #303934;
+      --border-strong: #55615a;
+      --band: #0d1310;
+      --band-raised: #1b2620;
+      --primary: #3f9a6b;
+      --primary-hover: #52ad7e;
+      --on-primary: #0d1310;
+      --link: #8fb6e2;
+      --signal: #ea5e66;
+      --signal-wash: #3a1b1e;
+      --field: #3f9a6b;
+      --field-wash: #173827;
+      --amber: #d9a240;
+      --amber-wash: #3a2c10;
+      --state-planned: #e8ece8;
+      --state-planned-wash: #141916;
+      --state-cancelled-wash: #27302b;
+      --state-manager: #c7d6cc;
+      --state-manager-wash: #27352d;
+      --shadow-sheet: 0 16px 40px rgba(0, 0, 0, 0.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141916;
+    --surface-2: #1d2420;
+    --surface-3: #27302b;
+    --text: #e8ece8;
+    --text-muted: #9ba69e;
+    --border: #303934;
+    --border-strong: #55615a;
+    --band: #0d1310;
+    --band-raised: #1b2620;
+    --primary: #3f9a6b;
+    --primary-hover: #52ad7e;
+    --on-primary: #0d1310;
+    --link: #8fb6e2;
+    --signal: #ea5e66;
+    --signal-wash: #3a1b1e;
+    --field: #3f9a6b;
+    --field-wash: #173827;
+    --amber: #d9a240;
+    --amber-wash: #3a2c10;
+    --state-planned: #e8ece8;
+    --state-planned-wash: #141916;
+    --state-cancelled-wash: #27302b;
+    --state-manager: #c7d6cc;
+    --state-manager-wash: #27352d;
+    --shadow-sheet: 0 16px 40px rgba(0, 0, 0, 0.6);
+  }
+}

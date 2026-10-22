@@ -1,0 +1,39 @@
+/* Eko_CRM prototype P3 — base: reset, document, type, focus, small utilities. */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-text);
+    font-size: var(--t-16);
+    line-height: var(--lh-text);
+    font-variant-numeric: tabular-nums;
+  }
+  h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); font-weight: var(--w-bold); line-height: var(--lh-display); }
+  p, ul, ol, dl, figure { margin: 0; }
+  a { color: var(--link); text-underline-offset: 2px; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  img, svg { display: block; }
+  table { border-collapse: collapse; }
+
+  :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  ::selection { background: var(--field-wash); }
+
+  .t-display-1 { font-family: var(--font-display); font-size: var(--t-39); line-height: 1.05; letter-spacing: -0.01em; }
+  .t-h1 { font-size: var(--t-31); }
+  .t-h2 { font-size: var(--t-25); }
+  .t-h3 { font-size: var(--t-20); }
+  .t-lead { font-size: var(--t-20); line-height: 1.4; }
+  .t-meta { font-size: var(--t-13); color: var(--text-muted); }
+  .t-muted { color: var(--text-muted); }
+  .t-name { font-family: var(--font-display); font-weight: var(--w-bold); }
+  .measure { max-width: var(--measure); }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+  }
+}

@@ -1,0 +1,86 @@
+/* Eko_CRM prototype P3 — app shell and screen layouts (product layout, not components). */
+@layer app {
+
+  /* ---- Band: the dark bar across the top on every size ---- */
+  .band { position: sticky; top: 0; z-index: 30; background: var(--band); color: var(--text-on-band); }
+  .band__in { display: flex; align-items: center; gap: var(--s-4); height: var(--band-h); padding: 0 var(--gutter); max-width: var(--content-max); margin: 0 auto; }
+  .brand { display: inline-flex; align-items: center; gap: var(--s-2); color: inherit; text-decoration: none; font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--t-20); letter-spacing: 0.01em; }
+  .brand__mark { width: 26px; height: 26px; }
+  .nav { display: none; }
+  .band__right { margin-left: auto; display: flex; align-items: center; gap: var(--s-2); }
+  .band__me { display: none; align-items: center; gap: var(--s-2); color: inherit; text-decoration: none; }
+  .band__me-name { font-size: var(--t-15); font-weight: var(--w-bold); }
+  .band__me-role { font-size: 12px; color: var(--text-on-band-muted); }
+  .google-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--field); box-shadow: 0 0 0 2px var(--band); }
+  .google-dot[data-link="expired"] { background: var(--signal); }
+  .google-dot[data-link="none"] { background: var(--text-on-band-muted); }
+
+  @media (min-width: 900px) {
+    .nav { display: flex; align-items: stretch; height: 100%; margin-left: var(--s-4); }
+    .nav__link { display: inline-flex; align-items: center; gap: var(--s-2); padding: 0 var(--s-3); color: var(--text-on-band-muted); text-decoration: none; font-weight: var(--w-bold); font-size: var(--t-15); border-bottom: 3px solid transparent; border-top: 3px solid transparent; }
+    .nav__link:hover { color: var(--text-on-band); }
+    .nav__link[aria-current="page"] { color: var(--text-on-band); border-bottom-color: var(--signal); }
+    .nav__later { font-size: 11px; font-weight: var(--w-regular); color: var(--text-on-band-muted); }
+    .band__me { display: inline-flex; }
+    .menu-btn { display: none; }
+  }
+
+  /* ---- Phone menu (sheet with the same links) ---- */
+  .menu { display: grid; gap: 2px; }
+  .menu__link { display: flex; align-items: center; gap: var(--s-3); min-height: var(--tap); padding: 0 var(--s-2); color: inherit; text-decoration: none; font-weight: var(--w-bold); border-radius: var(--r-control); }
+  .menu__link[aria-current="page"] { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--signal); }
+  .menu__link .count { margin-left: auto; }
+
+  /* ---- Page ---- */
+  .page { max-width: var(--content-max); margin: 0 auto; padding: var(--s-5) var(--gutter) var(--s-7); display: grid; gap: var(--s-5); align-content: start; }
+  @media (min-width: 900px) { .page { padding: var(--s-6) var(--s-5) var(--s-7); } }
+  .page__head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--s-3); }
+  .page__titles { display: grid; gap: var(--s-1); min-width: 0; }
+  .page__title { font-size: var(--t-31); }
+  .page__sub { color: var(--text-muted); }
+  .notices { display: grid; gap: var(--s-2); }
+  .crumb { display: inline-flex; align-items: center; gap: var(--s-1); color: var(--text-muted); text-decoration: none; font-size: var(--t-15); font-weight: var(--w-bold); }
+  .crumb:hover { color: var(--text); }
+  .toolbar { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
+  .two-col { display: grid; gap: var(--s-5); }
+  @media (min-width: 1000px) { .two-col { grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr); align-items: start; } }
+  .stack { display: grid; gap: var(--s-4); align-content: start; }
+  .stack[data-gap="small"] { gap: var(--s-2); }
+
+  /* Week page */
+  .week-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2) var(--s-4); }
+  .week-head__range { font-family: var(--font-display); font-size: var(--t-31); font-weight: var(--w-bold); }
+  .week-head__nav { display: inline-flex; gap: 2px; }
+  @media (max-width: 600px) { .week-head__range { font-size: var(--t-25); } }
+  .board-desktop { display: none; }
+  .board-phone { display: grid; gap: var(--s-4); }
+  @media (min-width: 900px) { .board-desktop { display: block; } .board-phone { display: none; } }
+  .next { display: grid; gap: var(--s-3); padding: var(--s-4); background: var(--surface-2); border-left: 4px solid var(--signal); }
+  .next__name { font-size: var(--t-25); color: inherit; text-decoration: none; }
+  .next__name:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .next__when { font-weight: var(--w-bold); }
+
+  /* Event preview (what Google will show) */
+  .event { display: grid; gap: var(--s-1); padding: var(--s-3) var(--s-4); border: 1px solid var(--border); border-left: 4px solid var(--primary); font-size: var(--t-15); }
+  .event__title { font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--t-20); }
+  .event__line { display: flex; gap: var(--s-2); align-items: center; }
+
+  /* Dashboard */
+  .tiles { display: grid; gap: var(--s-4); grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+
+  /* Login */
+  .login { min-height: 100dvh; display: grid; grid-template-rows: auto 1fr; background: var(--bg); }
+  .login__band { background: var(--band); color: var(--text-on-band); padding: var(--s-7) var(--gutter); }
+  .login__band-in { max-width: 920px; margin: 0 auto; display: grid; gap: var(--s-3); }
+  .login__claim { font-family: var(--font-display); font-size: var(--t-39); font-weight: var(--w-bold); line-height: 1.1; max-width: 18ch; }
+  .login__claim-sub { color: var(--text-on-band-muted); max-width: 48ch; }
+  .login__main { padding: var(--s-6) var(--gutter); }
+  .login__card { max-width: 920px; margin: 0 auto; display: grid; gap: var(--s-6); }
+  @media (min-width: 760px) { .login__card { grid-template-columns: 1fr 1fr; } }
+  .login__people { display: grid; gap: var(--s-2); align-content: start; }
+  .login__people .btn { justify-content: flex-start; gap: var(--s-3); }
+  .login__people .btn small { color: var(--text-muted); font-weight: var(--w-regular); }
+
+  /* Demo strip label on the band */
+  .demo-note { font-size: var(--t-13); color: var(--text-muted); }
+}

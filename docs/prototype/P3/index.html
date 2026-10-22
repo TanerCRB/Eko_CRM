@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Eko CRM — prototyp P3</title>
+  <meta name="color-scheme" content="light dark">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Brygada+1918:wght@400;700&family=Lato:wght@400;700&display=swap">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/app.css">
+  <style>
+    /* Capitalise Intl day names in place: "czwartek" → "Czwartek". */
+    .cap { display: inline-block; }
+    .cap::first-letter, .week__dow::first-letter, .daystrip__dow::first-letter { text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <dialog id="sheet" class="sheet" aria-labelledby="sheet-title"></dialog>
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+  <script type="module" src="app/main.js"></script>
+</body>
+</html>
