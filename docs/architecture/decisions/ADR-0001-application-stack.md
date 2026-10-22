@@ -1,6 +1,6 @@
 # ADR-0001 — Application stack and backend layering
 
-**Status:** Draft — pending approval
+**Status:** Accepted 2026-10-23
 <!-- Only a human changes this to "Accepted <YYYY-MM-DD>". -->
 
 ## Context
