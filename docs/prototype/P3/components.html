@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Eko CRM — komponenty P3</title>
+  <meta name="color-scheme" content="light dark">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Brygada+1918:wght@400;700&family=Lato:wght@400;700&display=swap">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/app.css">
+  <style>
+    /* Gallery chrome only */
+    .g { max-width: 1100px; margin: 0 auto; padding: var(--s-6) var(--gutter) var(--s-7); display: grid; gap: var(--s-7); }
+    .g__head { display: grid; gap: var(--s-3); max-width: var(--measure); }
+    .g__sec { display: grid; gap: var(--s-4); padding-top: var(--s-5); border-top: 2px solid var(--border-strong); }
+    .g__sec > p { max-width: var(--measure); color: var(--text-muted); }
+    .g__demo { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; }
+    .g__demo[data-col] { display: grid; align-items: start; }
+    .g__code { font-size: var(--t-13); color: var(--text-muted); }
+    .swatches { display: grid; gap: var(--s-3); grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .swatch { display: grid; gap: var(--s-1); }
+    .swatch__chip { height: 56px; border: 1px solid var(--border); }
+    .type-row { display: grid; grid-template-columns: 130px 1fr; gap: var(--s-4); align-items: baseline; padding: var(--s-2) 0; border-bottom: 1px solid var(--border); }
+    .icons { display: grid; gap: var(--s-2); grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+    .icons > div { display: grid; justify-items: center; gap: var(--s-1); padding: var(--s-3) 0; font-size: var(--t-13); color: var(--text-muted); }
+    .icons .icon { width: 28px; height: 28px; color: var(--text); }
+    .cap::first-letter { text-transform: uppercase; }
+  </style>
+</head>
+<body>
+<main class="g">
+  <header class="g__head">
+    <h1 class="t-h1">Eko CRM: komponenty prototypu P3</h1>
+    <p class="t-muted">Każdy blok to klasa z <code>css/components.css</code>, wartości z <code>css/tokens.css</code>. Stany domenowe są atrybutami (<code>data-state="held"</code>), nie wariantami klas, więc przyszły komponent dostaje wartość domeny bez tłumaczenia. Mapa na komponenty React jest w README.</p>
+    <div><button class="btn" data-size="small" id="theme">Jasny / ciemny</button></div>
+  </header>
+
+  <section class="g__sec"><h2 class="t-h2">Kolor</h2>
+    <p>Biały papier i ciemnozielony pas kabiny. Czerwień sygnałowa ma jedno znaczenie: coś wymaga decyzji albo jest po terminie. Zieleń pola jest kolorem akcji i stanu „Odbyta”. Bursztyn tylko dla „W toku” i wizyt, których nie ma w Google.</p>
+    <div class="swatches" id="swatches"></div>
+  </section>
+
+  <section class="g__sec"><h2 class="t-h2">Typografia</h2>
+    <p>Dwa polskie kroje. Brygada 1918 (odnowiona antykwa z Warszawy) mówi: tytuły, nazwy klientów, liczby na pulpicie. Lato (Łukasz Dziedzic) pracuje: tekst, formularze, listy. Skala 1,25 od 16 px; cyfry tabelaryczne wszędzie.</p>
+    <div class="g__demo" data-col>
+      <div class="type-row"><span class="g__code">t-display-1 / 39</span><span class="t-display-1">19–25 października</span></div>
+      <div class="type-row"><span class="g__code">page__title / 31</span><span class="page__title t-name">Gospodarstwo Rolne Krystyna i Wiesław Banaś</span></div>
+      <div class="type-row"><span class="g__code">t-h2 / 25</span><span class="t-h2">Wizytę usunięto w kalendarzu Google</span></div>
+      <div class="type-row"><span class="g__code">t-h3 / 20</span><span class="t-h3">Notatki i zadania</span></div>
+      <div class="type-row"><span class="g__code">body / 16</span><span>Spółdzielnia kończy zbiór buraków. Prezes pyta o wapno nawozowe przed orką zimową, 60 ha.</span></div>
+      <div class="type-row"><span class="g__code">t-meta / 13</span><span class="t-meta">ul. Kolejowa 7, 88-150 Kruszwica</span></div>
+    </div>
+  </section>
+
+  <section class="g__sec"><h2 class="t-h2">Przyciski</h2>
+    <p>Etykieta nazywa skutek. Destrukcyjne są obrysowane tuszem, nie czerwone: czerwień jest zarezerwowana. Minimum 44 px wysokości; <code>data-size="small"</code> tylko w gęstych listach.</p>
+    <div class="g__demo">
+      <button class="btn" data-kind="primary" data-i="plus">Zaplanuj wizytę</button>
+      <button class="btn" data-i="phone">Zadzwoń</button>
+      <button class="btn" data-kind="quiet">Szczegóły</button>
+      <button class="btn" data-kind="destructive">Archiwizuj</button>
+      <button class="btn" disabled>Przenieś zaznaczonych</button>
+      <button class="btn" data-size="small" data-i="plus">Dodaj zadanie</button>
+      <button class="btn" data-kind="quiet" data-size="icon" aria-label="Kopiuj" data-i="copy"></button>
+    </div>
+    <div class="g__demo" style="background:var(--band);padding:12px"><button class="btn" data-kind="band" data-size="small" data-i="demo">Demo</button><button class="btn" data-kind="band" data-size="icon" aria-label="Menu" data-i="menu"></button></div>
+  </section>
+
+  <section class="g__sec"><h2 class="t-h2">Stany i flagi</h2>
+    <p>Stan to obramowana plakietka: wizyta ma dokładnie jeden. Flaga to glif i słowo bez ramki: może być kilka. Odwołana ma przerywaną ramkę, bo nie liczy się jak pozostałe.</p>
+    <div class="g__demo">
+      <span class="state" data-state="planned">Zaplanowana</span><span class="state" data-state="held">Odbyta</span><span class="state" data-state="cancelled">Odwołana</span><span class="state" data-state="awaiting">Czeka na decyzję</span>
+      <span class="flag" data-flag="moved" data-i="moved">przeniesiona</span><span class="flag" data-flag="unsynced" data-i="cloudOff">nie ma jej w Google</span>
+    </div>
+    <div class="g__demo">
+      <span class="state" data-state="todo">Do zrobienia</span><span class="state" data-state="progress">W toku</span><span class="state" data-state="done">Zrobione</span><span class="state" data-state="cancelled">Anulowane</span><span class="state" data-state="late">Zaległe</span><span class="state" data-state="manager">Kierownik</span>
+      <span class="count">3</span><span class="count" data-tone="quiet">1</span>
+    </div>
+  </section>
+
+  <section class="g__sec"><h2 class="t-h2">Formularz</h2>
+    <p>Błąd mówi, co poprawić, i pojawia się po opuszczeniu pola. Ostrzeżenie o duplikacie nie blokuje; konflikt NIP blokuje.</p>
+    <div class="form-grid" style="max-width:860px">
+      <div class="field"><label class="field__label" for="k1">Nazwa</label><input class="input" id="k1" value="Marian Gawlik"></div>
+      <div class="field"><label class="field__label" for="k2">NIP <small>(opcjonalnie)</small></label><input class="input" id="k2" value="556-901-23-57" aria-invalid="true"><span class="field__error">Ten NIP ma błędną cyfrę kontrolną. Sprawdź, czy nie ma literówki.</span></div>
+      <div class="field"><label class="field__label" for="k3">Województwo</label><select class="select" id="k3"><option>kujawsko-pomorskie</option></select><span class="field__hint">Opcjonalne, ale musi być poprawne.</span></div>
+      <div class="field" data-span="full"><label class="field__label" for="k4">Nowa notatka</label><textarea class="textarea" id="k4" placeholder="Co ustaliliście? Czego potrzebuje klient?"></textarea></div>
+    </div>
+    <div class="g__demo"><label class="check"><input type="radio" name="p" checked>Główny</label><label class="check"><input type="checkbox">Zaznacz</label>
+      <div class="tabs" role="group"><button class="tabs__tab" aria-pressed="true">Otwarte</button><button class="tabs__tab" aria-pressed="false">Zaległe</button><button class="tabs__tab" aria-pressed="false">Wszystkie</button></div>
+      <label class="search" style="flex:0 1 320px"><span class="visually-hidden">Szukaj</span><span data-i="search"></span><input class="input" placeholder="Nazwa, miejscowość, NIP albo telefon"></label></div>
+  </section>
+
+  <section class="g__sec"><h2 class="t-h2">Komunikaty strony</h2>
+    <p>Lewa krawędź niesie ton. Decyzja (VIS-11) i wygaśnięcie dostępu Google (VIS-8) pokazują się na każdej stronie, tylko właścicielowi.</p>
+    <div class="g__demo" data-col>
+      <div class="notice" data-tone="decision" data-i="alert"><div class="notice__body"><span class="notice__title">Wizyta usunięta w Google czeka na Twoją decyzję</span><span>Rolnicza Spółdzielnia Produkcyjna Zorza, jutro 10:00</span></div><button class="btn" data-kind="primary" data-size="small">Zdecyduj</button></div>
+      <div class="notice" data-tone="blocked" data-i="cloudOff"><div class="notice__body"><span class="notice__title">Dostęp do kalendarza Google wygasł</span><span>Wizyty zapisują się w aplikacji, ale nie trafiają do kalendarza. Czekają 2 zmiany.</span></div><button class="btn" data-kind="primary" data-size="small">Połącz ponownie</button></div>
+      <div class="notice" data-tone="warning" data-i="alert"><div class="notice__body"><span class="notice__title">Możliwy duplikat. Sprawdź przed zapisem.</span><span>Klient „Marian Gawlik” w miejscowości Mława już istnieje.</span></div></div>
+      <div class="notice" data-tone="hint" data-i="cloud"><div class="notice__body"><span class="notice__title">Kalendarz Google nie jest połączony</span><span>Wizyty działają bez niego.</span></div></div>
+    </div>
+  </section>
+
+  <section class="g__sec"><h2 class="t-h2">Plansza tygodnia</h2>
+    <p>Element rozpoznawczy. Siedem równych kolumn, dziś z czerwoną linią u góry, wizyty jako bloki w kolejności dnia, nie w proporcji czasu. Poniżej 900 px zamienia się w pasek dni i listę.</p>
+    <div class="week" style="min-height:0">
+      <div class="week__day" data-past style="min-height:220px"><div class="week__head"><span class="week__dow">Pon.</span><span class="week__date">19</span></div><div class="week__body">
+        <a class="visit" data-state="held" href="#"><span class="visit__time">09:00–10:00</span><span class="visit__name">Gospodarstwo Rolne Banaś</span><span class="visit__meta"><span>Odbyta</span></span></a>
+        <a class="visit" data-state="held" href="#"><span class="visit__time">12:00–13:00</span><span class="visit__name">PHU Agro-Kłos</span><span class="visit__meta"><span>Odbyta</span><span class="flag" data-flag="moved">przeniesiona</span></span></a></div></div>
+      <div class="week__day" data-past><div class="week__head"><span class="week__dow">Wt.</span><span class="week__date">20</span></div><div class="week__body"><a class="visit" data-state="cancelled" href="#"><span class="visit__time">09:00–10:00</span><span class="visit__name">Grupa Producentów Buraka</span><span class="visit__meta"><span>Odwołana</span></span></a></div></div>
+      <div class="week__day" data-today><div class="week__head"><span class="week__dow">Śr.</span><span class="week__date">21</span><span class="week__today">dziś</span></div><div class="week__body"><a class="visit" data-state="planned" href="#"><span class="visit__time">15:30–16:30</span><span class="visit__name">PHU Agro-Kłos</span><span class="visit__meta"><span>Zaplanowana</span></span></a></div></div>
+      <div class="week__day"><div class="week__head"><span class="week__dow">Czw.</span><span class="week__date">22</span></div><div class="week__body"><a class="visit" data-state="awaiting" href="#"><span class="visit__time">10:00–11:00</span><span class="visit__name">RSP Zorza</span><span class="visit__meta"><span>Czeka na decyzję</span></span></a><a class="visit" data-state="planned" data-unsynced href="#"><span class="visit__time">13:00–14:00</span><span class="visit__name">Ferma Drobiu Olszewscy</span><span class="visit__meta"><span>Zaplanowana</span><span class="flag" data-flag="unsynced">nie ma jej w Google</span></span></a></div></div>
+      <div class="week__day"><div class="week__head"><span class="week__dow">Pt.</span><span class="week__date">23</span></div><div class="week__body"><span class="week__drop">Wolny dzień</span></div></div>
+      <div class="week__day"><div class="week__head"><span class="week__dow">Sob.</span><span class="week__date">24</span></div><div class="week__body"><span class="week__drop">Wolny dzień</span></div></div>
+      <div class="week__day"><div class="week__head"><span class="week__dow">Niedz.</span><span class="week__date">25</span></div><div class="week__body"><span class="week__drop">Wolny dzień</span></div></div>
+    </div>
+    <p>Wersja kierownika: pasy na handlowca, w komórce liczniki stanów.</p>
+    <div class="lanes">
+      <div class="lanes__corner">Wizyty zespołu</div><div class="lanes__dow">Pon. 19</div><div class="lanes__dow">Wt. 20</div><div class="lanes__dow" data-today>Śr. 21</div><div class="lanes__dow">Czw. 22</div><div class="lanes__dow">Pt. 23</div><div class="lanes__dow">Sob. 24</div><div class="lanes__dow">Niedz. 25</div>
+      <div class="lanes__rep">Tomasz Krawczyk</div><a class="lanes__cell" href="#"><span class="lanes__n" data-state="held">2</span></a><a class="lanes__cell" href="#"><span class="lanes__n" data-state="held">1</span><span class="lanes__n" data-state="cancelled">1</span></a><a class="lanes__cell" href="#"><span class="lanes__n" data-state="held">2</span><span class="lanes__n" data-state="planned">1</span></a><a class="lanes__cell" href="#"><span class="lanes__n" data-state="planned">1</span><span class="lanes__n" data-state="awaiting">1</span></a><a class="lanes__cell" href="#"><span class="t-meta">–</span></a><a class="lanes__cell" href="#"><span class="t-meta">–</span></a><a class="lanes__cell" href="#"><span class="t-meta">–</span></a>
+    </div>
+    <p>Pasek dni (telefon):</p>
+    <div class="daystrip" style="max-width:420px">
+      <button class="daystrip__day"><span class="daystrip__dow">Pon.</span><span class="daystrip__n">19</span><span class="daystrip__dots"><i></i><i></i></span></button>
+      <button class="daystrip__day"><span class="daystrip__dow">Wt.</span><span class="daystrip__n">20</span><span class="daystrip__dots"><i></i></span></button>
+      <button class="daystrip__day" aria-pressed="true" data-today><span class="daystrip__dow">Śr.</span><span class="daystrip__n">21</span><span class="daystrip__dots"><i></i><i></i><i></i></span></button>
+      <button class="daystrip__day"><span class="daystrip__dow">Czw.</span><span class="daystrip__n">22</span><span class="daystrip__dots"><i></i><i></i></span></button>
+      <button class="daystrip__day"><span class="daystrip__dow">Pt.</span><span class="daystrip__n">23</span><span class="daystrip__dots"></span></button>
+      <button class="daystrip__day"><span class="daystrip__dow">Sob.</span><span class="daystrip__n">24</span><span class="daystrip__dots"></span></button>
+      <button class="daystrip__day"><span class="daystrip__dow">Niedz.</span><span class="daystrip__n">25</span><span class="daystrip__dots"></span></button>
+    </div>
+  </section>
+
+  <section class="g__sec"><h2 class="t-h2">Następna wizyta, wydarzenie, kontakt</h2>
+    <div class="two-col">
+      <div class="next"><span class="t-meta">Następna wizyta</span><span class="next__when">dziś, 15:30–16:30</span><a class="next__name t-name" href="#">PHU Agro-Kłos</a><span class="t-meta">ul. Kolejowa 7, 88-150 Kruszwica</span>
+        <div class="btn-row"><a class="btn" href="#" data-i="phone">Zadzwoń</a><a class="btn" href="#" data-i="pin">Nawiguj</a><a class="btn" data-kind="quiet" href="#">Szczegóły</a></div></div>
+      <div class="stack">
+        <div class="event"><span class="event__title">Wizyta: PHU Agro-Kłos</span><span class="event__line" data-i="pin">ul. Kolejowa 7, 88-150 Kruszwica</span><span class="event__line" data-i="phone">+48 523 515 522</span></div>
+        <div><div class="contact" data-i="phone"><div><a class="contact__value" href="#">+48 602 114 950</a><div class="contact__who">Wiesław</div></div><span class="contact__primary">główny</span></div>
+        <div class="contact" data-i="mail"><div><span class="contact__value">banas.czolowo@example.pl</span><div class="contact__who">faktury</div></div><button class="btn" data-kind="quiet" data-size="icon" aria-label="Kopiuj" data-i="copy"></button></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="g__sec"><h2 class="t-h2">Notatka, zadanie, wiersze</h2>
+    <p>Wpis kierownika ma ciemnozieloną krawędź i plakietkę „Kierownik” wszędzie, gdzie się pojawia (ACC-6). Zadanie zaległe ma czerwoną krawędź; „zaległe” jest wyliczane, nie jest statusem.</p>
+    <article class="note" data-by="manager"><div class="note__head"><span class="note__author">Beata Wilk</span><span class="state" data-state="manager">Kierownik</span><span>wczoraj 16:40</span></div>
+      <p class="note__text">Klient zgłosił w biurze opóźnienie wrześniowej dostawy. Proszę o kontakt przed następną wizytą.</p>
+      <div class="task" data-late><span class="task__desc">Zadzwonić w sprawie opóźnionej dostawy</span><span class="row__aside"><span class="state" data-state="late">Zaległe</span><span class="state" data-state="todo">Do zrobienia</span></span><div class="task__meta"><span>termin wczoraj</span><span>dla: Tomasz Krawczyk</span><select class="select"><option>Zmień status</option></select></div></div></article>
+    <ul class="rows">
+      <li><a class="row" data-link href="#"><span class="person">PA</span><span class="row__main"><span class="row__title">PHU Agro-Kłos</span><span class="t-meta">Kruszwica</span></span><span class="row__aside"><span class="t-meta">dziś 15:30</span><span class="count" data-tone="quiet">1</span></span></a></li>
+      <li><a class="row" data-link href="#"><span class="row__time">10:00</span><span class="row__main"><span class="row__title">Rolnicza Spółdzielnia Produkcyjna Zorza</span><span class="t-meta">jutro, 10:00–11:00</span></span><span class="row__aside"><span class="state" data-state="awaiting">Czeka na decyzję</span></span></a></li>
+    </ul>
+  </section>
+
+  <section class="g__sec"><h2 class="t-h2">Pulpit: kafelki i pasek</h2>
+    <p>Liczby w tuszu; barwa stanu tylko w górnej linii. Pasek to jedna barwa (udział odbytych), bez legendy, bo jedna seria.</p>
+    <div class="tiles"><div class="tile" data-state="planned"><span class="tile__value">18</span><span class="tile__label">Zaplanowane, w tym odbyte</span></div><div class="tile" data-state="held"><span class="tile__value">12</span><span class="tile__label">Odbyte</span></div><div class="tile" data-state="moved"><span class="tile__value">2</span><span class="tile__label">Przeniesione</span></div><div class="tile" data-state="cancelled"><span class="tile__value">1</span><span class="tile__label">Odwołane</span></div><div class="tile" data-state="awaiting"><span class="tile__value">1</span><span class="tile__label">Czekają na decyzję</span></div></div>
+    <div class="bar" style="max-width:240px"><i style="width:67%"></i></div>
+  </section>
+
+  <section class="g__sec"><h2 class="t-h2">Arkusz decyzji i powiadomienie</h2>
+    <p>Na telefonie arkusz wjeżdża od dołu, przyciski na całą szerokość. Czerwona linia u góry: to pytanie o decyzję.</p>
+    <div class="g__demo"><button class="btn" data-kind="primary" id="open">Pokaż arkusz</button><button class="btn" id="toast-btn">Pokaż powiadomienie</button></div>
+    <dialog class="sheet" id="sheet" data-tone="decision" aria-labelledby="sh-t"><form method="dialog">
+      <div class="sheet__head"><h2 class="sheet__title" id="sh-t">Usuwasz wizytę</h2><p class="t-muted">PHU Agro-Kłos, czwartek, 22 października, 15:30. Co z nią zrobić?</p></div>
+      <div class="sheet__body">
+        <label class="choice"><input type="radio" name="c" checked><span class="choice__title">Przenieś na inny termin</span><span class="choice__hint">Wizyta będzie liczona jako przeniesiona.</span></label>
+        <label class="choice"><input type="radio" name="c"><span class="choice__title">Odwołaj wizytę</span><span class="choice__hint">Liczy się jako odwołana. Notatki zostają przy kliencie.</span></label></div>
+      <div class="sheet__foot"><button class="btn" data-kind="quiet">Nie usuwaj</button><button class="btn" data-kind="primary">Potwierdź</button></div></form></dialog>
+    <div class="toasts" id="toasts"></div>
+  </section>
+
+  <section class="g__sec"><h2 class="t-h2">Pusty stan, klucz–wartość</h2>
+    <div class="empty"><h3 class="empty__title">Nie masz jeszcze klientów.</h3><p class="t-muted">Dodaj pierwszego albo poproś kierownika o przypisanie.</p><button class="btn" data-i="plus">Dodaj klienta</button></div>
+    <dl class="kv"><dt>Adres</dt><dd>Czołowo 18, 88-200 Radziejów</dd><dt>Województwo</dt><dd>kujawsko-pomorskie</dd><dt>NIP</dt><dd>889-204-11-70</dd></dl>
+  </section>
+
+  <section class="g__sec"><h2 class="t-h2">Ikony i znak</h2>
+    <p>Siatka 24, kreska 2 px, kwadratowe końce. Znak: trzy bruzdy na kwadratowym polu i czerwony punkt handlowca w drodze.</p>
+    <div class="g__demo" id="brand"></div>
+    <div class="icons" id="icons"></div>
+  </section>
+</main>
+<script type="module">
+  import { icon, iconNames, brandMark } from "./app/icons.js";
+  document.querySelectorAll("[data-i]").forEach((el) => el.insertAdjacentHTML("afterbegin", icon(el.dataset.i, el.classList.contains("flag") || el.classList.contains("event__line") || el.dataset.size === "icon" ? "small" : "")));
+  document.getElementById("icons").innerHTML = iconNames.map((k) => `<div>${icon(k)}<span>${k}</span></div>`).join("");
+  document.getElementById("brand").innerHTML = `<span class="brand" style="font-size:var(--t-31)">${brandMark.replace('class="brand__mark"', 'class="brand__mark" style="width:44px;height:44px"')}Eko CRM</span>`;
+  const sw = [["--ink", "Tusz"], ["--band", "Kabina"], ["--paper", "Papier"], ["--mist", "Mgła"], ["--rule", "Linia"], ["--muted", "Tekst drugorzędny"], ["--signal", "Sygnał"], ["--signal-wash", "Sygnał, tło"], ["--field", "Pole"], ["--field-wash", "Pole, tło"], ["--amber", "Bursztyn"], ["--amber-wash", "Bursztyn, tło"]];
+  const css = getComputedStyle(document.documentElement);
+  document.getElementById("swatches").innerHTML = sw.map(([v, l]) => `<div class="swatch"><div class="swatch__chip" style="background:var(${v})"></div><strong>${l}</strong><span class="g__code">${v} ${css.getPropertyValue(v).trim()}</span></div>`).join("");
+  document.getElementById("open").onclick = () => document.getElementById("sheet").showModal();
+  document.getElementById("toast-btn").onclick = () => { const el = document.createElement("div"); el.className = "toast"; el.textContent = "Zaplanowano. W Google pojawi się w ciągu minuty."; document.getElementById("toasts").appendChild(el); setTimeout(() => el.remove(), 4000); };
+  document.getElementById("theme").onclick = () => { const r = document.documentElement; const dark = r.dataset.theme ? r.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches; r.dataset.theme = dark ? "light" : "dark"; };
+</script>
+</body>
+</html>
