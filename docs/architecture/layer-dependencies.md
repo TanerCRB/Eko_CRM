@@ -18,3 +18,4 @@ The layout and rules below are fixed by ADR-0001 (stack and layering) and ADR-00
 | `fe-api` | `frontend/src/api/**` | `@/api` | fe-components, fe-features | ADR-0001: the typed client knows no UI |
 | `fe-components` | `frontend/src/components/**` | `@/components` | fe-api, fe-features | ADR-0001: presentational components don't fetch |
 | `fe-features` | `frontend/src/features/**` | `@/features` | — | ADR-0001: screens compose the client and the components |
+| `fe-time` | `frontend/src/time/**` | `@/time` | fe-api, fe-components, fe-features | ADR-0001: the one Europe/Warsaw date helper is used by every frontend layer and uses none |

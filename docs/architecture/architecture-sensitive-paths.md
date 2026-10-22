@@ -45,6 +45,9 @@ own rows.
 | `backend/uv.toml` | dependencies | ADR-0001 | package index URL and resolver settings |
 | `uv.toml` | dependencies | ADR-0001 | uv also reads a uv.toml from parent directories |
 | `**/ruff.toml` | pipeline | ADR-0001 | per-layer banned-api config (ADR-0001-C11); weakening it silently drops layer enforcement |
+| `ruff.toml` | pipeline | ADR-0001 | ruff config at the repository root (`**/ruff.toml` needs a slash) |
+| `.ruff.toml` | pipeline | ADR-0001 | ruff config at the repository root; takes precedence over `ruff.toml` in its directory |
+| `**/.ruff.toml` | pipeline | ADR-0001 | ruff config; takes precedence over `ruff.toml` and `pyproject.toml` in its directory |
 | `frontend/tsconfig*.json` | pipeline | ADR-0001 | `strict` (ADR-0001-C3) |
 | `.github/workflows/**` | pipeline | — | who runs what, with which secrets |
 | `.githooks/**` | pipeline | — | the pre-push guard on `main` |
