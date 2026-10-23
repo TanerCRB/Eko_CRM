@@ -23,12 +23,19 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   `90af4f9`, every named mutation killed; seven recorded exceptions for the evidence chain
   (`docs/architecture/exception-register.md`, follow-up #29).
 
-- [ ] **EKO-1-02** — Record the identity decision (ADR-0003).
+- [x] **EKO-1-02** — Record the identity decision (ADR-0003).
   *Done when:* ADR-0003 is in `docs/architecture/decisions/` with status "Accepted <date>" and
   fixes the identity server (Keycloak preferred), how the roles rep / manager / administrator
   reach the backend, account deactivation, password reset over the company SMTP mailbox, and that
   accounts never depend on Google.
   **Out of scope (explicit):** any implementation; Google account linking — EKO-1-05.
+  **Done 2026-10-23:**
+  [`ADR-0003-identity-and-access.md`](architecture/decisions/ADR-0003-identity-and-access.md)
+  (status "Accepted 2026-10-23", after two fix rounds), the ADR-0001 addendum on the `auth` layer and
+  both registers citing ADR-0003, merged in [PR #34](https://github.com/TanerCRB/Eko_CRM/pull/34) —
+  QA's document checks (`tests/doc-checks/EKO-1-02.sh`) verified at `50e6e6d`, every named
+  mutation killed; no recorded exceptions. Forwarded: who reviews admin events and ADR-0003-C22
+  (ADR-0004, #16); the Keycloak behaviours behind ADR-0003-C1, C7, C10 and C14..C20 (EKO-1-06, #19).
 
 - [ ] **EKO-1-03** — Record the deployment and backup decision (ADR-0004).
   *Done when:* ADR-0004 is "Accepted <date>" and fixes the container runtime and composition, the
