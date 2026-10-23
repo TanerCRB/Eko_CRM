@@ -16,8 +16,9 @@ the administrator sees no CRM data), section 5 (own accounts independent of Goog
 self-registration, password reset by e-mail from the identity server through a company SMTP
 mailbox that does not exist yet; on-premises, containerised) and ACC-1 to ACC-3. No product task
 in EKO-2 fits the architecture until this is decided. The administrator's permissions in Keycloak,
-the network exposure of Keycloak's pages and the hand-over of temporary passwords follow the
-human's decisions of 2026-10-23 on the verification findings of EKO-1-02.
+the network exposure of Keycloak's pages, the hand-over of temporary passwords and who may change a
+staff member's name follow the human's decisions of 2026-10-23 on the verification findings of
+EKO-1-02.
 
 ## Decision
 
@@ -39,7 +40,8 @@ from it; a realm setting changed only in a console is a defect. Credentials (SMT
 secrets) never appear in that export (secret handling: ADR-0004). The export holds **no staff
 account**: it has no `users` entries and no separate user files, so no username, e-mail address,
 password hash or one-time-password secret of a staff member is in the repository. Every
-secret-bearing field in it (client secrets, the SMTP password) is absent or masked.
+secret-bearing field in it (client secrets, the SMTP password) is absent or an environment
+placeholder replaced at import, never the mask string Keycloak writes in place of a secret.
 
 ### Identity server storage
 
@@ -54,7 +56,9 @@ restore (ADR-0004).
 
 Keycloak cannot use up the shared server's connections: Keycloak's database role and the
 application's database role each carry a connection limit (`CONNECTION LIMIT`), Keycloak's
-connection pool maximum (`db-pool-max-size`) is set no higher than its role's limit, and the two
+connection pool maximum (`db-pool-max-size`) is set no higher than its role's limit, the
+application's connections at their most (backend workers × (pool size + overflow), plus background
+jobs, plus a migration run) stay within its role's limit, and the two
 limits together stay below `max_connections` minus the connections reserved for superusers. The
 values are set by the walking skeleton (EKO-1-06) within the composition decided by ADR-0004.
 
@@ -70,13 +74,14 @@ browser deals with (a backend-for-frontend), and the single-page application hol
 - The tokens Keycloak issues are held **server-side** by the backend, in the application database
   (through the `data` layer, ADR-0002), encrypted with a key read through
   `backend/app/core/settings.py` (key handling: ADR-0004). When logged in, the browser holds only an
-  opaque, random session identifier in a cookie marked `HttpOnly`, `Secure` and `SameSite=Strict`
+  opaque, random session identifier in a cookie named with the `__Host-` prefix and marked
+  `HttpOnly`, `Secure` and `SameSite=Strict`
   (and, between the start of a login and its callback, the login-transaction cookie below); the
   database stores only a hash of that identifier. No access, refresh or ID token is ever returned to
   the single-page application or readable by its JavaScript.
 - **Login transaction.** Starting a login creates a login transaction (the OIDC `state`, the
   `nonce` and the PKCE verifier) stored server-side and bound to the browser by a separate cookie
-  marked `HttpOnly`, `Secure` and `SameSite=Lax`, valid for at most 10 minutes and holding only a
+  named with the `__Host-` prefix and marked `HttpOnly`, `Secure` and `SameSite=Lax`, valid for at most 10 minutes and holding only a
   random transaction identifier. `Lax` is required because the callback from Keycloak is a top-level
   navigation that is cross-site whenever Keycloak's pages are on another site (ADR-0004). The
   callback is refused, and creates no session, unless it arrives with that cookie and a `state`
@@ -108,7 +113,11 @@ without a session, or whose session cannot be resolved or verified, gets HTTP 40
 token has expired, the backend renews it with the stored refresh token. Renewal is **serialised per
 session** across every backend process: at most one refresh for a session is in flight, a
 concurrent request on the same session waits for it and uses the tokens it stored, and no request
-sends a refresh token that another request has replaced. Refresh-token rotation is on in the realm
+sends a refresh token that another request has replaced. The refresh call to Keycloak times out
+after at most 5 seconds, and a request waits for another request's refresh at most 5 seconds; when
+that refresh fails or the wait runs out, the waiting request answers 503 at once and does not
+refresh itself. The per-session lock holds no database transaction open across the call to
+Keycloak. Refresh-token rotation is on in the realm
 (`revokeRefreshToken` true, `refreshTokenMaxReuse` 0), so each refresh token is used once.
 
 - **Refused.** If Keycloak refuses the refresh with an OAuth error (such as `invalid_grant`:
@@ -117,7 +126,11 @@ sends a refresh token that another request has replaced. Refresh-token rotation 
 - **Unreachable.** If Keycloak cannot be reached, times out or answers with a server error, the
   session is kept, the request is not served and gets HTTP 503, and a later request tries the
   refresh again. The single-page application treats 503 as "try again", not as a logout. No request
-  is served on an expired access token, so the bound below holds while Keycloak is down.
+  is served on an expired access token, so the bound below holds while Keycloak is down. A refresh
+  that times out may already have been carried out by Keycloak, which has then replaced the refresh
+  token the backend still holds; the next refresh with it is refused and the session is deleted as
+  under *Refused*. This decision accepts that logout (`refreshTokenMaxReuse` stays 0): the user
+  logs in again, and the request answered 401 is not carried out.
 
 **Bound (at most 5 minutes).**
 
@@ -176,10 +189,13 @@ timeout value is decided by EKO-2-01 and does not relax this bound.
   decision; `realm-admin`, `impersonation`, `manage-realm` and `manage-clients` are never added.
 - Keycloak runs with its impersonation feature disabled, so no account in any realm, the master
   realm included, can impersonate a user.
-- An account holding `administrator` must not be able to give itself or anyone a
-  `realm-management` role. This relies on Keycloak refusing to grant administrative roles the
-  granting account does not hold; it is unverified until ADR-0003-C16 runs, and if that control
-  fails, the task running it stops and returns to the human.
+- Keycloak refuses to let an account grant a `realm-management` role it does not hold itself, but
+  holding `manage-users` lets it give any account the ones it holds (those of the composite). This
+  decision forbids giving a `realm-management` role to any account other than through the
+  `administrator` composite. Keycloak does not prevent that mechanically; every such mapping is a
+  stored admin event, and ADR-0003-C22 finds an account holding one. ADR-0003-C16 proves only the
+  refusal of the roles outside the composite; if it fails, the task running it stops and returns
+  to the human.
 - **Admin events are stored.** The realm stores admin events with their representation
   (`adminEventsEnabled` and `adminEventsDetailsEnabled` true). Every creation, update, enabling,
   disabling and deletion of an account, every password set by an administrator, and every
@@ -218,6 +234,11 @@ account.
 - **Reactivation.** Enabling a disabled account restores access to the same records, because its
   subject identifier is unchanged.
 - **Role removal** takes effect within the same bound of at most 5 minutes and changes no data.
+- **Names.** Staff do not change their own first or last name; only an administrator changes it,
+  in Keycloak's console, as a stored admin event. In the realm's user profile `firstName` and
+  `lastName` are editable by `admin` only, and the realm's default roles do not include the
+  `account` client's `manage-account` or `view-profile` role, so Keycloak's account console is not
+  usable by staff and is not exposed (*Network exposure*).
 - Recovery when no active administrator remains, and the bootstrap of the first administrator, are
   not decided here (ADR-0004).
 
@@ -233,7 +254,9 @@ account.
   administrator sets a temporary password in Keycloak's console with the "update password"
   required action, so the user replaces it at the next login on Keycloak's pages. The temporary
   password is handed over in person or in a phone call, never written in an e-mail, a messenger or
-  any other written message, and it is set only right before the user logs in. An account whose
+  any other written message, and it is set only right before the user logs in. For a reset, the
+  administrator hands it over only in person or in a call the administrator makes to a phone number
+  the company already holds for that person, never to an incoming caller. An account whose
   temporary password is still unused 7 days after it was set (the "update password" required action
   still pending) is disabled by the administrator. Developer and test environments point Keycloak
   at a local mail-catching container that delivers nothing outside the composition. No personal or
@@ -250,7 +273,8 @@ creates, authenticates and alters no account, and is not done through Keycloak's
 
 Keycloak's login, password-reset and required-action pages are reachable from the internet. Its
 administration console, and the admin REST API behind it, for every realm including the master
-realm, are reachable only from the company network. ADR-0004 decides the placement, hostnames and
+realm, are reachable only from the company network; its account console is reachable from
+neither. ADR-0004 decides the placement, hostnames and
 HTTPS that realise this; this decision fixes only who may reach which pages. Brute-force detection
 is a precondition of that exposure: it is on in the realm (`bruteForceProtected` true) before the
 login page of any shared environment is reachable from the internet. Its thresholds are decided
@@ -336,7 +360,7 @@ ADR-0001's, this rule is recorded there as the addendum of 2026-10-23.
 
 | Option | Cost | Closes off |
 |---|---|---|
-| **A. Rotation on, refresh serialised per session; refused means 401 and the session deleted, unreachable means 503 and the session kept** (chosen) | A per-session lock shared by every backend process; the SPA handles 503 as a retry. | Nothing. |
+| **A. Rotation on, refresh serialised per session; refused means 401 and the session deleted, unreachable means 503 and the session kept** (chosen) | A per-session lock shared by every backend process; the SPA handles 503 as a retry; a refresh that times out after Keycloak rotated the token ends the session. | Nothing. |
 | B. Rotation off, refresh not serialised | A stolen refresh token stays usable for the whole Keycloak session; concurrent refreshes race and the last write wins. | Detecting a reused refresh token. |
 | C. 401 both when Keycloak refuses and when it is unreachable | Every Keycloak restart logs out the users whose access token expires during it. | Riding out a Keycloak restart. |
 
@@ -344,7 +368,7 @@ ADR-0001's, this rule is recorded there as the addendum of 2026-10-23.
 
 | Option | Cost | Closes off |
 |---|---|---|
-| **A. User-management roles only, impersonation feature off, admin events stored** (chosen) | A holder of the role can still reach CRM data by giving their own account a role or by setting a user's temporary password, visible after the fact in admin events; console role assignment may need one more read-only role (gate in EKO-1-06). | Delegating realm or client configuration to the role. |
+| **A. User-management roles only, impersonation feature off, admin events stored** (chosen) | A holder of the role can still reach CRM data by giving their own account a role or by setting a user's temporary password, visible after the fact in admin events, and can give another account the composite's `realm-management` roles, found by ADR-0003-C22; console role assignment may need one more read-only role (gate in EKO-1-06). | Delegating realm or client configuration to the role. |
 | B. `realm-admin` for the role | Simplest to configure; brings impersonation and realm and client settings, so the live realm can drift from the export and CRM data can be reached under any user's identity. | Separating account management from realm configuration. |
 | C. Account management through the application, with the backend calling Keycloak's admin API | An administrative credential to Keycloak in the backend and an admin surface in the API. | Keycloak's console as the only admin tool. |
 
@@ -392,27 +416,28 @@ Identifier and acceptance criterion only.
 
 | Control | Acceptance criterion |
 |---|---|
-| ADR-0003-C1 | The realm export under `identity/` has `registrationAllowed` false, `bruteForceProtected` true, an empty `identityProviders` list, `directAccessGrantsEnabled` false on every client, the application's client confidential with PKCE required, `revokeRefreshToken` true with `refreshTokenMaxReuse` 0, neither the `email` nor the `profile` client scope assigned to the application's client, and no protocol mapper on that client emitting `email` or `preferred_username`. |
+| ADR-0003-C1 | The realm export under `identity/` has `registrationAllowed` false, `bruteForceProtected` true, an empty `identityProviders` list, `directAccessGrantsEnabled` false on every client, the application's client confidential with PKCE required, `revokeRefreshToken` true with `refreshTokenMaxReuse` 0, neither the `email` nor the `profile` client scope assigned to the application's client, and no protocol mapper on that client emitting `email` or `preferred_username`; its user profile makes `firstName` and `lastName` editable by `admin` only, and its default roles include neither the `account` client's `manage-account` nor its `view-profile` role. |
 | ADR-0003-C2 | The realm export's `accessTokenLifespan` plus the backend's configured clock-skew leeway plus its configured maximum clock offset is at most 300 seconds, and the deployment (ADR-0004) keeps the backend's and Keycloak's clocks within that offset. |
 | ADR-0003-C3 | Every reference to the Keycloak image in the repository names a full `<major>.<minor>.<patch>` tag or carries `@sha256:`. |
 | ADR-0003-C4 | A test walking every API route: with no session cookie, or a session whose token has a wrong signature, issuer or audience, or whose expired token Keycloak refuses to renew, each route answers 401, and a session whose renewal was refused is deleted; with an expired token and Keycloak unreachable, each route answers 503 and the session is kept. |
 | ADR-0003-C5 | A test walking every API route with a verified token holding none of `rep`, `manager`, `administrator` (including one holding realm roles with those names) gets 403 on each route; with only `administrator` it gets 403 on every route reading or changing customers, visits, notes, actions or dashboards; with `manager` and `administrator` it gets the same answers as with `manager` alone. |
 | ADR-0003-C6 | A test with a `rep` token adding a header, query parameter or body field naming the role `manager` gets the same answer as without it. |
 | ADR-0003-C7 | Against a running Keycloak: a session accepted for an active account is refused (401) within 300 seconds after the account is disabled; a session of an account holding `manager` loses manager rights within 300 seconds after that role is removed; in both cases the application's rows referring to the account are unchanged, and after the account is enabled again (and the role restored) a new login reaches the same records. |
-| ADR-0003-C8 | No response body or non-`HttpOnly` cookie sent to the browser contains an access, refresh or ID token; the session cookie is `HttpOnly`, `Secure` and `SameSite=Strict`; the only other cookie the backend sets is the login-transaction cookie, `HttpOnly`, `Secure`, `SameSite=Lax`, valid for at most 10 minutes and cleared at the callback; a callback without that cookie or with a `state` that does not match its transaction is refused and creates no session; the session identifier after a login differs from any the browser presented before it; a state-changing request with a foreign `Origin` header is refused. |
+| ADR-0003-C8 | No response body or non-`HttpOnly` cookie sent to the browser contains an access, refresh or ID token; the session cookie is `HttpOnly`, `Secure` and `SameSite=Strict`; both cookies' names start with `__Host-`; the only other cookie the backend sets is the login-transaction cookie, `HttpOnly`, `Secure`, `SameSite=Lax`, valid for at most 10 minutes and cleared at the callback; a callback without that cookie or with a `state` that does not match its transaction is refused and creates no session; the session identifier after a login differs from any the browser presented before it; a state-changing request with a foreign `Origin` header is refused. |
 | ADR-0003-C9 | The OpenAPI document contains no operation whose request body has a property named `password`, `username` or `grant_type`, and no route sends e-mail. |
 | ADR-0003-C10 | Against a running Keycloak with a mail-catching SMTP server: a reset request for an existing address and one for an unknown address return pages with the same text and status; exactly one message reaches the catcher, for the existing address; for a disabled account, login is still refused after the reset. |
 | ADR-0003-C11 | On the PostgreSQL server, the application's database role cannot connect to Keycloak's database and Keycloak's role cannot connect to the application's. |
 | ADR-0003-C12 | `bash scripts/layer-check.sh origin/main HEAD` exits 0 with an `auth` row whose "Must not depend on" lists `services`, `api`, `integrations`, with `auth` listed under "Must not depend on" in the rows `domain`, `services`, `data`, `core` and `integrations`, and not in the row `api`; `grep -rli -e jwt -e jose -e id_token -e access_token backend/app/services backend/app/domain` returns nothing. |
 | ADR-0003-C13 | After `alembic upgrade head`, no column in the application schema is named or holds a staff e-mail address, username or password; staff are referenced by the subject identifier. |
-| ADR-0003-C14 | The realm export under `identity/` has no `users` entries and no file holding users, and every client secret field and the SMTP password field in it is absent or masked. |
+| ADR-0003-C14 | The realm export under `identity/` has no `users` entries and no file holding users, and every client secret field and the SMTP password field in it is absent or an environment placeholder, never the mask string. |
 | ADR-0003-C15 | In the realm export, the application's client role `administrator` is a composite whose composites are exactly the `realm-management` client roles `manage-users`, `view-users`, `query-users`, `query-groups` and `query-clients`, and not `realm-admin`, `impersonation`, `manage-realm`, `manage-clients`, `manage-events`, `manage-identity-providers`, `manage-authorization`, `create-client`, `view-realm`, `view-clients`, `view-events`, `view-identity-providers` or `view-authorization`; no group and no other role in the export includes a `realm-management` role. |
-| ADR-0003-C16 | Against a running Keycloak started as the repository configures it, with the impersonation feature disabled: an account holding only `administrator` creates, disables and enables an account, sets a temporary password and assigns the application's roles, including to itself; the same account is denied each of impersonating a user, changing a realm or client setting, viewing or changing admin events, and giving any account a `realm-management` role. |
-| ADR-0003-C17 | The realm export has `adminEventsEnabled` and `adminEventsDetailsEnabled` true; against a running Keycloak, creating an account, changing it, disabling and enabling it, setting its password, deleting a test account, and assigning or unassigning one of the application's roles each leave a stored admin event with its representation and the acting account. |
-| ADR-0003-C18 | A test sending at least ten concurrent requests on one session whose access token has expired: every request is answered as authenticated, Keycloak receives exactly one refresh request for that session, and the session still exists afterwards. |
-| ADR-0003-C19 | On the PostgreSQL server, Keycloak's database role and the application's database role each have a connection limit greater than zero, Keycloak's configured `db-pool-max-size` does not exceed its role's limit, and the two limits together are below `max_connections` minus `superuser_reserved_connections`. |
+| ADR-0003-C16 | Against a running Keycloak started as the repository configures it, with the impersonation feature disabled: an account holding only `administrator` creates, disables and enables an account, sets a temporary password and assigns the application's roles, including to itself; the same account is denied each of impersonating a user, changing a realm or client setting, viewing or changing admin events, and giving any account a `realm-management` role outside the composite (at least `realm-admin`, `manage-realm`, `manage-clients`, `impersonation` and `view-events`). |
+| ADR-0003-C17 | The realm export has `adminEventsEnabled` and `adminEventsDetailsEnabled` true; against a running Keycloak, creating an account, changing it, disabling and enabling it, setting its password, deleting a test account, and assigning or unassigning one of the application's roles each leave a stored admin event with its representation and the acting account, and no stored representation holds a password value. |
+| ADR-0003-C18 | A test sending at least ten concurrent requests on one session whose access token has expired: every request is answered as authenticated, Keycloak receives exactly one refresh request for that session, and the session still exists afterwards; with Keycloak accepting the connection but never answering, every one of them gets 503 within 6 seconds of being sent and Keycloak receives exactly one refresh request. |
+| ADR-0003-C19 | On the PostgreSQL server, Keycloak's database role and the application's database role each have a connection limit greater than zero, Keycloak's configured `db-pool-max-size` does not exceed its role's limit, the backend's configured workers × (pool size + max overflow) plus the background jobs' pools plus one migration connection does not exceed the application role's limit, and the two limits together are below `max_connections` minus `superuser_reserved_connections`. |
 | ADR-0003-C20 | After a test login against a running Keycloak, the access, refresh and ID tokens stored for the session, once decrypted, carry no `email` and no `preferred_username` claim. |
 | ADR-0003-C21 | By review of stored admin events and account state in each shared environment before the company mailbox exists: no enabled account still carries the "update password" required action more than 7 days after the admin event that set its temporary password. |
+| ADR-0003-C22 | By review of the live application realm in each shared environment: no account and no group has a `realm-management` role in its own role mappings; such roles are held only through the `administrator` composite. |
 
 ## Addenda
 
