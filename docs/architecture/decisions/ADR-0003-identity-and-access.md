@@ -1,6 +1,6 @@
 # ADR-0003 — Identity server, browser session, roles and account lifecycle
 
-**Status:** Draft — pending approval
+**Status:** Accepted 2026-10-23
 <!-- Only a human changes this to "Accepted <YYYY-MM-DD>". -->
 
 ## Context
