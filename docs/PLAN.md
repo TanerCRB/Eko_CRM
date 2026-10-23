@@ -9,12 +9,19 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
 
 ## EKO-1 — Foundations
 
-- [ ] **EKO-1-01** — Record the stack and persistence decisions (ADR-0001 stack, ADR-0002
+- [x] **EKO-1-01** — Record the stack and persistence decisions (ADR-0001 stack, ADR-0002
   database and migration tool).
   *Done when:* both decisions are in `docs/architecture/decisions/` with status "Accepted
   <date>", and `docs/architecture/layer-dependencies.md` and
   `docs/architecture/architecture-sensitive-paths.md` cite them instead of "pending".
   **Out of scope (explicit):** any product code — the decisions come first.
+  **Done 2026-10-23:**
+  [`ADR-0001-application-stack.md`](architecture/decisions/ADR-0001-application-stack.md) and
+  [`ADR-0002-database-and-migrations.md`](architecture/decisions/ADR-0002-database-and-migrations.md)
+  (status "Accepted 2026-10-23"), both registers citing them, merged in
+  [PR #30](https://github.com/TanerCRB/Eko_CRM/pull/30) — QA's document checks verified at
+  `90af4f9`, every named mutation killed; seven recorded exceptions for the evidence chain
+  (`docs/architecture/exception-register.md`, follow-up #29).
 
 - [ ] **EKO-1-02** — Record the identity decision (ADR-0003).
   *Done when:* ADR-0003 is in `docs/architecture/decisions/` with status "Accepted <date>" and
