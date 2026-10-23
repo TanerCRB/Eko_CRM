@@ -3,8 +3,9 @@
 Internal CRM for one agricultural sales company: reps' customers (farmers), field visits synced
 with Google Calendar, notes and follow-up actions, visit dashboard — scope, rules and requirement
 identifiers in [`docs/product/project-brief.md`](docs/product/project-brief.md). Monorepo:
-`backend/` (Python 3.12, FastAPI, Pydantic) and `frontend/` (React + TypeScript, Vite, pnpm). No
-code yet; the first task is the stack and persistence decisions (`docs/PLAN.md`, `EKO-1-01`).
+`backend/` (Python 3.12, FastAPI, Pydantic v2, uv) and `frontend/` (React + TypeScript strict,
+Vite, pnpm); PostgreSQL 18 with Alembic migrations and SQLAlchemy 2 — fixed by ADR-0001 and
+ADR-0002 in `docs/architecture/decisions/`. No code yet; the next tasks are in `docs/PLAN.md`.
 
 This repo is also the source of its own process: a monorepo instantiation of **Ninefold**
 (https://github.com/TanerCRB/NineFold, v0.10.0), an SDLC framework for AI-agent-driven development
@@ -59,8 +60,8 @@ label:waiting-on-human` finds everything waiting on the human.
 | Tests | `backend/tests/`, `frontend/tests/` (mirrors `frontend/src/`) — never next to the code, so QA's write boundary is one prefix per side |
 | Task worktrees | `../Eko_CRM-<identifier>`, branch `<identifier>-<slug>` |
 
-`docs/architecture/layer-dependencies.md` and `architecture-sensitive-paths.md` are provisional
-until ADR-0001/ADR-0002 are accepted.
+`docs/architecture/layer-dependencies.md` and `architecture-sensitive-paths.md` follow the layout
+fixed by ADR-0001/ADR-0002; rows marked "pending ADR-0003..0006" change with those decisions.
 
 Upgrading the process: `UPGRADING.md`, diffing the kit's new version against `agents/`,
 `scripts/`, `.claude/commands/` and `process/`.
