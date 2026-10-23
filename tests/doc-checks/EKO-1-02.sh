@@ -209,15 +209,23 @@ k02_admin_no_crm() {
   local roles; roles="$(sub_sents '^### Roles')"
   need "$roles" 'administrator grants no CRM data' || return 1
   need "$roles" 'holding only administrator is denied every API operation that reads or changes customers, visits, notes, actions or dashboards' || return 1
-  # A sentence giving administrator read or change access to CRM data. Only a negation excuses it,
-  # or the multi-role case (administrator together with manager or rep), which K-02 requires.
+  # A sentence giving administrator (or "a holder of the role") read or change access to CRM data.
+  # Excused only by a negation of the subject's own verb ("administrator is denied", "... cannot",
+  # "... sees no CRM data": at most three words after the subject, so a "cannot" about someone else
+  # later in the sentence does not count), by the words "no CRM data", by the multi-role case
+  # (administrator together with manager or rep), which K-02 requires, or by the disclosed
+  # escalation path ("by giving their own account a role", "by setting a user's temporary
+  # password"), which is a Keycloak console action and not a grant by the application.
+  local subj='(\badministrators?|\bholders? of (the|that|this) role)\b'
   local hits
   hits="$(printf '%s\n' "$ADR3_SENTS" \
-    | grep -Ei '\badministrators?\b[^.]{0,40}\b(has|have|gets|get|is granted|are granted|grants|grant|may|can|is able to|are able to|sees|reads|views)\b' \
+    | grep -Ei "$subj"'[^.]{0,40}\b(has|have|gets|get|is granted|are granted|grants|grant|may|can|is able to|are able to|sees|reads|views)\b' \
     | grep -Ei '\b(read|reads|access|see|sees|view|views|change|changes|reach)\b' \
     | grep -Ei '\b(CRM|customers?|visits?|notes?|actions?|dashboards?|manager|rep)\b' \
-    | grep -Eiv '(no CRM|\bnot\b|never|denied|cannot)' \
-    | grep -Eiv '\b(manager|rep) and administrator\b|\badministrator and (also )?(manager|rep)\b')"
+    | grep -Eiv "$subj"'( [a-z]+){0,3} (cannot|can not|does not|do not|is not|are not|may not|must not|never|is denied|are denied|(sees|has|gets|grants|reads) no CRM)\b' \
+    | grep -Eiv '\bno CRM data\b' \
+    | grep -Eiv '\b(manager|rep) and administrator\b|\badministrator and (also )?(manager|rep)\b' \
+    | grep -Eiv '\bby (giving|setting)\b')"
   [ -z "$hits" ] || { WHY="forbidden statement: $(printf '%s' "$hits" | head -n 1 | cut -c1-200)"; return 1; }
 }
 check 'administrator alone reads no CRM data' k02_admin_no_crm
@@ -249,17 +257,23 @@ k03_session_after_deactivation() {
   bound_ok "$s" || return 1
   need "$BOUND" 'The mechanism is ' || return 1
   # The mechanism must not state a figure larger than the bound: no "N seconds" over 300, no
-  # "N minutes" over 5, no hours or days, anywhere in the section that states the bound.
-  local fig n
-  fig="$(printf '%s\n' "$BOUND" | grep -Eio '[0-9]+ (seconds?|minutes?|hours?|days?)\b')"
+  # "N minutes" over 5, no hours, days or weeks, anywhere in the section that states the bound.
+  # Digits with a unit word or abbreviation ("900 seconds", "900 s", "15min", "1 h") ...
+  local fig n num unit
+  fig="$(printf '%s\n' "$BOUND" | grep -Eio '\b[0-9]+ ?(seconds?|secs?|s|minutes?|mins?|hours?|hrs?|h|days?|d|weeks?)\b')"
   while IFS= read -r n; do
     [ -n "$n" ] || continue
-    case "$n" in
-      *[Ss]econd*) [ "${n%% *}" -le 300 ] || { WHY="the bound's section states $n, more than 300 seconds"; return 1; } ;;
-      *[Mm]inute*) [ "${n%% *}" -le 5 ] || { WHY="the bound's section states $n, more than 5 minutes"; return 1; } ;;
+    num="${n%%[!0-9]*}"; unit="${n#"$num"}"; unit="${unit# }"
+    case "$(printf '%s' "$unit" | tr 'A-Z' 'a-z')" in
+      s|sec|secs|second|seconds) [ "$num" -le 300 ] || { WHY="the bound's section states $n, more than 300 seconds"; return 1; } ;;
+      min|mins|minute|minutes) [ "$num" -le 5 ] || { WHY="the bound's section states $n, more than 5 minutes"; return 1; } ;;
       *) WHY="the bound's section states $n, more than 5 minutes"; return 1 ;;
     esac
   done <<< "$fig"
+  # ... and spelled-out figures: minutes from six up, seconds from four hundred up, any hours,
+  # days or weeks.
+  fig="$(printf '%s\n' "$BOUND" | grep -Eio '\b((six|seven|eight|nine|ten|eleven|twelve|[a-z]+teen|twenty|thirty|forty|fifty|sixty|ninety)([- ][a-z]+)? (minutes?|mins?)|((four|five|six|seven|eight|nine) hundred|thousand)([- a-z]+)? seconds?|[a-z]+ (hours?|days?|weeks?))\b' | head -n 1)"
+  [ -z "$fig" ] || { WHY="the bound's section states '$fig', more than 5 minutes"; return 1; }
 }
 check 'existing session refused within 5 minutes after deactivation' k03_session_after_deactivation
 
