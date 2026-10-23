@@ -42,7 +42,7 @@ under pressure is checked with pressure scenarios, Method 4 of the same document
 | **Product Owner** | *Story* Issue with an observable *Definition of done* and an explicit *Out of scope* | `Read, Grep, Glob, Bash` (`gh` and reads) | Write code or technical documentation. Apply the gate-1 label. |
 | **Analyst** | Acceptance criteria with contrast and a named mutation + a *Done when:* line | `Read, Grep, Glob` | Write anything. Design solutions — it describes *what*, not *how*. |
 | **Developer** (`developer-backend` writes only under `backend/`, `developer-frontend` only under `frontend/`) | Branch ready for PR: schema change (if applicable) + code + tests, each test seen failing before its code, full test suite green | full, in the product repository | Commit. Check off tasks or raise statuses. Weaken tests that have started failing. Fix what it hasn't reproduced. Lower a finding's severity. |
-| **QA** | Contrast test, executed mutation with a result, proposed row for the capability register | full, but **writes only into the test directories** (`backend/tests/`, `frontend/tests/`) | **Writing to production code** — otherwise it fixes instead of detecting. |
+| **QA** | Contrast test, executed mutation with a result, proposed row for the capability register | full, but **writes only into the test directories** (`backend/tests/`, `frontend/tests/`; `tests/doc-checks/` for a decision task's document checks) | **Writing to production code** — otherwise it fixes instead of detecting. |
 
 ### 2a. Where a tool declaration isn't enough
 
