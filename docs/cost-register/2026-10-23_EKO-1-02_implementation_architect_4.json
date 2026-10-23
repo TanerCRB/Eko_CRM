@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-23",
+  "task": "EKO-1-02",
+  "phase": "implementation",
+  "role": "architect",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "a1fd27e7ad078df53",
+  "tokens": 501943,
+  "tokenSplit": { "input": 18, "output": 948, "cacheWrite": 71625, "cacheRead": 429352 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 28,
+  "seconds": 225,
+  "fixRound": 2,
+  "reworkCause": "reviewer STOP R-09..R-13 and security-auditor B-01/B-02 at a24df6a; R-09..R-11 and R-13 introduced by the fix-round-1 text (the Architect's own self-check could have caught them); R-12 existed at edc29ab and the reviewer missed it in round 0",
+  "notes": "all findings FIXED (C22 added; C1, C8, C14, C16, C17, C18, C19 extended), none disputed; R-09 residual detected not prevented, flagged as possibly needing the human; doc-checks 35/36 (only K-01 status, Draft); boundary-check: clean (allowed ADR-0003 only)"
+}
