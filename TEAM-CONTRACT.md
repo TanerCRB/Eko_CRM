@@ -111,7 +111,7 @@ anyone, sends the task back to gate 1. A gap the Developer meets during implemen
 reopen the criteria — it is recorded as a numbered assumption and decided by you at gate 2, and
 your answer becomes an amendment to the criteria, locked again (task command, "Scope lock").
 
-**Who may approve gate 2: <one person / a second person>.** Every session acts on your account, so
+**Who may approve gate 2: one person.** Every session acts on your account, so
 the account alone doesn't show who drove the agents and who approved what they wrote. The task
 command records the **operator**, the account the task's session runs under, on the Issue when the
 task starts. It names the operator in the gate-2 message, and `/task-status` reports who merged.
