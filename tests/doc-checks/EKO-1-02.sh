@@ -10,10 +10,23 @@
 # checks of K-07, which then compare the merge base of <base> and HEAD with the working tree plus
 # untracked files), or the commit named by --head (then `git diff <base>...<head>`).
 #
-# Each check is one line of output, "ok   <name>" or "FAIL <name> — <why>". The names are the ones
-# the PR's "K-<n> — test:" lines quote. Exit codes: 0 = every check passed, 1 = at least one check
+# Each check is one line of output, "ok   <name>", "FAIL <name> — <why>" or (K-07 only, see below)
+# "skip <name> — <why>". The names are the ones the PR's "K-<n> — test:" lines quote. Exit codes:
+# 0 = every check that ran passed, 1 = at least one check
 # failed, 2 = the script itself could not run (bad argument, missing file, not a repository) —
 # never read 2 as a pass.
+#
+# K-07 is bound to the pull request: it judges the task's own change set, which exists only
+# between the commit the task branched from and the task's last commit. The task branched from
+# 03faa3ca45f00ef59be0122b7e445054ea29251f. After the merge, re-run every check, K-07 included,
+# with that base pinned and the PR's head commit (the merge commit's second parent):
+#
+#   bash tests/doc-checks/EKO-1-02.sh --base 03faa3ca45f00ef59be0122b7e445054ea29251f --head <merge>^2
+#
+# Without --base, when ADR-0003 already exists at origin/main (the task is merged, so the change
+# set against origin/main is empty or belongs to later work), the K-07 checks print "skip" with
+# that command and are not counted; K-01..K-06 still run. With an explicit --base nothing is
+# skipped. During the PR ADR-0003 does not exist at origin/main, so K-07 always runs there.
 #
 # What these checks are: line and sentence matching over prose. They prove that a statement is
 # present (or absent) in the decision, not that the statement is true of any running system.
@@ -21,11 +34,13 @@
 set -uo pipefail
 
 BASE_REF="origin/main"
+BASE_GIVEN=""
+TASK_BASE="03faa3ca45f00ef59be0122b7e445054ea29251f"
 HEAD_REF=""
 die() { echo "EKO-1-02 doc-checks: $* — the checks did not run" >&2; exit 2; }
 while [ $# -gt 0 ]; do
   case "$1" in
-    --base) [ $# -ge 2 ] || die "--base needs a ref"; BASE_REF="$2"; shift 2 ;;
+    --base) [ $# -ge 2 ] || die "--base needs a ref"; BASE_REF="$2"; BASE_GIVEN=1; shift 2 ;;
     --head) [ $# -ge 2 ] || die "--head needs a ref"; HEAD_REF="$2"; shift 2 ;;
     *) die "unknown argument '$1' (usage: $0 [--base <ref>] [--head <ref>])" ;;
   esac
@@ -99,7 +114,7 @@ sub_sents() { printf '%s\n' "$DECISION_TEXT" | section "$1" | paras | sents; }
 
 # ---- the check runner ----------------------------------------------------------------------
 
-passed=0; failed=0
+passed=0; failed=0; skipped=0
 WHY=""
 # check '<name>' <function> — runs the function; it sets WHY and returns non-zero on a failure.
 check() {
@@ -178,7 +193,7 @@ k02_roles_source() {
   # selects or passes a role, or a role taken from a header/query/body/cookie, unless the sentence
   # says it is ignored.
   forbid "$ADR3_SENTS" '\b(frontend|client|browser|single-page application|SPA|user)( application)? (sends|passes|supplies|provides|selects|picks|chooses|sets) (the |a |its |their )?(user.s |caller.s )?(active |current |selected )?roles?\b' || return 1
-  forbid "$ADR3_SENTS" '\broles?\b[^.]*\b(request header|header|query|body|cookie)\b' '(ignored|never|not )' || return 1
+  forbid "$ADR3_SENTS" '\broles?\b[^.]*\b(request header|header|query|body|cookie)\b' '(ignored|never|\bnot\b)' || return 1
 }
 check 'ADR-0003 names the three roles and their single source' k02_roles_source
 
@@ -194,14 +209,23 @@ k02_admin_no_crm() {
   local roles; roles="$(sub_sents '^### Roles')"
   need "$roles" 'administrator grants no CRM data' || return 1
   need "$roles" 'holding only administrator is denied every API operation that reads or changes customers, visits, notes, actions or dashboards' || return 1
-  forbid "$ADR3_SENTS" 'administrator (has|gets|is granted|grants|may|can)[^.]*(manager|rep)?[^.]*(read|access to|see)[^.]*' '(no CRM|not |never|denied|console|accounts|user-management)' || return 1
+  # A sentence giving administrator read or change access to CRM data. Only a negation excuses it,
+  # or the multi-role case (administrator together with manager or rep), which K-02 requires.
+  local hits
+  hits="$(printf '%s\n' "$ADR3_SENTS" \
+    | grep -Ei '\badministrators?\b[^.]{0,40}\b(has|have|gets|get|is granted|are granted|grants|grant|may|can|is able to|are able to|sees|reads|views)\b' \
+    | grep -Ei '\b(read|reads|access|see|sees|view|views|change|changes|reach)\b' \
+    | grep -Ei '\b(CRM|customers?|visits?|notes?|actions?|dashboards?|manager|rep)\b' \
+    | grep -Eiv '(no CRM|\bnot\b|never|denied|cannot)' \
+    | grep -Eiv '\b(manager|rep) and administrator\b|\badministrator and (also )?(manager|rep)\b')"
+  [ -z "$hits" ] || { WHY="forbidden statement: $(printf '%s' "$hits" | head -n 1 | cut -c1-200)"; return 1; }
 }
 check 'administrator alone reads no CRM data' k02_admin_no_crm
 
 k02_no_role_denied() {
   local roles; roles="$(sub_sents '^### Roles')"
   need "$roles" 'authenticated account with none of the three roles is denied every API operation' || return 1
-  forbid "$ADR3_SENTS" '(no (app )?role|none of the (three )?roles|without a role)[^.]*(treated as|defaults? to|is given|gets the rights of|assumed)' '(No role is assumed|not |never)' || return 1
+  forbid "$ADR3_SENTS" '(no (app )?role|none of the (three )?roles|without a role)[^.]*(treated as|defaults? to|is given|gets the rights of|assumed)' '(No role is assumed|\bnot\b|never)' || return 1
 }
 check 'an authenticated account with no app role is denied every API operation' k02_no_role_denied
 
@@ -213,7 +237,7 @@ BOUND="$(sub_sents '^### How a request is verified')"
 k03_no_self_registration() {
   need "$LIFECYCLE" 'Accounts are created only by an administrator' || return 1
   need "$LIFECYCLE" 'self-registration is disabled' || return 1
-  forbid "$ADR3_SENTS" '\b(users|staff|anyone|a user|people)\b[^.]*\b(may|can|are able to)\b[^.]*\b(register|sign up|create (their|an) (own )?account)' '(not |never|disabled|no )' || return 1
+  forbid "$ADR3_SENTS" '\b(users|staff|anyone|a user|people)\b[^.]*\b(may|can|are able to)\b[^.]*\b(register|sign up|create (their|an) (own )?account)' '(\bnot\b|never|disabled|\bno\b)' || return 1
 }
 check 'no self-registration' k03_no_self_registration
 
@@ -224,6 +248,18 @@ k03_session_after_deactivation() {
   local s; s="$(printf '%s\n' "$BOUND" | grep -Ei 'deactivat' | grep -Ei 'session' | grep -Ei 'already issued')"
   bound_ok "$s" || return 1
   need "$BOUND" 'The mechanism is ' || return 1
+  # The mechanism must not state a figure larger than the bound: no "N seconds" over 300, no
+  # "N minutes" over 5, no hours or days, anywhere in the section that states the bound.
+  local fig n
+  fig="$(printf '%s\n' "$BOUND" | grep -Eio '[0-9]+ (seconds?|minutes?|hours?|days?)\b')"
+  while IFS= read -r n; do
+    [ -n "$n" ] || continue
+    case "$n" in
+      *[Ss]econd*) [ "${n%% *}" -le 300 ] || { WHY="the bound's section states $n, more than 300 seconds"; return 1; } ;;
+      *[Mm]inute*) [ "${n%% *}" -le 5 ] || { WHY="the bound's section states $n, more than 5 minutes"; return 1; } ;;
+      *) WHY="the bound's section states $n, more than 5 minutes"; return 1 ;;
+    esac
+  done <<< "$fig"
 }
 check 'existing session refused within 5 minutes after deactivation' k03_session_after_deactivation
 
@@ -252,7 +288,7 @@ check 'password reset does not reactivate' k03_reset_no_reactivate
 
 k03_only_removal() {
   need "$LIFECYCLE" 'Deactivation is the only removal' || return 1
-  forbid "$ADR3_SENTS" '\baccounts?\b[^.]*\b(may|can|are allowed to)\b[^.]*\bbe (deleted|removed)' '(not |never|forbidden)' || return 1
+  forbid "$ADR3_SENTS" '\baccounts?\b[^.]*\b(may|can|are allowed to)\b[^.]*\bbe (deleted|removed)' '(\bnot\b|never|forbidden)' || return 1
 }
 check 'deactivation is the only removal for an account that app data refers to' k03_only_removal
 
@@ -282,8 +318,8 @@ check 'ADR-0003 states what the identity server uses until the company mailbox e
 k04_backend_no_password() {
   need "$RESET" 'backend sends no reset e-mail, has no reset endpoint, and never receives a password' || return 1
   need "$DECISION_SENTS" 'no backend endpoint receives it' || return 1
-  forbid "$ADR3_SENTS" '\b(backend|endpoint|API)\b[^.]*\b(passes|forwards|sends|accepts|receives|posts|takes|relays)\b[^.]*\b(username and password|password)' '(\bno\b|never|not |disabled|forbid)' || return 1
-  forbid "$ADR3_SENTS" '(password grant|direct-access[^.]*grant|resource-owner password[^.]*grant)[^.]*\b(enabled|used|allowed)\b' '(disabled|not |never)' || return 1
+  forbid "$ADR3_SENTS" '\b(backend|endpoint|API)\b[^.]*\b(passes|forwards|sends|accepts|receives|posts|takes|relays)\b[^.]*\b(username and password|password)' '(\bno\b|never|\bnot\b|disabled|forbid)' || return 1
+  forbid "$ADR3_SENTS" '(password grant|direct-access[^.]*grant|resource-owner password[^.]*grant)[^.]*\b(enabled|used|allowed)\b' '(disabled|\bnot\b|never)' || return 1
 }
 check 'the backend sends no reset e-mail and receives no password' k04_backend_no_password
 
@@ -302,8 +338,8 @@ GOOGLE="$(sub_sents '^### Accounts never depend on Google')"
 k05_no_google_login() {
   need "$GOOGLE" 'No identity provider \(Google or any other\) is configured' || return 1
   need "$GOOGLE" 'no one signs in, and no account is created, through an external provider' || return 1
-  forbid "$ADR3_SENTS" '(sign(s|ing)?[ -]in with google|log(s|ging)?[ -]in with google|google (login|sign-in|sso)|login with google|through google)' '(\bno\b|not |never)' || return 1
-  forbid "$ADR3_SENTS" '(google|external (identity )?provider)[^.]*\b(offered|optional|alternative|second method|allowed to sign)' '(\bno\b|not |never)' || return 1
+  forbid "$ADR3_SENTS" '(sign(s|ing)?[ -]in with google|log(s|ging)?[ -]in with google|google (login|sign-in|sso)|login with google|through google)' '(\bno\b|\bnot\b|never)' || return 1
+  forbid "$ADR3_SENTS" '(google|external (identity )?provider)[^.]*\b(offered|optional|alternative|second method|allowed to sign)' '(\bno\b|\bnot\b|never)' || return 1
 }
 check 'no Google login' k05_no_google_login
 
@@ -325,7 +361,17 @@ check 'ADR-0003 settles where the identity server stores its data, and whether i
 k06_browser_flow() {
   local bf; bf="$(sub_sents '^### Browser flow')"
   need "$bf" 'The browser flow is (a|an) [a-z]' || return 1
-  if has "$(printf '%s\n' "$bf" | grep -Ei 'The browser flow is')" 'The browser flow is[^.]* or '; then WHY="the browser flow is not one choice"; return 1; fi
+  # The chosen flow: the words after "The browser flow is", up to the first ":", ";", "," or ".".
+  local flow fam=0
+  flow="$(printf '%s\n' "$bf" | grep -Eio 'The browser flow is [^:;,.]*' | head -n 1 | sed -E 's/^The browser flow is //I')"
+  if has "$flow" '( or |\beither\b|\bchoice\b|\bbetween\b|\boptions?\b|\bTBD\b|decided|undecided|\blater\b)'; then
+    WHY="the browser flow is not one choice: '$flow'"; return 1
+  fi
+  # It names exactly one of the three families of the Options table.
+  has "$flow" '(backend session|backend-for-frontend|\bBFF\b|server-side session)' && fam=$((fam + 1))
+  has "$flow" '(\bSPA\b|single-page application|public client|token in the browser|browser token|bearer)' && fam=$((fam + 1))
+  has "$flow" '(proxy)' && fam=$((fam + 1))
+  [ "$fam" -eq 1 ] || { WHY="the browser flow names $fam of the flows (backend session, SPA token, proxy), expected exactly 1: '$flow'"; return 1; }
 }
 check 'ADR-0003 fixes the browser flow' k06_browser_flow
 
@@ -396,25 +442,37 @@ adr1_diff() {
   else git diff -U0 --no-color --no-ext-diff "$MB" -- "$ADR1"; fi | tr -d '\r'
 }
 CHANGED="$(changed_files)"
+
+# The PR-bound skip (see the header): only without an explicit --base, and only when ADR-0003 is
+# already part of the base, which is never the case while the task's PR is open.
+K07_SKIP=""
+if [ -z "$BASE_GIVEN" ] && git cat-file -e "$BASE_REF:$ADR3" 2>/dev/null; then
+  K07_SKIP="$ADR3 already exists at $BASE_REF (the task is merged); re-run with --base $TASK_BASE --head <merge>^2"
+fi
+# check07 '<name>' <function> — check, or a printed skip that counts neither as passed nor failed.
+check07() {
+  if [ -n "$K07_SKIP" ]; then echo "skip $1 — $K07_SKIP"; skipped=$((skipped + 1)); return 0; fi
+  check "$@"
+}
 ALLOWED_RE='^(docs/architecture/decisions/ADR-0003-[^/]*\.md|docs/architecture/decisions/ADR-0001-application-stack\.md|tests/doc-checks/EKO-1-02\.sh|docs/architecture/layer-dependencies\.md|docs/architecture/architecture-sensitive-paths\.md|docs/cost-register/.*)$'
 
 k07_only_allowed() {
   local extra; extra="$(printf '%s\n' "$CHANGED" | grep . | grep -Ev "$ALLOWED_RE")"
   [ -z "$extra" ] || { WHY="outside the allowed set: $(printf '%s' "$extra" | tr '\n' ' ')"; return 1; }
 }
-check 'the change set touches only ADR-0003, its document checks, the two registers, ADR-0001 and cost-register bookkeeping' k07_only_allowed
+check07 'the change set touches only ADR-0003, its document checks, the two registers, ADR-0001 and cost-register bookkeeping' k07_only_allowed
 
 k07_no_code_no_adr2() {
   local bad; bad="$(printf '%s\n' "$CHANGED" | grep -E "^(backend/|frontend/|$ADR2)")"
   [ -z "$bad" ] || { WHY="listed: $(printf '%s' "$bad" | tr '\n' ' ')"; return 1; }
 }
-check 'the change set lists nothing under backend/ or frontend/ and not ADR-0002' k07_no_code_no_adr2
+check07 'the change set lists nothing under backend/ or frontend/ and not ADR-0002' k07_no_code_no_adr2
 
 k07_adr1_no_removed() {
   local removed; removed="$(adr1_diff | grep -E '^-' | grep -Ev '^--- ')"
   [ -z "$removed" ] || { WHY="removed line in ADR-0001: $(printf '%s' "$removed" | head -n 1 | cut -c1-160)"; return 1; }
 }
-check 'ADR-0001 diff has no removed line' k07_adr1_no_removed
+check07 'ADR-0001 diff has no removed line' k07_adr1_no_removed
 
 # Added lines of ADR-0001 as "<new line number>\t<text>".
 adr1_added() {
@@ -433,7 +491,7 @@ k07_adr1_after_addenda() {
   first_bad="$(adr1_added | awk -F'\t' -v s="$start" '$1 <= s { print; exit }')"
   [ -z "$first_bad" ] || { WHY="added line $(printf '%s' "$first_bad" | cut -f1) is above the end of the Addenda heading and comment (line $start): $(printf '%s' "$first_bad" | cut -f2 | cut -c1-120)"; return 1; }
 }
-check 'every added ADR-0001 line comes after the Addenda heading and its comment' k07_adr1_after_addenda
+check07 'every added ADR-0001 line comes after the Addenda heading and its comment' k07_adr1_after_addenda
 
 k07_adr1_one_dated() {
   local added dated first
@@ -444,9 +502,9 @@ k07_adr1_one_dated() {
   first="$(printf '%s\n' "$added" | head -n 1 | cut -f2)"
   printf '%s\n' "$first" | grep -Eq '^- \*\*[0-9]{4}-[0-9]{2}-[0-9]{2}:\*\*' || { WHY="the first added line is not the dated item: $(printf '%s' "$first" | cut -c1-120)"; return 1; }
 }
-check 'ADR-0001 gains exactly one dated addendum, as its first added line' k07_adr1_one_dated
+check07 'ADR-0001 gains exactly one dated addendum, as its first added line' k07_adr1_one_dated
 
 # ---- result --------------------------------------------------------------------------------
 
-echo "EKO-1-02 doc-checks: $passed passed, $failed failed (base $BASE_REF, head ${HEAD_REF:-working tree})"
+echo "EKO-1-02 doc-checks: $passed passed, $failed failed, $skipped skipped (base $BASE_REF, head ${HEAD_REF:-working tree})"
 [ "$failed" -eq 0 ]
