@@ -218,3 +218,11 @@ Identifier and acceptance criterion only.
 
 <!-- A change to an accepted decision is a dated addendum with a reason, never an edit of the text
 above. -->
+- **2026-10-23:** ADR-0003 (identity and access, EKO-1-02) adds the backend layer `auth`
+  (`backend/app/auth/`), which must not depend on `services`, `api` or `integrations`. The rows
+  `domain`, `services`, `data`, `core` and `integrations` of the layer table above add `auth` to
+  "Must not depend on"; the row `api` is unchanged, and only `api` and `backend/app/main.py` depend
+  on `auth`. The ruff `TID251` bans of ADR-0001-C11 follow these rows. Reason: the caller's
+  identity enters the inner layers as a value defined in `domain`, so no inner layer reads a
+  token, a claim or the session; without this rule an import of `auth` from `domain` would pass
+  the layer check.

@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-23",
+  "task": "EKO-1-02",
+  "phase": "analysis",
+  "role": "analyst",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Low",
+  "agentId": "a8c6356d5ab2ebad1",
+  "tokens": 171373,
+  "tokenSplit": { "input": 12, "output": 983, "cacheWrite": 33203, "cacheRead": 137175 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 9,
+  "seconds": 70,
+  "fixRound": 0,
+  "reworkCause": "K-07 forbade any ADR-0001 change, contradicting the Architect's Q7 = A (ADR-0001 addendum) approved by the human; caught by the Architect's impact map, not catchable by the Analyst before the design existed",
+  "notes": "READY FOR GATE 1; K-06 and K-07 amended for Q7 = A; evidence-chain lint clean; read-only registered role, no boundary check"
+}

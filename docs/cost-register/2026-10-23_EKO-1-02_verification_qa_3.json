@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-23",
+  "task": "EKO-1-02",
+  "phase": "verification",
+  "role": "qa",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "a17a363b7b2a5140d",
+  "tokens": 4920013,
+  "tokenSplit": { "input": 122, "output": 2619, "cacheWrite": 1009644, "cacheRead": 3907628 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 65,
+  "seconds": 6461,
+  "fixRound": 2,
+  "reworkCause": "ADR-0003 revised for reviewer R-09..R-13 / auditor B-01, B-02, so mutation anchors moved; three further weak spots in QA's own script named by the reviewer (QA's earlier contrast runs could have caught them)",
+  "notes": "PROOF HOLDS at b6f62ae; all named mutations and W-1..W-4 re-run and killed; W-5..W-8 survived the committed script and are killed by the tightened one; boundary-check: clean (allowed tests/doc-checks/)"
+}

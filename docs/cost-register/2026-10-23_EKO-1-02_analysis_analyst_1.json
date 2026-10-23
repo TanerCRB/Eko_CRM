@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-23",
+  "task": "EKO-1-02",
+  "phase": "analysis",
+  "role": "analyst",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "a0db6c48b7a32816d",
+  "tokens": 355584,
+  "tokenSplit": { "input": 18, "output": 2626, "cacheWrite": 59934, "cacheRead": 293006 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 19,
+  "seconds": 227,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "NEEDS ANSWERS round 1 (C-1); draft K-01..K-07; gate-1 questions G-1..G-5; read-only registered role, no boundary check"
+}

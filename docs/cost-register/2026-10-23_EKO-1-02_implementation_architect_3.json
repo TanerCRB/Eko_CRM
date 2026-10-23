@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-23",
+  "task": "EKO-1-02",
+  "phase": "implementation",
+  "role": "architect",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "add8ea9d924619cc7",
+  "tokens": 291901,
+  "tokenSplit": { "input": 10, "output": 25909, "cacheWrite": 86263, "cacheRead": 179719 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 9,
+  "seconds": 427,
+  "fixRound": 1,
+  "reworkCause": "reviewer STOP R-01..R-07 and security-auditor B-01..B-03 at edc29ab; the Architect's own analysis-phase impact map could have caught R-01 (it raised restricted admin permissions only for deletion, Q9) and R-02/R-03 (refresh under concurrency and outage); not catchable by the Analyst's criteria, which check statements only",
+  "notes": "all findings FIXED in ADR-0003 (controls C14..C21 added, C1/C2/C4/C8 extended), none disputed; doc-checks 35/36 (only K-01 status, Draft); boundary-check: clean (allowed ADR-0003 only)"
+}
