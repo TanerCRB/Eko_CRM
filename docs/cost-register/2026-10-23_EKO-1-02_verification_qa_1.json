@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-23",
+  "task": "EKO-1-02",
+  "phase": "verification",
+  "role": "qa",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "af09c4775ba3c041d",
+  "tokens": 1850773,
+  "tokenSplit": { "input": 54, "output": 622, "cacheWrite": 100911, "cacheRead": 1749186 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 29,
+  "seconds": 1105,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "PROOF HOLDS at 1bd2432; 36 document checks; 28 mutations, all killed; first runner attempt mis-applied 12 multi-line mutations on the CRLF checkout and re-ran all 28; boundary-check: clean (allowed tests/doc-checks/)"
+}
