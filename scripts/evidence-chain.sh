@@ -43,6 +43,13 @@
 # Reviewer's reading. An infrastructure PR proves by a run, not by a test in the tree: run only
 # `lint` there. Adapt TEST_PATH_RE and the section headings to your repository, and keep the
 # self-test cases in step with them.
+#
+# A decision task has no test suite: its criteria are proven by document checks (grep over an
+# ADR, a register lookup, layer-check.sh). QA commits them under tests/doc-checks/, one script
+# per task (e.g. tests/doc-checks/EKO-1-02.sh), each check carrying the name the PR's test line
+# quotes. TEST_PATH_RE already matches that directory, so the chain reads those names exactly as
+# it reads test names, and weakening-check.sh guards the scripts the same way. A check that stays
+# a scratch script outside the tree proves nothing here.
 
 set -Eeuo pipefail
 trap 'echo "evidence-chain: the check itself failed (line $LINENO) — treat the chain as broken" >&2; exit 2' ERR
@@ -259,6 +266,10 @@ self_test() {
   mkdir -p "$root/repo/test"
   printf "it('cancel frees the room')\nit('refund quote rounds half-up')\nit('long note is cut at 500')\n" > "$root/repo/test/cancel.test.js"
   printf "cancel frees the room is also a string here\n" > "$root/repo/notes.md"
+  # A decision task: document checks in the tracked check directory, an ADR outside it.
+  mkdir -p "$root/repo/tests/doc-checks" "$root/repo/docs"
+  printf "check 'ADR-0009 status reads Accepted' grep -q '^Status: Accepted' docs/ADR-0009.md\ncheck 'the register cites ADR-0009' grep -q ADR-0009 docs/register.md\n" > "$root/repo/tests/doc-checks/EKO-9-01.sh"
+  printf "Status: Accepted\nthe layer table cites ADR-0009\n" > "$root/repo/docs/ADR-0009.md"
   git -C "$root/repo" add -A
 
   # expect <name> <expected exit> <output must contain> -- <args…>
@@ -319,7 +330,25 @@ self_test() {
 - K-04 — removed:}"
   chain_case "an orphan test line"                   1 "K-08   the PR links a criterion" "$FOUR" "${PR_OK/- Condition: Cancel works./- K-08 — test: cancel frees the room}"
   chain_case "a malformed line in a section"         1 "a line not in the format" "$FOUR" "${PR_OK/- K-01 — removed: the tenant filter — result: killed, 2 tests failed/- K-01 removed the tenant filter, 2 failed}"
-  chain_case "a lint finding fails the chain too"    1 "K-03   no contrast" "$(crit K-01 test)$(crit K-02 'human — courteous')$(crit K-03 test | grep -v Contrast)$(crit K-04 test)" "$PR_OK"
+  # Chain: a decision task proven by document checks, with no test suite behind it.
+  local TWO_DOC; TWO_DOC="$(crit K-01 test 'ADR-0009 is accepted')$(crit K-02 test 'the register cites ADR-0009')"
+  local PR_DOC='Refs #9
+
+## Definition of done — proof
+
+- K-01 — test: ADR-0009 status reads Accepted
+- K-02 — test: the register cites ADR-0009
+
+## Mutation
+
+- K-01 — removed: the Accepted status line — result: killed, 1 check failed
+- K-02 — removed: the ADR-0009 citation — result: killed, 1 check failed
+'
+  chain_case "document checks prove a decision task" 0 "evidence-chain: clean — 2 criteria" "$TWO_DOC" "$PR_DOC"
+  chain_case "a test line that names no check"       1 "names test \"the ADR is fine\", which no test file contains" "$TWO_DOC" "${PR_DOC/the register cites ADR-0009/the ADR is fine}"
+  chain_case "a test line with no name at all"       1 "K-02   a line not in the format" "$TWO_DOC" "${PR_DOC/- K-02 — test: the register cites ADR-0009/- K-02 — test:}"
+  chain_case "a check found only in the ADR itself"  1 "names test \"the layer table cites ADR-0009\", which no test file contains" "$TWO_DOC" "${PR_DOC/the register cites ADR-0009/the layer table cites ADR-0009}"
+  chain_case "a lint finding fails the chain too"   1 "K-03   no contrast" "$(crit K-01 test)$(crit K-02 'human — courteous')$(crit K-03 test | grep -v Contrast)$(crit K-04 test)" "$PR_OK"
 
   # Must fail the check itself, never read as "holds".
   issue "$FOUR" > "$root/issue.md"; printf '%s' "$PR_OK" > "$root/pr.md"; mkdir -p "$root/plain"

@@ -129,6 +129,11 @@ happen — and like every negative claim it needs a contrast, the same situation
 element in which it does happen, and a mutation that makes it happen where it shouldn't. A
 prohibition you can't give a contrast to goes to "Gaps in the Story".
 
+A decision task proves its criteria by document checks that QA commits as
+`tests/doc-checks/<identifier>.sh` (`agents/qa.md`, "The stack you work in"). A prohibition on
+adding files therefore names that one file as allowed; one that forbids it leaves QA nowhere to
+put the proof, and the evidence chain fails at gate 2 on every criterion.
+
 ### 3c. Mark what no test can decide
 
 Some claims can only be judged by a person: whether a text reads as the business intends,

@@ -57,7 +57,7 @@ label:waiting-on-human` finds everything waiting on the human.
 | Frontend PR template | `.github/PULL_REQUEST_TEMPLATE/frontend.md` — copied by hand from `process/issue-templates/PULL_REQUEST_TEMPLATE-frontend.md` (the sync writes only the default backend one) |
 | Labels | `process/labels.json`, applied with `node tools/sync-github.mjs --labels \| bash` |
 | Registers | `docs/PLAN.md`, `docs/architecture/{capabilities,architecture-sensitive-paths,layer-dependencies,exception-register}.md`, `docs/cost-register/` |
-| Tests | `backend/tests/`, `frontend/tests/` (mirrors `frontend/src/`) — never next to the code, so QA's write boundary is one prefix per side |
+| Tests | `backend/tests/`, `frontend/tests/` (mirrors `frontend/src/`) — never next to the code, so QA's write boundary is one prefix per side; a decision task's document checks in `tests/doc-checks/<identifier>.sh` |
 | Task worktrees | `../Eko_CRM-<identifier>`, branch `<identifier>-<slug>` |
 
 `docs/architecture/layer-dependencies.md` and `architecture-sensitive-paths.md` follow the layout

@@ -596,7 +596,8 @@ missing = go back to the `analysis` phase; a broken lock = back to gate 1.
     register are created as a **proposal**. QA restores production files from `HEAD` and returns
     every mutation as a patch against `CHECKPOINT` (`Base: <SHA>`); it goes into the PR's Mutation
     section as is. **Run the write-boundary check around the call** with the test directories
-    (`backend/tests/`, `frontend/tests/`) as the only allowed paths — a mutation left un-reverted, staged or committed shows up here, not
+    (`backend/tests/`, `frontend/tests/`, and `tests/doc-checks/` for a decision task's document checks)
+    as the only allowed paths — a mutation left un-reverted, staged or committed shows up here, not
     at gate 2.
 
 11a. **QA checkpoint.** Commit QA's test changes — the paths its report lists, all inside the
@@ -643,7 +644,7 @@ so the boundary is checked mechanically by you, around the call, not by a human 
 T=$(mktemp -d)                                         # outside the tree
 scripts/boundary-check.sh snapshot "$T/state"          # immediately BEFORE the role call
 # ... role call ...
-scripts/boundary-check.sh verify "$T/state" backend/tests/ frontend/tests/   # immediately AFTER; the allowed prefixes
+scripts/boundary-check.sh verify "$T/state" backend/tests/ frontend/tests/ tests/doc-checks/   # immediately AFTER; the allowed prefixes
 ```
 
 It compares `HEAD`, the index and the whole working tree (new files included), so an edit hidden

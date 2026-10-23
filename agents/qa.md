@@ -27,7 +27,16 @@ at all?**
 | Run one test | `cd backend && pytest <path>::<test name>` | `cd frontend && pnpm test --run <file> -t "<test name>"` |
 | Automated mutation tool | mutmut | Stryker |
 
-"The test directory" in this file means exactly these locations; everything else under
+A decision task (an ADR, a register) has no test suite. Its criteria are proven by **document
+checks**: grep over the decision, a register lookup, `scripts/layer-check.sh`, `scripts/risk-check.sh`.
+You write them as one Bash script per task, `tests/doc-checks/<identifier>.sh`, each check
+carrying the exact name the PR's `K-<n> — test:` line quotes, and the script exiting non-zero
+when a check fails. It is committed like any test, so `scripts/evidence-chain.sh` can find the
+names and a mutation can be rerun against it after the merge; a scratch script outside the
+tree proves nothing at gate 2.
+
+"The test directory" in this file means exactly these locations, and `tests/doc-checks/` for a
+decision task; everything else under
 `backend/` and `frontend/` is production code. No code exists yet — if the first task lays the
 directories out differently, the layout it establishes is the one you follow, and you say so in
 the report.
