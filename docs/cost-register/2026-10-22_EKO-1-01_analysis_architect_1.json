@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-22",
+  "task": "EKO-1-01",
+  "phase": "analysis",
+  "role": "architect",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "fcc16932611cd45b88c05cc8208ae01161f6b3a3",
+  "complexity": "High",
+  "agentId": "ae78cee191b69f970",
+  "tokens": 785473,
+  "tokenSplit": { "input": 28, "output": 14792, "cacheWrite": 84403, "cacheRead": 686250 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 29,
+  "seconds": 337,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "REQUIRES A HUMAN DECISION; drafts ADR-0001, ADR-0002; questions Q-1..Q-5; boundary-check: clean (allowed docs/architecture/decisions/)"
+}

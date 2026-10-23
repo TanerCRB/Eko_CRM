@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-23",
+  "task": "EKO-1-01",
+  "phase": "verification",
+  "role": "qa",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "fcc16932611cd45b88c05cc8208ae01161f6b3a3",
+  "complexity": "Medium",
+  "agentId": "a0c61d8d5e9290799",
+  "tokens": 1816827,
+  "tokenSplit": { "input": 66, "output": 403, "cacheWrite": 80869, "cacheRead": 1735489 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 35,
+  "seconds": 699,
+  "fixRound": 2,
+  "reworkCause": "re-verification after reviewer STOP at f44f78d (R-08, R-10)",
+  "notes": "PROOF HOLDS at 90af4f9, UNDECIDABLE K-04, 1 low (nested pyproject.toml unclassed as ruff config); all named mutations killed; boundary-check: clean (--none, shared round-2 snapshot)"
+}
