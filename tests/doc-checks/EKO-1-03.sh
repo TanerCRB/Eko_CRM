@@ -47,8 +47,11 @@
 # "[EKO-x-yy]", read from GitHub on 2026-10-24 and re-checked by the named gh check.
 #
 # Fix round 1 (decisions A-H on #16, 2026-10-24) added the checks of the revised mechanisms and
-# tightened the ones the Reviewer broke on paper; K-01's "every deployment and every restart"
-# carries the one exception the human accepted (the starts of a rolled-back release).
+# tightened the ones the Reviewer broke on paper. Fix round 2 (decisions on the findings at be73027,
+# 2026-10-24) withdrew the K-01 exception for a rolled-back release: every deployment and every
+# restart runs migrate, which changes nothing on a revision descending from its head (R-12). It
+# added the checks of R-10..R-15, B-01, B-05, B-08 and B-09 and tightened the six checks the
+# Reviewer broke on paper at be73027.
 #
 # What these checks are: line and sentence matching over prose. They prove that a statement is
 # present (or absent) in the decision, not that the statement is true of any running system.
@@ -188,8 +191,11 @@ check() {
   else echo "FAIL $name — ${WHY:-check failed}"; failed=$((failed + 1)); fi
 }
 skip() { echo "skip $1 — $2"; skipped=$((skipped + 1)); }
-# has <text> <ERE> — case-insensitive match somewhere in the text.
-has() { printf '%s\n' "$1" | grep -Eiq -- "$2"; }
+# has <text> <ERE> — case-insensitive match somewhere in the text. The text is given to grep as a
+# here-string, not through a pipe: with pipefail, a writer still writing when "grep -q" exits on
+# its first match dies of SIGPIPE and fails the pipeline. Git Bash on Windows rarely shows it;
+# Linux (WSL, a CI runner) does on the larger texts (fix round 2).
+has() { grep -Eiq -- "$2" <<< "$1"; }
 need() { has "$1" "$2" || { WHY="missing${3:+ in $3}: /$2/"; return 1; }; }
 forbid() {  # forbid <text> <ERE> [<ERE that excuses the line>]
   local hits
@@ -204,8 +210,8 @@ numbered() { printf '%s\n' "$1" | grep -E '^[0-9]+\. '; }
 
 # pair_ok <identifier> <issue> — the identifier is an entry of docs/PLAN.md and the pair is known.
 pair_ok() {
-  printf '%s\n' "$PLAN_TEXT" | grep -Fq -- "**$1**" || { WHY="$1 is not an entry of $PLAN"; return 1; }
-  printf '%s\n' "$PAIRS" | grep -Fxq -- "$1 $2" || { WHY="$1 (#$2) does not match the identifier's Issue ($(printf '%s\n' "$PAIRS" | grep -E "^$1 " | sed -E 's/^[^ ]+ /#/' ))"; return 1; }
+  grep -Fq -- "**$1**" <<< "$PLAN_TEXT" || { WHY="$1 is not an entry of $PLAN"; return 1; }
+  grep -Fxq -- "$1 $2" <<< "$PAIRS" || { WHY="$1 (#$2) does not match the identifier's Issue ($(printf '%s\n' "$PAIRS" | grep -E "^$1 " | sed -E 's/^[^ ]+ /#/' ))"; return 1; }
 }
 # pairs_ok <text> — every "EKO-x-yy (#n)" in the text resolves.
 pairs_ok() {
@@ -225,7 +231,7 @@ check 'ADR-0004 has no unterminated comment' k01_comments
 k01_status() {
   local st; st="$(printf '%s\n' "$ADR4_TEXT" | grep -E '^\*\*Status:\*\*')"
   [ "$(printf '%s\n' "$st" | grep -c .)" -eq 1 ] || { WHY="expected one status line, found: $(printf '%s' "$st" | tr '\n' '/')"; return 1; }
-  printf '%s\n' "$st" | grep -Eq '^\*\*Status:\*\* Accepted [0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]*$' || { WHY="status line: $st"; return 1; }
+  grep -Eq '^\*\*Status:\*\* Accepted [0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]*$' <<< "$st" || { WHY="status line: $st"; return 1; }
 }
 check 'ADR-0004 status reads Accepted' k01_status
 
@@ -246,7 +252,7 @@ k01_one_runtime() {
   [ "$(printf '%s\n' "$fams" | grep -c .)" -eq 1 ] || { WHY="the runtime sentence names $(printf '%s\n' "$fams" | grep -c .) runtimes: '$chosen'"; return 1; }
   rows="$(printf '%s\n' "$OPTIONS_TEXT" | section '^### Container runtime' | paras | grep -E '^\| [A-Z]\. ')"
   [ "$(printf '%s\n' "$rows" | grep -c .)" -ge 2 ] || { WHY="Options considered / Container runtime has fewer than two option rows"; return 1; }
-  printf '%s\n' "$rows" | grep -Eiq "\b$fams\b" || { WHY="the chosen runtime '$fams' is not an option row"; return 1; }
+  grep -Eiq "\b$fams\b" <<< "$rows" || { WHY="the chosen runtime '$fams' is not an option row"; return 1; }
   # No other runtime named anywhere in the Decision.
   local other; other="$(printf '%s\n' "$DECISION_SENTS" | grep -Eio "\b($RUNTIMES)\b" | tr 'A-Z' 'a-z' | sort -u | grep -Fxv -- "$fams")"
   [ -z "$other" ] || { WHY="the Decision also names $(printf '%s' "$other" | tr '\n' ' ')"; return 1; }
@@ -258,7 +264,7 @@ k01_composition() {
   rows="$(sub_paras '^### Composition and placement' | grep -E '^\| `?[a-z]')"
   roles="$(printf '%s\n' "$rows" | awk -F'|' '{ v = $4; gsub(/^ +| +$/, "", v); print v }')"
   for r in '^the backend' 'static file server' '^the PostgreSQL server' '^(the )?Keycloak\b|^the identity server' 'HTTPS entry point' 'produces[^|]*backup'; do
-    printf '%s\n' "$roles" | grep -Eiq -- "$r" || { WHY="no composition row whose role matches /$r/"; return 1; }
+    grep -Eiq -- "$r" <<< "$roles" || { WHY="no composition row whose role matches /$r/"; return 1; }
   done
   need "$(sub_paras '^### Composition and placement')" 'Background work\. [^.]*ADR-0006' 'Composition and placement' || return 1
 }
@@ -297,19 +303,40 @@ check 'exactly one named process runs alembic upgrade head' k01_one_migrator
 k01_web_worker() { need "$MIG" 'web process, and any worker process started from the backend image, do not run it, neither at start nor at any other time' 'Migrations'; }
 check 'the web process and any worker never run the migration' k01_web_worker
 
-# K-01 "runs on every deployment and every restart", amended at gate 2 (human decision 1 on #16,
-# 2026-10-24): the one accepted exception is the starts of a rolled-back release. The sentence
-# may carry that exception and no other; a skip of migrate anywhere else in the Decision fails.
+# K-01 "runs on every deployment and every restart", with no exception (fix round 2, R-12: the
+# exception of fix round 1 for a rolled-back release is withdrawn; migrate is a no-op on a
+# revision descending from its head). The sentence carries no exception word, and no Decision
+# sentence lets a start skip migrate. No excuse is read from the line: the first version excused a
+# whole line naming the rolled-back release, so "A start after a host reboot skips migrate, as the
+# starts of a rolled-back release do." passed (EKO-1-03-M108). The one kept sentence, a backend
+# container restarted alone by the restart policy (not a start of the environment), is removed by
+# its exact text before the bans.
 k01_every_deploy() {
-  local s rest
+  local s rest all
   s="$(printf '%s\n' "$MIG" | grep -Ei 'migrate runs on every deployment and every restart of the environment')"
   [ -n "$s" ] || { WHY="missing in Migrations: 'migrate runs on every deployment and every restart of the environment'"; return 1; }
-  rest="$(printf '%s\n' "$s" | sed -E 's/\(every docker compose up\)//; s/, except the starts of a rolled-back release \([^)]*\)//')"
-  forbid "$rest" '\b(except|unless|but not|other than|apart from|save for|skips?|skipped|without|only (on|at|when))\b' || { WHY="the every-deployment sentence carries another exception than the starts of a rolled-back release: ${WHY#forbidden statement: }"; return 1; }
-  forbid "$DECISION_SENTS" '\b(skips?|skipped|skipping|without running|without|bypass(es|ing)?|omits?) migrate\b' 'rolled-back release|previous release.s backend' || return 1
-  forbid "$DECISION_SENTS" '\bmigrate\b[^.]*\b(is|are) (skipped|not run|omitted)\b' 'rolled-back release|previous release.s backend' || return 1
+  has "$s" 'migrate runs on every deployment and every restart of the environment \(every docker compose up\), with no exception, a rollback to the previous release and every start of the rolled-back release included; backend \(and any worker\) starts only after migrate has exited with success' || { WHY="the every-deployment sentence does not read '... every restart of the environment (every docker compose up), with no exception, a rollback to the previous release and every start of the rolled-back release included; backend (and any worker) starts only after migrate has exited with success': $(printf '%s' "$s" | cut -c1-200)"; return 1; }
+  rest="$(printf '%s\n' "$s" | sed -E 's/\(every docker compose up\)//; s/, with no exception, a rollback to the previous release and every start of the rolled-back release included;/;/')"
+  forbid "$rest" '\b(except|exception|unless|but not|other than|apart from|save for|skips?|skipped|without|only (on|at|when)|excluded)\b' || { WHY="the every-deployment sentence carries an exception: ${WHY#forbidden statement: }"; return 1; }
+  all="$(printf '%s\n' "$DECISION_SENTS" | sed -E 's/^A container of backend restarted alone by the runtime.s restart policy does not migrate; its revision check below decides whether it serves\.$/KEPT-RESTART-POLICY-SENTENCE/')"
+  forbid "$all" '\b(skips?|skipped|skipping|without running|without|bypass(es|ed|ing)?|omits?|omitted) migrate\b' || return 1
+  forbid "$all" '\bmigrate\b[^.]*\b(is|are|was|be) (skipped|not run|omitted|bypassed)\b' || return 1
+  forbid "$all" '\b(does not|do not|need not|never|no longer) (run |start )?migrate\b|\bmigrate (does not|need not|is not) (run|start)( at| on| when| after| for|[,.;]|$)' || return 1
 }
-check 'the migration runs on every deployment and every restart, except the starts of a rolled-back release' k01_every_deploy
+check 'the migration runs on every deployment and every restart, with no exception' k01_every_deploy
+
+# R-12 (fix round 2): migrate makes backend's descent check, is a no-op on a revision descending
+# from its head and fails on one it cannot place; C13 tests both.
+k01_migrate_noop() {
+  need "$MIG" '^- migrate changes nothing on a newer schema\.' 'Migrations' || return 1
+  need "$MIG" 'Before it applies a revision, migrate reads the database.s Alembic revision and makes the same descent check as backend: when the revision is not the head its code ships but descends from that head, migrate exits with success and changes nothing' 'Migrations' || return 1
+  need "$MIG" 'A revision the check cannot place as that head, as a revision before it or as a descendant of it fails the run, and the schema is left unchanged' 'Migrations' || return 1
+  need "$MIG" 'So a rollback to the previous release, every later start of that release, a secret rotation that restarts the environment and a restore all run migrate like any other start' 'Migrations' || return 1
+  forbid "$DECISION_SENTS" '\b(cannot place|cannot establish|unknown revision|unplaceable)\b[^.]*\b(exits with success|exits 0|is accepted|passes|is a no-op|serves)\b' || return 1
+  control 'runs the previous release.s migrate against a database at the next release.s head after an expand migration: it exits 0 and leaves a schema dump identical to the one before it' 'migrate as a no-op on a descending revision (C13)' || return 1
+  control 'runs migrate against a database at a revision its code cannot place: it exits non-zero and leaves the schema unchanged' 'migrate refusing an unplaceable revision (C13)' || return 1
+}
+check 'migrate changes nothing on a revision descending from its head and fails on one it cannot place' k01_migrate_noop
 
 k01_serialised() { need "$MIG" 'Two runs at once are (serialised|serialized|prevented)' 'Migrations'; }
 check 'two migration runs at once are serialised' k01_serialised
@@ -341,21 +368,50 @@ k01_no_old_code() {
   need "$MIG" 'A revision older than that head, or one the check cannot establish as that head or a descendant of it, is always refused' 'Migrations' || return 1
   need "$MIG" 'The previous release may serve on a newer schema only within the expand → deploy → contract rule' 'Migrations' || return 1
   forbid "$DECISION_SENTS" '\b(accepts?|serves?( on)?|starts? on|runs? on)\b[^.]*\b(any|older|earlier|ancestor|unknown|previous) (revision|schema)s?\b' || return 1
+  # A revision the check cannot read or establish still served (the Reviewer's paper break at
+  # be73027: "If the revision cannot be read, backend logs a warning and serves."; EKO-1-03-M109).
+  # "exits without serving" and "never serves" are the refusal itself; only those words are
+  # neutralised, so a line that refuses and then serves still fails (contrast EKO-1-03-C11).
+  forbid "$(printf '%s\n' "$DECISION_SENTS" | sed -E 's/\b(exits without serving|without serving|never serves)\b/REFUSES/g')" '\b(cannot|can.t|could not|fails? to|unable to|does not) (be )?(read|reach|establish|place|determine|find|query)\b[^.]*\b(serves?|serving|answers|continues|keeps running|starts anyway|proceeds)\b' || return 1
+  forbid "$DECISION_SENTS" '\b(backend|worker|revision check)\b[^.]*\b(logs?|records?|emits?|raises?) (a |an )?(warning|notice|alert)\b[^.]*\b(serves?|serving|starts?|continues|proceeds)\b' || return 1
+  forbid "$DECISION_SENTS" '\b(unreadable|missing|empty|absent) (alembic )?(revision|alembic_version)\b' || return 1
 }
 check 'no code serves on a schema older than itself; the revision check accepts only its head or a descendant' k01_no_old_code
 
+# Fix round 2 (R-12): a rollback starts the previous release with migrate first, as a no-op.
 k01_rollback() {
   local d; d="$(sub_sents '^### Deployment and expand')"
   need "$d" '^Rollback to the previous release\.$' 'Deployment and expand → deploy → contract' || return 1
-  need "$d" 'without running migrate: the database stays at the newer head, which descends from the previous release.s head, and the previous release.s revision check accepts it' 'Deployment and expand → deploy → contract' || return 1
-  need "$d" 'Every start of the environment while the rolled-back release serves skips migrate in the same way, until a later release is deployed' 'Deployment and expand → deploy → contract' || return 1
-  need "$d" 'A rollback goes back to the previous release only; going back further is a restore' 'Deployment and expand → deploy → contract' || return 1
+  need "$d" 'the operator starts the previous release by the digests its composition names, migrate first and then backend \(and any worker\) and frontend' 'Deployment and expand → deploy → contract' || return 1
+  need "$d" 'the database stays at the newer head, which descends from the previous release.s head, so the previous release.s migrate exits with success and changes nothing, and the previous release.s revision check accepts that head' 'Deployment and expand → deploy → contract' || return 1
+  need "$d" '^Every later start of the environment runs migrate in the same way\.$' 'Deployment and expand → deploy → contract' || return 1
+  need "$d" '^A rollback goes back to the previous release only; going back further is a restore\.$' 'Deployment and expand → deploy → contract' || return 1
   need "$d" 'going back to an older Keycloak image is a restore' 'Deployment and expand → deploy → contract' || return 1
   need "$d" 'Going back past a contract migration is a restore' 'Deployment and expand → deploy → contract' || return 1
   forbid "$DECISION_SENTS" '\b(downgrade migration|alembic downgrade)\b' 'No downgrade migration is run' || return 1
-  control 'previous release.s backend, without migrate, against a database at the next release.s head after an expand migration: it answers requests' 'the rollback (C13)' || return 1
+  forbid "$DECISION_SENTS" '\b(rollback|roll(s|ed)? back|going back|goes back)\b[^.]*\b(two|several|multiple|more than one|any number of|earlier|older) releases?\b' || return 1
+  control 'runs the previous release.s migrate against a database at the next release.s head after an expand migration: it exits 0 and leaves a schema dump identical to the one before it; the previous release.s backend started after it answers requests and leaves the schema unchanged' 'the rollback (C13)' || return 1
 }
-check 'a rollback goes one release back without migrate; further back, and any Keycloak rollback, is a restore' k01_rollback
+check 'a rollback goes one release back and runs migrate as a no-op; further back, and any Keycloak rollback, is a restore' k01_rollback
+
+# R-13 (fix round 2): the one-release limit is the operator's rule, which the check does not enforce.
+k01_rollback_procedural() {
+  local d; d="$(sub_sents '^### Deployment and expand')"
+  need "$d" '^This limit is a procedural rule of the operator, not one the revision check enforces: the check accepts every revision that descends from its code.s head and does not establish how many releases lie between the two\.$' 'Deployment and expand → deploy → contract' || return 1
+  local all; all="$(printf '%s\n' "$DECISION_SENTS" | sed -E 's/^This limit is a procedural rule of the operator, not one the revision check enforces: the check accepts every revision that descends from its code.s head and does not establish how many releases lie between the two\.$/PROCEDURAL-RULE-SENTENCE/')"
+  forbid "$all" '\b(revision check|the check|migrate)\b[^.]*\b(enforces|bounds|limits|guarantees|ensures|refuses)\b[^.]*\b(one release|previous release only|one-release|how many releases|more than one release|rollback)\b' || return 1
+  forbid "$all" '\b(revision check|the check)\b[^.]*\b(establishes|counts|knows) how many releases\b' || return 1
+}
+check 'the one-release limit of a rollback is a procedural rule the revision check does not enforce' k01_rollback_procedural
+
+# B-09 (fix round 2): a release adding or tightening an access rule is never rolled back.
+k01_access_rule_rollback() {
+  local d; d="$(sub_sents '^### Deployment and expand')"
+  need "$d" '^A release that adds or tightens an access rule \(a rule restricting what a user may read or change\) cannot be rolled back; going back past it is a restore\.$' 'Deployment and expand → deploy → contract' || return 1
+  forbid "$DECISION_SENTS" '\baccess rules?\b[^.]*\b(can|may|is allowed to) (be )?(rolled back|roll back)\b' || return 1
+  forbid "$DECISION_SENTS" '\b(rollback|roll(s|ed)? back)\b[^.]*\b(past|over|across|before) (a|an|the) (release that (adds|tightens)|access rule)\b' || return 1
+}
+check 'a release that adds or tightens an access rule cannot be rolled back' k01_access_rule_rollback
 
 k01_failed_migration() { need "$MIG" 'failed migration leaves (the previous release running|the service stopped)' 'Migrations'; }
 check 'a failed migration leaves the previous release running or the service stopped' k01_failed_migration
@@ -370,8 +426,8 @@ k01_edc() {
   local dep steps
   dep="$(sub_paras '^### Deployment and expand')"
   steps="$(numbered "$dep")"
-  printf '%s\n' "$steps" | grep -Eiq '^[0-9]+\. Release N \(expand\)' || { WHY="no release step 'Release N (expand)'"; return 1; }
-  printf '%s\n' "$steps" | grep -Eiq '^[0-9]+\. Release N\+1 or later \(contract\)' || { WHY="no release step 'Release N+1 or later (contract)'"; return 1; }
+  grep -Eiq '^[0-9]+\. Release N \(expand\)' <<< "$steps" || { WHY="no release step 'Release N (expand)'"; return 1; }
+  grep -Eiq '^[0-9]+\. Release N\+1 or later \(contract\)' <<< "$steps" || { WHY="no release step 'Release N+1 or later (contract)'"; return 1; }
   need "$(printf '%s\n' "$dep" | sents)" 'ships in a later release than its expand migration' 'Deployment and expand → deploy → contract' || return 1
   need "$(printf '%s\n' "$dep" | sents)" 'never in the same release, and only once no running release reads or writes the old shape' 'Deployment and expand → deploy → contract' || return 1
   # "same release" may appear only as the ban itself, the negation directly in front of it ("never
@@ -449,6 +505,18 @@ k02_admin_binding() {
   need "$HTTPS" 'so the source-network check is a second guard and not the only one' 'HTTPS exposure' || return 1
   need "$HTTPS" 'A request that reaches the public listener with SNI or Host <auth-admin-host> is refused' 'HTTPS exposure' || return 1
   forbid "$DECISION_SENTS" '\badmin listener\b[^.]*\b(published|bound|listens?|exposed|served)\b[^.]*(0\.0\.0\.0|all (the )?(host.s )?(interfaces|addresses)|every (host )?(interface|address)|public (address|interface|IP)|internet-facing (address|interface))' || return 1
+  # Any other statement of where the admin listener is published or bound (the Reviewer's paper
+  # break at be73027: "the admin listener's port is also published on the host's WAN interface"
+  # passed the closed list above; EKO-1-03-M110). The one required sentence is removed by its
+  # exact text; whatever else says where the admin listener or its port is published fails.
+  local others; others="$(printf '%s\n' "$DECISION_SENTS" | sed -E 's/The admin listener.s port is published only on the host.s company-network interface, never on an address the internet reaches, so the source-network check is a second guard and not the only one\./REQUIRED-BINDING-SENTENCE./')"
+  forbid "$others" '\badmin listener\b[^.]*\b(published|publishes|bound|binds|listens?|exposed|mapped|reachable on|forwarded)\b' || return 1
+  # Scoped to the admin side: the same words about the public listener are its normal place
+  # (contrast EKO-1-03-C09, which failed the first, unscoped version of this ban).
+  # (<auth-admin-host> stands outside the \b groups: a word boundary never falls next to "<" or
+  # ">", so the first version's "\b(...|<auth-admin-host>)\b" could not match it; EKO-1-03-M156.)
+  forbid "$others" '(\b(admin listener|admin port|administration console)\b|<auth-admin-host>)[^.]*\b(WAN|uplink|external|outside|public-facing|internet-facing) (interface|address|port|IP)s?\b|\b(WAN|uplink|external|outside|public-facing|internet-facing) (interface|address|port|IP)s?\b[^.]*(\b(admin listener|admin port|administration console)\b|<auth-admin-host>)' || return 1
+  forbid "$others" '\b(proxy|listeners?)\b[^.]*\b(published|bound)\b[^.]*\b(all|every|any) (host )?(interfaces|addresses|interface|address)\b' || return 1
   forbid "$DECISION_SENTS" '\bpublic listener\b[^.]*\b(forwards|serves|accepts|routes)\b[^.]*<auth-admin-host>' || return 1
   forbid "$DECISION_SENTS" '\bsource-network check is the only\b' || return 1
   control 'admin listener is bound to the host.s company-network address only, not to 0\.0\.0\.0, :: or an address the internet reaches' 'the admin listener binding (C3)' || return 1
@@ -566,10 +634,15 @@ RESTORE_P="$(sub_paras '^### Restore procedure')"
 RESTORE="$(printf '%s\n' "$RESTORE_P" | sents)"
 
 k04_frequency() {
+  local b
   need "$BACKUP" 'A backup runs once every day' 'Backup' || return 1
-  forbid "$BACKUP" '\b(weekly|monthly|once a week|every week|every [2-9][0-9]* days|every (two|three|four|five|six|seven) days|every [0-9]{3,} hours|every (2[5-9]|[3-9][0-9]) hours)\b' || return 1
+  # "the monthly verification" names the off-server check's interval, not the backup's (fix round
+  # 2, the Retention item): only that exact noun phrase is taken out before the bans, so "a backup
+  # runs monthly" or "monthly backups" still fail (contrast EKO-1-03-C07, mutation EKO-1-03-M111).
+  b="$(printf '%s\n' "$BACKUP" | sed -E 's/\bthe monthly verification\b/the VERIFICATION/g')"
+  forbid "$b" '\b(weekly|monthly|once a week|every week|every [2-9][0-9]* days|every (two|three|four|five|six|seven) days|every [0-9]{3,} hours|every (2[5-9]|[3-9][0-9]) hours)\b' || return 1
   # Less than daily without a number (added after the Reviewer's paper break "every other day").
-  forbid "$BACKUP" '\b(every|each) (other|second|alternate) (day|night)s?\b|\balternate (days|nights)\b|\b(once|twice|three times) (a|per) (week|fortnight|month)\b|\bfortnightly\b|\b(on )?(weekdays|working days|business days|workdays)\b|\b(Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)days?\b' || return 1
+  forbid "$b" '\b(every|each) (other|second|alternate) (day|night)s?\b|\balternate (days|nights)\b|\b(once|twice|three times) (a|per) (week|fortnight|month)\b|\bfortnightly\b|\b(on )?(weekdays|working days|business days|workdays)\b|\b(Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)days?\b' || return 1
 }
 check 'a backup runs at least once every 24 hours' k04_frequency
 
@@ -604,14 +677,34 @@ check 'retention is a number of days' k04_retention
 k04_verification() {
   need "$BACKUP" 'At least once every calendar month, the IT department fetches the newest backup set from the destination, decrypts it on a host that is not the server with the backup private key, and checks it against its manifest' 'Backup' || return 1
   need "$BACKUP" 'its row counts equal to those of the dump' 'Backup' || return 1
-  need "$BACKUP" 'a set that fails is handled as a failed backup' 'Backup' || return 1
-  need "$(sub_paras '^### Backup' | grep -Ei '^- Retention\.')" 'and beyond them the last set that passed the verification below, until a newer set passes it' 'the retention item' || return 1
+  need "$BACKUP" 'a set that fails either comparison is handled as a failed backup' 'Backup' || return 1
+  need "$(sub_paras '^### Backup' | grep -Ei '^- Retention\.')" 'and beyond them the last three sets that passed the monthly verification below, each until three newer sets have passed it' 'the retention item' || return 1
   # "... and is never on the server" is the key's own ban, not a place it is decrypted.
   forbid "$(printf '%s\n' "$DECISION_SENTS" | sed -E 's/,? and is never on the server//')" '\bdecrypt(s|ed|ing|ion)?\b[^.]*\b(on|at|in) the server\b' || return 1
   forbid "$(printf '%s\n' "$DECISION_SENTS" | sed -E 's/,? and is never on the server//')" '\b(private key|decryption key)\b[^.]*\b(is|are) (kept|stored|copied|held|placed)\b[^.]*\bon the server\b' || return 1
-  control 'decrypted off the server and checked against its manifest at intervals of at most one calendar month, and the destination still holds the last set that passed the check, also when it is older than 30 days' 'the backup verification (C27)' || return 1
+  # The verification left out after a while or on a condition (the Reviewer's paper break at
+  # be73027: "After the first year the check may be skipped while the 26-hour alert stays green.";
+  # EKO-1-03-M112). Every sentence that names the verification or the check and lets it be skipped,
+  # dropped or made optional fails, whatever it is conditioned on.
+  # A negated skip ("may not be skipped") is the ban itself; only that phrase is neutralised
+  # (contrast EKO-1-03-C12).
+  forbid "$(printf '%s\n' "$DECISION_SENTS" | sed -E 's/\b(may|must|can|shall|is|are) (not|never) be (skipped|omitted|dropped|suspended|waived|paused|postponed|stopped|discontinued|replaced)\b/NEGATED-SKIP/g')" '\b(verification|the check|monthly check|this check|that check)\b[^.]*\b(may|can|need not|is allowed to|is|are)\b[^.]*\b(skipped|omitted|dropped|suspended|optional|waived|paused|postponed|stopped|discontinued|replaced)\b' || return 1
+  forbid "$DECISION_SENTS" '\b(skip|omit|drop|suspend|waive|pause|postpone|stop|discontinue)s?\b[^.]*\b(the verification|the monthly check|the check off the server|verifying)\b' || return 1
+  forbid "$DECISION_SENTS" '\b(verification|monthly check)\b[^.]*\b(only|until|unless|except)\b[^.]*\b(first|year|month|alert|season|deployment|failure)\b' || return 1
+  control 'decrypted off the server and checked against its manifest at intervals of at most one calendar month' 'the monthly verification (C27)' || return 1
+  control 'the destination still holds the last three sets that passed the check, also when they are older than 30 days' 'the verified sets kept (C27)' || return 1
 }
-check 'the newest backup set is decrypted and checked off the server every month, and the last verified set is kept' k04_verification
+check 'the newest backup set is decrypted and checked off the server every month, and the last three verified sets are kept' k04_verification
+
+# B-05 (fix round 2): the monthly check also compares the set with the off-server record of account
+# changes, a fact the server cannot fabricate; C27 records it.
+k04_verification_record() {
+  need "$BACKUP" 'The same check compares the set with the IT department.s off-server record of account changes \(\*?Operator duties\*?\): the newest entries of that record made before the set.s time are present in the set.s Keycloak dump, a fact a compromised server cannot fabricate' 'Backup' || return 1
+  forbid "$DECISION_SENTS" '\brecord of account changes\b[^.]*\b(need not|is not|are not|never) (be )?(compared|checked|read)\b' || return 1
+  forbid "$DECISION_SENTS" '\b(compar\w*|check\w*)\b[^.]*\brecord of account changes\b[^.]*\b(optional|when available|if available|where possible|at the IT department.s discretion)\b' || return 1
+  control 'each check on a host meeting the restore-host requirements and finding the newest entries of the record of account changes made before the set.s time in the set.s Keycloak dump' 'the record comparison (C27)' || return 1
+}
+check 'the monthly check compares the set with the off-server record of account changes' k04_verification_record
 
 # The alert bound: the first missing daily run must be caught before a second one is due, so the
 # bound lies above 24 and below 48 hours (added after the Reviewer's paper break "older than 260
@@ -647,38 +740,103 @@ check 'the restore procedure is numbered steps restoring both databases consiste
 RSTEPS="$(numbered "$RESTORE_P")"
 rpos() { printf '%s\n' "$RSTEPS" | grep -Ein -- "$1" | head -n 1 | cut -d: -f1; }
 rstep() { printf '%s\n' "$RSTEPS" | sed -n "${1}p"; }
+# Fix round 2 (R-10, R-11): step 8 starts proxy with the admin listener and the public listener
+# accepting the company network only; step 10 sets the Keycloak-stored secrets; step 14 opens the
+# public listener to the internet. The step names below are matched by their opening words.
+rs_fetch() { rpos '^[0-9]+\. Fetch the chosen backup set from the destination, the backup private key and the environment.s secrets'; }
+rs_cnt() { rpos '^[0-9]+\. Compare the restored application tables. row counts with the manifest, before any migration runs; the restore goes on only when they are equal'; }
+rs_adm() { rpos '^[0-9]+\. Start proxy with its admin listener on <auth-admin-host> and with the public listener closed to the internet'; }
+rs_re() { rpos '^[0-9]+\. Through that console, re-apply every account change made after the backup.s time'; }
+rs_sec() { rpos '^[0-9]+\. Through the same console, set the application client.s OIDC client secret'; }
+rs_be() { rpos '^[0-9]+\. Start backend and frontend\.'; }
+rs_open() { rpos '^[0-9]+\. Only then open the public listener to the internet'; }
 k04_restore_order() {
-  local pg db cnt kc adm re key mig be open n p name
+  local pg db cnt kc adm re sec key mig be open n p name t
   printf '%s\n' "$RSTEPS" | awk '{ split($1, a, "."); if (a[1] + 0 != NR) exit 1 }' || { WHY="the restore steps are not numbered 1..n in order"; return 1; }
   n="$(printf '%s\n' "$RSTEPS" | grep -c .)"
   pg="$(rpos '^[0-9]+\. Start postgres alone, with no published port and proxy not started')"
   db="$(rpos '^[0-9]+\. Restore the application database and then Keycloak.s database')"
-  cnt="$(rpos '^[0-9]+\. Compare the restored application tables. row counts with the manifest, before any migration runs; the restore goes on only when they are equal')"
+  cnt="$(rs_cnt)"
   kc="$(rpos '^[0-9]+\. Start keycloak')"
-  adm="$(rpos '^[0-9]+\. Start proxy with only its admin listener on <auth-admin-host>, with the public listener closed')"
-  re="$(rpos '^[0-9]+\. Through that console, re-apply every account change made after the backup.s time')"
+  adm="$(rs_adm)"
+  re="$(rs_re)"
+  sec="$(rs_sec)"
   key="$(rpos '^[0-9]+\. Replace the session-token encryption key with a newly generated value')"
   mig="$(rpos '^[0-9]+\. Run migrate')"
-  be="$(rpos '^[0-9]+\. Start backend and frontend, the public listener still closed')"
-  open="$(rpos '^[0-9]+\. Only then open the public listener')"
-  for p in pg db cnt kc adm re key mig be open; do
+  be="$(rs_be)"
+  open="$(rs_open)"
+  for p in pg db cnt kc adm re sec key mig be open; do
     [ -n "${!p}" ] || { WHY="restore step missing: $p"; return 1; }
   done
   # name <a> <b> — step a comes before step b.
   before() { [ "${!1}" -lt "${!2}" ] || { WHY="restore step $1 (${!1}) is not before $2 (${!2})"; return 1; }; }
   before pg db && before db cnt && before cnt mig || return 1           # counts compared before migrate (R-08)
-  before kc adm && before adm re || return 1                             # the admin-only proxy exists before the re-apply (R-03)
+  before kc adm && before adm re && before adm sec || return 1           # the company-only proxy exists before the console work (R-03, R-10)
   before re open && before key be && before key open || return 1         # revocations and the new key before the public listener (R-02)
+  before sec be && before sec open || return 1                           # Keycloak holds the secrets in effect before the test login (R-11)
   before mig be && before be open || return 1
-  [ "$open" -eq "$n" ] || { WHY="opening the public listener is step $open, not the last step ($n)"; return 1; }
-  # No earlier step starts proxy other than with its admin listener only, or opens the public listener.
+  [ "$open" -eq "$n" ] || { WHY="opening the public listener to the internet is step $open, not the last step ($n)"; return 1; }
+  # Before the opening step, proxy is started only at the company-only step, and no other step
+  # names a listener except the test login through the company-only public listener. The first
+  # version matched only "start(s) proxy" and "open(s) the public listener", so "Start keycloak and
+  # proxy with both of its listeners" at step 7 passed (the Reviewer's paper break at be73027;
+  # EKO-1-03-M113).
   for p in $(seq 1 $((open - 1))); do
-    if rstep "$p" | grep -Eiq '\b(start|restart|run)s? proxy\b' && [ "$p" -ne "$adm" ]; then WHY="restore step $p starts proxy other than with its admin listener only"; return 1; fi
-    if rstep "$p" | grep -Eiq '\bopens? the public listener\b|\bpublic listener (is )?open(ed)?\b'; then WHY="restore step $p opens the public listener"; return 1; fi
+    [ "$p" -ne "$adm" ] || continue
+    t="$(rstep "$p" | sed -E 's/\bproxy (is |still |stays )?not (yet )?started( yet)?\b//g;s/through the public listener, which accepts connections only from there \(step [0-9]+\)/VIA-COMPANY-ONLY-PATH/')"
+    if grep -Eiq '\bproxy\b|\bentry point\b|\bCaddy\b' <<< "$t"; then WHY="restore step $p starts or names proxy before the opening step, other than step $adm"; return 1; fi
+    if grep -Eiq '\blisteners?\b|\bport (80|443)\b' <<< "$t"; then WHY="restore step $p names a listener other than through the company-only public listener"; return 1; fi
+    if grep -Eiq '\bopen(s|ed|ing)?\b[^.]*\b(internet|public)\b|\b(internet|public)\b[^.]*\bopen(s|ed)?\b' <<< "$t"; then WHY="restore step $p opens something to the internet before step $open"; return 1; fi
   done
+  # The company-only step itself does not start the public listener open.
+  if rstep "$adm" | grep -Eiq '\bboth (of its )?listeners\b|\bopens? the public listener\b|\bpublic listener (is )?open(ed)?\b|\b(open|reachable|accepts connections) (to|from) (the internet|every network|any network|all networks)\b'; then WHY="restore step $adm starts the public listener open"; return 1; fi
   return 0
 }
-check 'the restore steps run in order: counts before migrate, admin-only proxy before the re-apply, revocations and a new session key before the public listener' k04_restore_order
+check 'the restore steps run in order: counts before migrate, the company-only proxy before the re-apply, revocations, Keycloak-stored secrets and a new session key before the public listener opens to the internet' k04_restore_order
+
+# R-10 (fix round 2): from step 8 to the opening step the public listener accepts the company
+# network only, so the test login runs through it; C18 and C25 state the same listener state.
+k04_restore_company_only() {
+  local adm be open cnt s
+  adm="$(rs_adm)"; be="$(rs_be)"; open="$(rs_open)"; cnt="$(rs_cnt)"
+  [ -n "$adm" ] && [ -n "$be" ] && [ -n "$open" ] && [ -n "$cnt" ] || { WHY="restore step missing: the company-only proxy, the test login, the opening or the count comparison"; return 1; }
+  s="$(rstep "$adm")"
+  need "$s" "closed to the internet: from this step until step $open, the public listener accepts connections only from the company network, as the admin listener does, and still refuses every request outside its allowlist" "restore step $adm" || return 1
+  need "$s" 'The administration console, the application and Keycloak.s login pages are then reachable only from the company network' "restore step $adm" || return 1
+  s="$(rstep "$be")"
+  need "$s" "From the company network, through the public listener, which accepts connections only from there \\(step $adm\\), log in at https://<app-host> with a test account" "restore step $be" || return 1
+  need "$s" "The restore is verified when the login works and the counts compared at step $cnt are equal" "restore step $be" || return 1
+  need "$(rstep "$open")" '^[0-9]+\. Only then open the public listener to the internet, take a fresh backup, and record the restore' "restore step $open" || return 1
+  control 'ends with a test login working from the company network while the public listener accepted no connection from the internet' 'the test login through the company-only listener (C18)' || return 1
+  control 'for the time before the public listener was opened to the internet, while it accepted connections only from the company network' 'the listener state of the re-apply (C25)' || return 1
+}
+check 'during the restore the public listener accepts the company network only until the last step opens it to the internet' k04_restore_company_only
+
+# R-11 (fix round 2): the restore sets the Keycloak-stored secrets from their master copies and
+# re-applies break-glass and reviewer rotations from the record, which holds every such rotation.
+k04_restore_keycloak_secrets() {
+  local re sec open fetch s n row
+  re="$(rs_re)"; sec="$(rs_sec)"; open="$(rs_open)"; fetch="$(rs_fetch)"
+  [ -n "$re" ] && [ -n "$sec" ] && [ -n "$open" ] && [ -n "$fetch" ] || { WHY="restore step missing: the fetch, the re-apply, the Keycloak-stored secrets or the opening"; return 1; }
+  need "$(rstep "$sec")" "Through the same console, set the application client.s OIDC client secret and, once the company mailbox exists, the application realm.s SMTP credentials to the values of their off-server master copies fetched in step $fetch, so that Keycloak holds the values in effect and not those of the backup.s time" "restore step $sec" || return 1
+  s="$(rstep "$re")"
+  need "$s" 'Also re-apply every rotation of a break-glass or reviewer credential the record holds, so that no value rotated out since the backup works again' "restore step $re" || return 1
+  need "$s" 'the break-glass holder carrying out this step sets their own account.s password to the value in effect, and sets every other such account to a temporary password handed to its holder in person, which the holder replaces with the value in effect at their next login' "restore step $re" || return 1
+  need "$s" 'The holder carrying out this step logs in with the credential the restored master realm holds for their account' "restore step $re" || return 1
+  need "$(rstep "$open")" "the account changes and credential rotations re-applied, the Keycloak-stored secrets set at step $sec\\)" "restore step $open" || return 1
+  need "$(sub_sents '^### Operator duties')" 'Every rotation of a break-glass or reviewer credential is entered in the same record when it is made \(the account and the time, never the value\)' 'Operator duties' || return 1
+  for row in 'Master-realm break-glass admin credentials' "Reviewer.s read-only master-realm account credential"; do
+    s="$(printf '%s\n' "$INVENTORY" | grep -Ei "^\\| $row \\|")"
+    n="$(printf '%s\n' "$s" | grep -Eio 'every rotation is entered in the record of account changes and re-applied at restore step [0-9]+' | grep -Eo '[0-9]+$')"
+    [ -n "$n" ] || { WHY="the inventory row '$row' does not enter its rotations in the record and re-apply them at a restore step"; return 1; }
+    [ "$n" -eq "$re" ] || { WHY="the inventory row '$row' cites restore step $n for its rotations; the re-apply is step $re"; return 1; }
+  done
+  forbid "$DECISION_SENTS" '\b(client secret|SMTP credentials?|Keycloak-stored secrets?)\b[^.]*\b(kept|left|taken|used|restored) (as|from) (restored|the backup|the backup set|the restored database)\b' || return 1
+  forbid "$DECISION_SENTS" '\b(rotation|rotations)\b[^.]*\b(break-glass|reviewer)\b[^.]*\b(need not be|is not|are not|never) (entered|recorded|re-applied)\b' || return 1
+  forbid "$DECISION_SENTS" '\b(reads?|uses?|types?|learns?)\b[^.]*\b(another|other) holder.s (credential|password)\b' || return 1
+  control 'the OIDC client secret and the SMTP credentials stored in Keycloak equal their off-server master copies; every rotation of a break-glass or reviewer credential recorded after the backup.s time is in effect, so the previous value is refused' 'the Keycloak-stored secrets and rotations (C25)' || return 1
+}
+check 'the restore sets the Keycloak-stored secrets from their master copies and re-applies break-glass and reviewer rotations' k04_restore_keycloak_secrets
 
 k04_restore_reapply() {
   local re key
@@ -711,11 +869,36 @@ k04_restore_refs() {
 }
 check 'every restore step the Decision cites is the step it means' k04_restore_refs
 
+# B-08 (fix round 2): every host receiving the private key or a decrypted set, the verification
+# host included, meets the restore-host requirements.
+k04_restore_host() {
+  need "$RESTORE" '^Restore-host requirements\.$' 'Restore procedure' || return 1
+  need "$RESTORE" '^Every host that receives the backup private key or a decrypted backup set, the restore host and the host of the monthly verification \(\*?Backup\*?\) alike, is held by the company, has its disk encrypted, and is not used for e-mail or web browsing\.$' 'Restore procedure' || return 1
+  need "$BACKUP" '^The host of the check meets the restore-host requirements \(\*?Restore procedure\*?\)\.$' 'Backup' || return 1
+  need "$(rstep 1)" '^1\. Provide a host that meets the restore-host requirements' 'restore step 1' || return 1
+  need "$(printf '%s\n' "$INVENTORY" | grep -Ei '^\| Backup encryption private key')" 'brought only to the restore host at restore step 2 and to the off-server host of the backup verification \(\*?Backup\*?\), both meeting the restore-host requirements' 'the private-key row' || return 1
+  forbid "$DECISION_SENTS" '\b(verification|the check)\b[^.]*\b(any|a personal|an? (IT )?(laptop|workstation|own))\b[^.]*\bhost\b|\b(host|laptop|workstation)\b[^.]*\b(need not|does not need to|is not required to) meet\b' || return 1
+  forbid "$DECISION_SENTS" '\bexcept (the|for the) (host of the|verification)|\brestore-host requirements\b[^.]*\b(do not|does not|need not) apply\b' || return 1
+  control 'each check on a host meeting the restore-host requirements' 'the verification host (C27)' || return 1
+}
+check 'every host receiving the backup private key or a decrypted set meets the restore-host requirements' k04_restore_host
+
 k04_counts() {
   need "$BACKUP" 'row count of each application table, counted inside the dump.s own snapshot' 'Backup' || return 1
   control 'row counts matching the manifest when compared before migrate runs' 'the count comparison (C18)' || return 1
 }
 check 'the manifest counts are the dump snapshot.s and are compared before migrate' k04_counts
+
+# R-15 (fix round 2): the backup role's connection limit covers every session a backup holds at the
+# same time; "greater than zero" (a limit of 1, with which every run fails) is gone, and C19 runs a
+# nightly backup with that limit.
+k04_backup_conn_limit() {
+  need "$(sub_sents '^### Composition and placement')" 'The backup service connects with its own database role, which also carries a connection limit of at least the number of sessions a backup holds at the same time \(the session holding the advisory lock, the pg_dump session, and the session counting rows inside the dump.s snapshot, wherever these are separate sessions\)' 'Composition and placement' || return 1
+  forbid "$DECISION_SENTS" '\bbackup\b[^.]*\bconnection limit (greater than zero|above zero|of (at least )?(one|1)|of one session)\b|\bconnection limit\b[^.]*\bbackup\b[^.]*\b(greater than zero|of (at least )?(one|1)\b)' || return 1
+  forbid "$CONTROLS" 'backup role has a connection limit (greater than zero|of (at least )?(one|1)\b)' || return 1
+  control 'the backup role has a connection limit of at least the number of sessions a backup holds at the same time \(the advisory-lock session, the pg_dump session and the row-count session, wherever these are separate\), a nightly backup run with that limit completes' 'the backup role.s limit (C19)' || return 1
+}
+check "the backup role's connection limit covers the sessions a backup holds at the same time" k04_backup_conn_limit
 
 k04_first_test() {
   local s; s="$(printf '%s\n' "$RESTORE" | grep -Ei 'restore is first tested')"
@@ -742,10 +925,13 @@ DECISION_HEADINGS="$(printf '%s\n' "$DECISION_TEXT" | grep -E '^###+ ' | sed -E 
 
 # heading_ok <name> [<ERE the section must mention>]
 heading_ok() {
-  printf '%s\n' "$DECISION_HEADINGS" | grep -Fxq -- "$1" || { WHY="'$1' is not a heading of ADR-0004's Decision"; return 1; }
+  grep -Fxq -- "$1" <<< "$DECISION_HEADINGS" || { WHY="'$1' is not a heading of ADR-0004's Decision"; return 1; }
   if [ -n "${2:-}" ]; then
     local re; re="$(printf '%s' "$1" | sed -E 's/[][\\.*^$+?(){}|/]/\\&/g')"
-    sub_text "^###+ $re\$" | paras | grep -Eiq -- "$2" || { WHY="section '$1' does not mention /$2/"; return 1; }
+    # Collected first, then matched: "sub_text | paras | grep -q" fails by SIGPIPE under pipefail
+    # on Linux whenever paras is still writing after grep's first match (see has).
+    local t; t="$(sub_text "^###+ $re\$" | paras)"
+    has "$t" "$2" || { WHY="section '$1' does not mention /$2/"; return 1; }
   fi
 }
 
@@ -793,7 +979,7 @@ k05_items() {
         [ -n "$name" ] || continue
         heading_ok "$name" "$sec" && ok=1
       done < <(printf '%s\n' "$e" | grep -Eo 'decided in \*[^*]+\*' | sed -E 's/^decided in \*//; s/\*$//')
-      if printf '%s\n' "$e" | grep -Eq 'forwarded on to EKO-[0-9]+-[0-9]+ \(#[0-9]+\)'; then
+      if grep -Eq 'forwarded on to EKO-[0-9]+-[0-9]+ \(#[0-9]+\)' <<< "$e"; then
         pairs_ok "$(printf '%s\n' "$e" | sed -E 's/^[^—]*— //; s/^[^→]*→//')" && ok=1
       fi
     done <<< "$entries"
@@ -808,7 +994,7 @@ k05_pointers() {
   while IFS= read -r e; do
     case "$e" in *"→"*) ;; *) WHY="entry without a pointer: $(printf '%s' "$e" | cut -c1-120)"; return 1 ;; esac
     tail="$(printf '%s\n' "$e" | sed -E 's/^[^—]*— //; s/^[^→]*→ ?//')"
-    printf '%s\n' "$tail" | grep -Eq '^(decided in \*[^*]+\*|(forwarded on to )?EKO-[0-9]+-[0-9]+ \(#[0-9]+\))' \
+    grep -Eq '^(decided in \*[^*]+\*|(forwarded on to )?EKO-[0-9]+-[0-9]+ \(#[0-9]+\))' <<< "$tail" \
       || { WHY="pointer is neither a Decision section nor EKO-x-yy (#n): → $(printf '%s' "$tail" | cut -c1-100)"; return 1; }
     while IFS= read -r name; do
       [ -n "$name" ] || continue
@@ -820,7 +1006,7 @@ k05_pointers() {
   local fr; fr="$(sub_paras '^### Forward references' | grep -E '^- ')"
   while IFS= read -r e; do
     [ -n "$e" ] || continue
-    printf '%s\n' "$e" | grep -Eq '^- (EKO-[0-9]+-[0-9]+ \(#[0-9]+\)|Not decided)' || { WHY="forward reference names no task as EKO-x-yy (#n): $(printf '%s' "$e" | cut -c1-120)"; return 1; }
+    grep -Eq '^- (EKO-[0-9]+-[0-9]+ \(#[0-9]+\)|Not decided)' <<< "$e" || { WHY="forward reference names no task as EKO-x-yy (#n): $(printf '%s' "$e" | cut -c1-120)"; return 1; }
     pairs_ok "$e" || return 1
   done <<< "$fr"
 }
@@ -933,7 +1119,15 @@ k06_approver() {
   need "$DUTIES" 'An assignment of administrator, manager or rep is approved by the company management \(a person the business owner names\) and carried out by an administrator; the approver is never the administrator who makes the change' 'Operator duties' || return 1
   forbid "$DECISION_SENTS" '\bapprov(er|es|ed|al)\b[^.]*\b(may|can|is allowed to)\b[^.]*\b(be|also be)\b[^.]*\badministrator who\b' || return 1
   forbid "$DECISION_SENTS" '\b(administrators?|an administrator)\b[^.]*\bapproves? (its|their|his|her) own\b' || return 1
-  control 'recorded a comparison of the live holders of administrator, manager and rep with the record of approved assignments, in which every assignment names an approver from the company management who is not the administrator who made it' 'the assignment comparison (C22)' || return 1
+  # B-01 (fix round 2): the approver enters the approval, and the assignment waits for it.
+  need "$DUTIES" 'The approver enters the approval in the request record personally, never the administrator who makes the change, and the administrator makes the assignment only once that approval is there' 'Operator duties' || return 1
+  # An assignment made first and approved afterwards, on any condition (the Reviewer's paper break
+  # at be73027: "In an emergency an administrator may assign a role first and enter the approval
+  # afterwards."; EKO-1-03-M114), and an approval entered by the administrator.
+  forbid "$DECISION_SENTS" '\b(assign(s|ed|ment|ments)?|approv(al|als|ed|es|er))\b[^.]*\b(afterwards|retroactively|after the (fact|assignment|change)|later|subsequently|once (it|the role) is (made|assigned))\b' || return 1
+  forbid "$DECISION_SENTS" '\bassign\w*\b[^.]*\bfirst\b[^.]*\bapprov\w*' || return 1
+  forbid "$(printf '%s\n' "$DECISION_SENTS" | sed -E 's/^The approver enters the approval in the request record personally, never the administrator who makes the change, and the administrator makes the assignment only once that approval is there\.$/APPROVER-ENTERS-SENTENCE/')" '\badministrators?\b[^.]*\b(enters?|records?|writes?|types?|files?|logs?) (the|an|its|their) approval\b' || return 1
+  control 'recorded a comparison of the live holders of administrator, manager and rep with the record of approved assignments, in which every assignment names an approver from the company management who is not the administrator who made it, and whose approval that approver entered in the request record' 'the assignment comparison and the approver entering the approval (C22)' || return 1
 }
 check 'role assignments are approved by the company management, never by the administrator who makes them, and compared weekly' k06_approver
 
@@ -993,6 +1187,24 @@ k06_steps() {
   need "$r" 'under the new-account rule' 'the recovery steps' || return 1
 }
 check 'bootstrap and recovery are numbered steps that use the new-account rule' k06_steps
+
+# R-14 (fix round 2): the master realm is configured from inside the keycloak container before
+# proxy starts, so brute-force detection is on before the admin listener exists (C8).
+k06_bootstrap_inside() {
+  local b s pos p
+  b="$(numbered "$(sub_paras '^### Bootstrap of the first administrator')")"
+  pos="$(printf '%s\n' "$b" | grep -Ein 'turns on the master realm.s login events, admin events and brute-force detection' | head -n 1 | cut -d: -f1)"
+  [ -n "$pos" ] || { WHY="no bootstrap step turns on the master realm's events and brute-force detection"; return 1; }
+  s="$(printf '%s\n' "$b" | sed -n "${pos}p")"
+  need "$s" '^[0-9]+\. Before proxy is started, and so with neither listener running, the IT department works from inside the keycloak container \(for example kcadm\.sh against Keycloak.s internal port, through docker exec\)' 'the bootstrap step configuring the master realm' || return 1
+  need "$s" 'Only then is proxy started\.$' 'the bootstrap step configuring the master realm' || return 1
+  forbid "$s" '\b(administration console|admin console|admin listener|public listener|through proxy|over HTTPS)\b|<auth-admin-host>' || return 1
+  for p in $(seq 1 $((pos - 1))); do
+    if printf '%s\n' "$b" | sed -n "${p}p" | sed -E 's/\bproxy (is |still |stays )?not (yet )?started( yet)?\b//g' | grep -Eiq '\bproxy\b|\blisteners?\b|<auth-admin-host>|\b(administration|admin) console\b'; then WHY="bootstrap step $p, before the master realm is configured, starts or uses proxy or the console"; return 1; fi
+  done
+  forbid "$DECISION_SENTS" '\bbootstrap\b[^.]*\b(through|on|via) (the )?((administration console|admin console)\b|<auth-admin-host>)' || return 1
+}
+check 'bootstrap configures the master realm from inside the keycloak container before proxy starts' k06_bootstrap_inside
 
 k06_control() { control 'ADR-0003-C22 review were done at intervals of at most [0-9]+ days' 'the review'; }
 check 'a Control row exists for the review' k06_control
@@ -1159,7 +1371,7 @@ k07_gh_approval() {
   command -v gh >/dev/null 2>&1 || { WHY="gh is not installed (use --offline to skip by name)"; return 1; }
   local labels body must
   labels="$(gh issue view 16 --repo "$REPO_SLUG" --json labels -q '.labels[].name' 2>/dev/null)" || { WHY="gh could not read Issue #16"; return 1; }
-  printf '%s\n' "$labels" | grep -Fxq 'adr-deviation' || { WHY="Issue #16 has no adr-deviation label"; return 1; }
+  grep -Fxq 'adr-deviation' <<< "$labels" || { WHY="Issue #16 has no adr-deviation label"; return 1; }
   body="$(gh issue view 16 --repo "$REPO_SLUG" --json body -q .body 2>/dev/null | tr -d '\r')"
   must="$(printf '%s\n' "$body" | grep -E '^Must stay' | head -n 1)"
   has "$must" 'exactly one approved deviation' || { WHY="the Must stay clause of Issue #16 names no approved deviation"; return 1; }
