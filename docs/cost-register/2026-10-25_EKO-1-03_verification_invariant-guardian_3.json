@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-25",
+  "task": "EKO-1-03",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "aa9576571af5dd814",
+  "tokens": 1026637,
+  "tokenSplit": { "input": 34, "output": 8594, "cacheWrite": 81537, "cacheRead": 936472 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 17,
+  "seconds": 151,
+  "fixRound": 2,
+  "reworkCause": "Re-verification after fix round 2 (Reviewer STOP and Security Auditor reservations at be73027)",
+  "notes": "PASS at 2642526, undecidable K-04, K-06; no findings; rule 25 checked name by name (four tighter renames, nine new checks, none removed); boundary-check: clean (read-only, --none)"
+}
