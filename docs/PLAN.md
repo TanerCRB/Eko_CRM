@@ -75,6 +75,16 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** feature screens; the prototypes' global state, innerHTML rendering
   and persona switch.
 
+- [ ] **EKO-1-08** — Provision the production server and prove a restore before go-live.
+  *Done when:* the company IT department has provisioned the production server as ADR-0004
+  decides, recorded in a dated provisioning record that accounts for every `ADR-0004-Cn` control;
+  and a restore from an off-server backup of both the application and the Keycloak database onto
+  a host like production, following ADR-0004's restore procedure with nothing taken from the
+  source server, is carried out and recorded in a dated restore record — both before go-live.
+  **Out of scope (explicit):** anything ADR-0004 does not decide — a restore-time target (none set
+  by the business; a new task when one is); retention and personal data in backups — EKO-1-04;
+  the Google secrets — EKO-1-05; zero-downtime deployment (G-3 A); later restore tests.
+
 ## EKO-2 — Access
 
 - [ ] **EKO-2-01** — Require login for the whole application.
