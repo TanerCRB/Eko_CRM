@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "task": "EKO-1-03",
+  "phase": "implementation",
+  "role": "architect",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "af4890da96497a7bd",
+  "tokens": 1947901,
+  "tokenSplit": { "input": 44, "output": 39447, "cacheWrite": 133740, "cacheRead": 1774670 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 47,
+  "seconds": 406,
+  "fixRound": 2,
+  "reworkCause": "Reviewer STOP at be73027 (R-10..R-15; R-10 and R-11 are R-03 and R-06 coming back), Security Auditor reservations B-01, B-05, B-08, B-09, QA F-02; R-10/R-11 and F-02 could have been caught by the Architect's own self-check in fix round 1 (restore step executability, table rendering)",
+  "notes": "All 13 items FIXED, B-02 left as recorded exception; restore now 14 steps; no shell in the session, so the Issue comment was not read and doc-checks not run by the role (driving session ran them: 89 passed, 4 failed on old wording, 2 skipped); two points to the human (previous-value retention for step 9, temporary passwords for other holders); boundary-check: clean (ADR-0004 only)"
+}
