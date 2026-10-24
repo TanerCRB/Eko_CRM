@@ -19,9 +19,8 @@ The brief ([`project-brief.md`](../../product/project-brief.md), section 5) fixe
 on-premises server run by the company IT department, containerised and cloud-agnostic, reachable
 from reps' phones over HTTPS under a company domain, a daily database backup kept off the server
 and one tested restore before go-live. The design choices were settled by the human at gate 1 of
-EKO-1-03 (Issue #16) on 2026-10-24. No walking skeleton exists to target, and the capability
-register is empty: nothing below is proven yet (see *What this decision leans on that is
-unproven*).
+EKO-1-03 (Issue #16) on 2026-10-24, and the findings of that task's verification were decided by
+the human on the same day.
 
 ## Decision
 
@@ -32,7 +31,8 @@ It provisions and patches the host, runs deployments, holds the secrets, receive
 certificate alerts, performs restores and the restore test, and carries out the duties under
 *Operator duties* below. The domain and its hostnames are provided by the human later; every
 hostname in this decision is a placeholder: `<company-domain>`, `<app-host>`, `<auth-host>` and
-`<auth-admin-host>`.
+`<auth-admin-host>`. That the IT department accepts these duties is a commitment outside the
+repository.
 
 ### Container runtime
 
@@ -124,7 +124,10 @@ Every component of the composition meets each of these:
   They are served only through a second listener of `proxy` at `https://<auth-admin-host>`, which
   refuses connections from every network other than those the IT department designates as the
   company network (the office network, and the company VPN if IT runs one). Keycloak's admin
-  hostname is set to that address.
+  hostname is set to that address. The admin listener's port is published only on the host's
+  company-network interface, never on an address the internet reaches, so the source-network check
+  is a second guard and not the only one. A request that reaches the public listener with SNI or
+  Host `<auth-admin-host>` is refused like every other request outside its allowlist.
 - **The account console** is reachable from neither the internet nor the company network: both
   listeners refuse it (ADR-0003, *Names*).
 - **Plain HTTP** on port 80 serves nothing except a redirect to the same URL over HTTPS and the ACME
@@ -135,7 +138,8 @@ Every component of the composition meets each of these:
   reachable from the internet, is provided and renewed by the IT department.
 - **Brute-force protection is a precondition.** No login page of a shared environment is
   reachable from the internet until the live realm has brute-force detection on (ADR-0003, *Network
-  exposure*).
+  exposure*). The master realm also has brute-force detection on before the admin listener of any
+  shared environment is started.
 - **Reset-response timing.** While the company mailbox does not exist, the reset e-mail is off in
   shared environments (ADR-0003, *Password reset*), so no internet-facing page sends a reset
   message and there is no timing difference to observe. The walking skeleton, EKO-1-06 (#19),
@@ -164,8 +168,13 @@ secret.
 
 Anyone holding administrative rights over the container runtime on the server can read a running
 container's environment (for example through `docker inspect`); those rights are held only by the
-IT department, and are equivalent to root on the host. No component writes a secret value to its
-log; what else may appear in logs is decided by ADR-0005 (EKO-1-04, #17).
+IT department, never by the reviewer (*Operator duties*), and are equivalent to root on the host.
+No component writes a secret value to its log; what else may appear in logs is decided by
+ADR-0005 (EKO-1-04, #17).
+
+Every rotation of a secret replaces its value in the off-server master copy and in every
+environment file on the server that holds it, at the same time, so a restore that takes the secrets
+from the master copies (*Restore procedure*) uses the values in effect.
 
 | Secret | Used by | Kept on the server (besides the off-server master copy) | Delivered | Readers | Rotation |
 |---|---|---|---|---|---|
@@ -173,13 +182,13 @@ log; what else may appear in logs is decided by ADR-0005 (EKO-1-04, #17).
 | Application database role password | `backend`, `migrate` (and a worker, if any) | `backend` environment file | environment variable | IT department | as above; restart of `backend` and `migrate` |
 | Keycloak database role password | `keycloak` | `keycloak` environment file | environment variable | IT department | as above |
 | Backup database role password | `backup` | `backup` environment file | environment variable | IT department | as above |
-| Session-token encryption key (ADR-0003) | `backend` | `backend` environment file | environment variable, read in `settings.py` | IT department | as above; replacing it makes every stored session undecryptable, so every user logs in again — accepted for about ten users |
-| OIDC client secret of the application's client | `backend`; Keycloak stores it in its database | `backend` and `keycloak` environment files | environment variable; injected into the realm at import | IT department | regenerated in Keycloak and set in `backend` together; restart of `backend` |
-| SMTP credentials of the company mailbox (once it exists) | `keycloak` (realm SMTP settings) | `keycloak` environment file | environment variable, injected into the realm at import | IT department | when the mailbox password changes |
+| Session-token encryption key (ADR-0003) | `backend` | `backend` environment file | environment variable, read in `settings.py` | IT department | as above; replacing it makes every stored session undecryptable, so every user logs in again — accepted for about ten users; also at every restore (*Restore procedure*) |
+| OIDC client secret of the application's client | `backend`; Keycloak stores it in its database | `backend` and `keycloak` environment files; Keycloak's database, and so every backup set | environment variable; injected into the realm at import | IT department | regenerated in Keycloak and set in `backend` together; restart of `backend`; also on compromise of the backup encryption private key |
+| SMTP credentials of the company mailbox (once it exists) | `keycloak` (realm SMTP settings) | `keycloak` environment file; Keycloak's database, and so every backup set | environment variable, injected into the realm at import | IT department | when the mailbox password changes, and on compromise of the backup encryption private key |
 | Keycloak bootstrap admin credential | `keycloak`, first start only | nowhere after bootstrap: removed from the environment file once used | environment variable, first start only | IT department | single use (*Bootstrap of the first administrator*) |
 | Master-realm break-glass admin credentials | the holders, in person | nowhere on the server | typed into the administration console on `<auth-admin-host>` | each holder its own (*Operator duties*) | after every use and when a holder leaves |
 | Reviewer's read-only master-realm account credential | the reviewer | nowhere on the server | typed into the administration console on `<auth-admin-host>` | the reviewer | yearly and when the reviewer changes |
-| Backup encryption private key | restores only | **never on the server**: two copies kept off the server by the IT department | brought to the restore host at restore step 2 only | IT department | yearly and when a holder leaves; older backups keep their key |
+| Backup encryption private key | restores and the backup verification only | **never on the server**: two copies kept off the server by the IT department | brought only to the restore host at restore step 2 and to the off-server host of the backup verification (*Backup*) | IT department | yearly and when a holder leaves; older backups keep their key |
 | Backup encryption public key (not secret) | `backup` | `backup` environment file | environment variable | — | with the private key |
 | Backup destination write credential | `backup` | `backup` environment file | environment variable | IT department | on suspected compromise |
 | Container registry pull credential (read-only) | the operator at deployment | the operator's runtime login on the server | not delivered to any container | IT department | yearly |
@@ -191,17 +200,29 @@ log; what else may appear in logs is decided by ADR-0005 (EKO-1-04, #17).
 
 - **Exactly one process runs `alembic upgrade head`: the one-shot `migrate` service.** The `backend` web process, and any worker process started from the backend image, do not run it, neither at start nor at any other time.
 - `migrate` runs on every deployment and every restart of the environment (every `docker compose
-  up`); `backend` (and any worker) starts only after `migrate` has exited with success. A restart
-  with no new revision runs `migrate` as a no-op that changes no schema. A container of `backend`
+  up`), except the starts of a rolled-back release (*Deployment and expand → deploy → contract*,
+  *Rollback to the previous release*); `backend` (and any worker) starts only after `migrate` has
+  exited with success. A restart with no new revision runs `migrate` as a no-op that changes no
+  schema. A container of `backend`
   restarted alone by the runtime's restart policy does not migrate; its revision check below
   decides whether it serves.
 - **Two runs at once are serialised.** `migrate` holds a PostgreSQL advisory lock on the
   application database for the whole run; a second run started meanwhile waits for the lock, then
   finds the schema at head and changes nothing.
+- **`migrate` does not stall the serving release.** Once it holds the advisory lock, `migrate` runs
+  its statements with a lock timeout and a statement timeout. A statement that waits longer for a
+  table lock, or runs longer, fails the run; PostgreSQL rolls the revision back and the
+  failed-migration rule below applies.
+- **Backup and migration exclude each other.** The `backup` service takes the same advisory lock
+  for the whole of its dumps. A backup therefore does not start while `migrate` runs, and `migrate`
+  does not start changing the schema while a backup runs; each waits for the other to release the
+  lock.
 - **No code serves on a schema older than itself.** At start, `backend` (and any worker) reads the
   database's Alembic revision and exits without serving when it is not the head revision its code
-  ships; it never migrates. The previous release may serve on a newer schema only within the
-  expand → deploy → contract rule below.
+  ships and not a revision that descends from that head; it never migrates. A revision older than
+  that head, or one the check cannot establish as that head or a descendant of it, is always
+  refused. The previous release may serve on a newer schema only within the expand → deploy →
+  contract rule below.
 - **A failed migration leaves the previous release running.** PostgreSQL rolls the failing
   revision back (ADR-0002), `migrate` exits with failure, and the new `backend` is not started; the
   previous release keeps serving on the unchanged schema. At the first deployment, where no
@@ -221,8 +242,19 @@ follows these steps, announced to staff beforehand:
    during the replacement may fail for the seconds it takes (the announced interruption). On
    failure, nothing is replaced (*Migrations*).
 
-A deployment does not start while the scheduled backup is running, so a migration and a backup do
-not run at the same time.
+A deployment does not start while the scheduled backup is running. Apart from that rule, the
+advisory lock (*Migrations*) keeps a migration and a backup from running at the same time, in both
+directions.
+
+**Rollback to the previous release.** When a new release fails after its `migrate` has succeeded,
+the operator starts the previous release's `backend` (and any worker) and `frontend` by the digests
+its composition names, without running `migrate`: the database stays at the newer head, which
+descends from the previous release's head, and the previous release's revision check accepts it
+(*Migrations*). Every start of the environment while the rolled-back release serves skips `migrate`
+in the same way, until a later release is deployed. A rollback goes back to the previous release
+only; going back further is a restore. Keycloak migrates its own schema forward when a newer
+Keycloak image starts, so Keycloak has no rollback: going back to an older Keycloak image is a
+restore (*Restore procedure*).
 
 **Expand → deploy → contract** is carried out across releases in these release steps:
 
@@ -249,7 +281,8 @@ restore (*Restore procedure*), not a rollback.
   with `pg_dump` (each dump a consistent snapshot while writes continue), the cluster's roles
   without their passwords, and a manifest naming the time, the Alembic revision of the application
   database, the image references of `backend`, `keycloak` and `postgres` in use, and the row count
-  of each application table.
+  of each application table, counted inside the dump's own snapshot so the counts are those of the
+  dump and not of the live database.
 - **Order.** The application database is dumped first and Keycloak's database second, so every
   Keycloak subject the application dump refers to exists in the Keycloak dump (ADR-0003 forbids
   deleting such an account).
@@ -262,10 +295,17 @@ restore (*Restore procedure*), not a rollback.
   volume or directory of the server's own host is not off the server and does not count as a
   backup destination. The `backup` service's credential can add new backup sets at the destination
   but cannot delete or overwrite existing ones.
-- **Retention.** The destination keeps the backup sets of the last **30 days**; older sets are
-  deleted by the destination's own housekeeping, not by the server. Personal data of customers
-  erased in the application therefore remains in backups for up to 30 days (ADR-0005, EKO-1-04
-  (#17), decides how erasure treats backups).
+- **Retention.** The destination keeps the backup sets of the last **30 days**, and beyond them the
+  last set that passed the verification below, until a newer set passes it; older sets are deleted
+  by the destination's own housekeeping, not by the server. Personal data of customers erased in
+  the application therefore remains in backups for up to 30 days, and longer in that verified set
+  while it is older than 30 days (ADR-0005, EKO-1-04 (#17), decides how erasure treats backups).
+- **Verification off the server.** At least once every calendar month, the IT department fetches
+  the newest backup set from the destination, decrypts it on a host that is not the server with the
+  backup private key, and checks it against its manifest (both dumps complete and readable, every
+  field of the manifest present, its row counts equal to those of the dump). The result is recorded
+  in the IT department's operations record, a set that fails is handled as a failed backup, and
+  the decrypted copy is deleted after the check.
 - **A failed or missing backup reaches the operator.** The `backup` service reports a failed run
   to the IT department's monitoring, and a check that does not run on the server (on the
   destination or in IT's monitoring) alerts the IT department when the newest backup set is older
@@ -294,21 +334,31 @@ from the repository at the release tag.
    backup set and set their passwords from the secrets.
 5. Restore the application database and then Keycloak's database, both from the same backup set,
    so the two are at mutually consistent points.
-6. Start `keycloak` with the image of the release fetched in step 2, no older than the one named in
+6. Compare the restored application tables' row counts with the manifest, before any migration
+   runs; the restore goes on only when they are equal.
+7. Start `keycloak` with the image of the release fetched in step 2, no older than the one named in
    the manifest; Keycloak migrates its own schema forward if the image is newer.
-7. Re-apply, through the administration console reached from the company network, every account
-   deactivation and role removal made after the backup's time, taken from the IT department's
-   off-server record of account changes (*Operator duties*), so that no account disabled since the
-   backup is active again.
-8. Run `migrate` with the release fetched in step 2, which brings the restored application database
-   forward to the head that release ships. The restored data runs with that release's images, never
-   older than those named in the manifest, and with the schema at that release's head; it never runs
-   with backend code older than its schema.
-9. Start `backend`, `frontend` and `proxy` with the public listener closed; on the company network,
-   log in with a test account and compare the application tables' row counts with the manifest.
-   The restore is verified when the login works and the counts match.
-10. Only then open the public listener, take a fresh backup, and record the restore (date, backup
-    set used, who performed it) in the IT department's operations record.
+8. Start `proxy` with only its admin listener on `<auth-admin-host>`, with the public listener
+   closed, so the administration console is reachable only from the company network.
+9. Through that console, re-apply every account change made after the backup's time that the IT
+   department's off-server record of account changes holds (*Operator duties*): every deactivation
+   and role removal, so that no account disabled since the backup is active again, and every
+   password reset, by disabling the account until its user receives a new temporary password under
+   ADR-0003's reset rule. Then sign out every session that the restored Keycloak database holds, in
+   the application realm and in the master realm.
+10. Replace the session-token encryption key with a newly generated value, in the off-server master
+    copy and in the `backend` environment file, so that no session restored in the application
+    database can be decrypted and every user logs in again.
+11. Run `migrate` with the release fetched in step 2, which brings the restored application
+    database forward to the head that release ships. The restored data runs with that release's
+    images, never older than those named in the manifest, and with the schema at that release's
+    head; it never runs with backend code older than its schema.
+12. Start `backend` and `frontend`, the public listener still closed; on the company network, log
+    in with a test account. The restore is verified when the login works and the counts compared
+    at step 6 are equal.
+13. Only then open the public listener, take a fresh backup, and record the restore (date, backup
+    set used, who performed it, the account changes re-applied) in the IT department's operations
+    record.
 
 **First tested restore.** The restore is first tested before go-live, on the provisioned production
 host or a host like it, into empty volumes, from a backup set taken from the destination, by
@@ -321,25 +371,41 @@ or Keycloak.
 - **Staffing.** The IT department staffs these duties with at least three people, so that the
   reviewer and the break-glass holders are different people.
 - **Who reviews the administrator.** A person in the IT department named by it as **reviewer**
-  reads the application realm's admin events and runs the live-realm review of ADR-0003-C22 (and
-  ADR-0003-C21) **every 7 days**, and after every use of a break-glass credential. The reviewer may
-  not hold the application role `administrator`, and may not hold any master-realm role that can
-  change the application realm.
+  reads the application realm's admin events and the master realm's login and admin events,
+  compares the live holders of `administrator`, `manager` and `rep` with the IT department's record
+  of approved assignments (*Record of account changes*), and runs the live-realm review of
+  ADR-0003-C22 (and ADR-0003-C21) **every 7 days**, and after every use of a break-glass credential.
+  The reviewer may not hold the application role `administrator`, and may not hold any master-realm
+  role that can change the application realm. The reviewer holds no administrative rights over the
+  container runtime and no PostgreSQL superuser access, and has no access to the PostgreSQL
+  superuser password or to any database role password.
+- **Master-realm events.** The master realm stores login events and admin events, so every login
+  with a break-glass credential and every change made with one is a stored event the reviewer
+  reads. Their retention is decided by ADR-0005 (EKO-1-04, #17); the reviewer's reading needs it to
+  be longer than the 7-day review interval.
 - **Through which account.** The reviewer reads through a dedicated read-only account in the
   **master realm** that holds only read roles of the application realm's management client in the
-  master realm (`view-events`, `view-users`, `view-realm`, `view-clients`, `query-*`), and no
-  `manage-*`, `realm-admin`, `impersonation` or master-realm `admin` role. With it the reviewer can
-  see admin events and role mappings but can neither change an account nor alter or switch off
-  admin events.
+  master realm and of the master realm's own management client (`view-events`, `view-users`,
+  `view-realm`, `view-clients`, `query-*`), and no `manage-*`, `realm-admin`, `impersonation` or
+  master-realm `admin` role. With it the reviewer can see login events, admin events and role
+  mappings but can neither change an account nor alter or switch off events.
 - **Who holds master-realm administration.** Full master-realm administration is a **break-glass
   credential**: one named master-realm account per holder, at most two holders, both in the IT
   department and neither of them the reviewer, kept in the IT department's password manager. It is
   used only for bootstrap, recovery, realm-configuration changes from the export under `identity/`,
-  and Keycloak upgrades; every use is announced to the reviewer, who reviews the admin events of
-  that day.
-- **Record of account changes.** An administrator who disables an account or removes a role tells
-  the IT department at the time, through IT's own request system, which is not on this server. That
-  off-server record is what restore step 7 re-applies.
+  and Keycloak upgrades; every use is announced to the reviewer, who reviews the events of both
+  realms of that day.
+- **Record of account changes.** An administrator who disables an account, removes a role, assigns
+  `administrator`, `manager` or `rep`, or sets a temporary password tells the IT department at the
+  time, through IT's own request system, which is not on this server; an assignment is entered
+  there, with who approved it, before it is made. An assignment of `administrator`, `manager` or
+  `rep` is approved by the company management (a person the business owner names) and carried out
+  by an administrator; the approver is never the administrator who makes the change. That
+  off-server record is what restore step 9
+  re-applies and what the reviewer compares the live role holders with. Resets that users make
+  themselves through the reset e-mail, possible only once the company mailbox exists, are not in
+  this record; before the reset e-mail is turned on in a shared environment, that gap returns to
+  the human.
 - **New-account handover.** The first temporary password of a new account follows the same rule as
   a reset: it is set only right before the user logs in, and handed over only in person or in a call
   the administrator makes to a phone number the company already holds for that person, never to an
@@ -355,7 +421,8 @@ or Keycloak.
 
 1. On the first start of `keycloak`, the IT department sets the Keycloak bootstrap admin credential
    in its environment file.
-2. With that temporary account, it creates the named break-glass master-realm accounts and the
+2. With that temporary account, it turns on the master realm's login events, admin events and
+   brute-force detection, creates the named break-glass master-realm accounts and the
    reviewer's read-only master-realm account, then deletes the temporary bootstrap account and
    removes the bootstrap credential from the environment file.
 3. It imports the application realm from the export under `identity/`, injecting the client
@@ -374,8 +441,8 @@ When no active account holds `administrator` (all disabled, or the holders unava
    that person's existing account or creates a new one, assigns `administrator`, and sets a
    temporary password.
 3. The holder hands over the temporary password under the new-account rule (*Operator duties*).
-4. The holder announces the use of the credential to the reviewer, who reviews that day's admin
-   events, and the credential is rotated.
+4. The holder announces the use of the credential to the reviewer, who reviews that day's events
+   of both realms, and the credential is rotated.
 
 ### Changes to accepted decisions
 
@@ -438,39 +505,40 @@ section of this Decision that decides it or the task it is forwarded on to:
 Forwarded on from this decision to named tasks:
 
 - **The composition file, Dockerfiles and entry-point configuration; the backup role's limit; the
-  image versions first used** → EKO-1-06 (#19).
-- **What may appear in logs (container logs included); retention of admin events, sessions and
-  logs; how erasure treats backups** → EKO-1-04 (#17).
+  image versions first used; the values of the lock and statement timeouts of `migrate`; how the
+  revision check establishes that a newer revision descends from its code's head; how a rolled-back
+  release starts without `migrate`** → EKO-1-06 (#19).
+- **What may appear in logs (container logs included); retention of admin events of both realms,
+  of the master realm's login events, of sessions and of logs; how erasure treats backups, the
+  verified set kept beyond 30 days included** → EKO-1-04 (#17).
 - **The background-work mechanism and any worker service; the Google secrets; the Google callback
   path on `<app-host>`** → EKO-1-05 (#18).
 - **Production provisioning (the real server, the domain and hostnames, the IT department's host OS,
-  disk-encryption unlock and monitoring) and the first tested restore** → EKO-1-08 (#36).
-
-### What this decision leans on that is unproven
-
-The capability register is empty. Unproven until the walking skeleton, EKO-1-06 (#19), or the first
-tested restore, EKO-1-08 (#36): that Keycloak's public pages can be served while `/admin/`, the
-master realm and the account console are refused on the public listener, with the admin console
-working on a separate admin hostname; that the entry point can load the `<auth-admin-host>`
-certificate and key from environment variables; that the realm export reaches `keycloak` for import
-without a host-path mount; that the composition starts with `migrate` gating `backend`; that the
-advisory lock serialises two migration runs; that the backup produces consistent, decryptable sets
-at the destination with a write-only credential; that the restore procedure restores a working
-system; and that the master-realm read-only account can read admin events and role mappings without
-any `manage-*` role. That the IT department accepts the duties above is a commitment outside the
-repository.
+  disk-encryption unlock and monitoring) and the first tested restore; the production network
+  topology (which host interface only the company network reaches, whether the client address
+  reaches `proxy` unchanged through any NAT or upstream proxy, IPv6, and which address ranges are
+  the company network)** → EKO-1-08 (#36).
+- **Keeping single-page applications already open on reps' phones working when `frontend` is
+  replaced (lazy chunks of the previous build no longer served; the previous build calling the new
+  release's API)** → EKO-1-07 (#20) and EKO-1-06 (#19).
 
 ### Forward references (not decided here)
 
 - EKO-1-06 (#19) — the composition file, Dockerfiles and entry-point configuration; the values of
-  ADR-0003-C19 and of the backup role's limit; the reset-timing measurement above; the image
-  versions first used.
+  ADR-0003-C19, of the backup role's limit and of the lock and statement timeouts of `migrate`; how
+  the revision check establishes descent from its head; how a rolled-back release starts without
+  `migrate`; the reset-timing measurement above; the image versions first used; with EKO-1-07
+  (#20), keeping open single-page applications working across a `frontend` replacement.
+- EKO-1-07 (#20) — the frontend build's lazy chunks and how an open single-page application
+  behaves when `frontend` is replaced, together with EKO-1-06 (#19).
 - EKO-1-04 (#17), ADR-0005 — what may appear in logs (including container logs), retention of admin
-  events, sessions and logs, and how erasure treats backups.
+  events of both realms, of the master realm's login events, of sessions and of logs, and how
+  erasure treats backups, the verified set kept beyond 30 days included.
 - EKO-1-05 (#18), ADR-0006 — the background-work mechanism and any worker service; the Google
   secrets and the Google callback path on `<app-host>`.
 - EKO-1-08 (#36) — provisioning the real server, the domain and hostnames, the IT department's
-  choice of host OS, disk-encryption unlock and monitoring, and the first tested restore.
+  choice of host OS, disk-encryption unlock and monitoring, the production network topology, and
+  the first tested restore.
 - Not decided: a restore-time target (RTO) and a recovery point tighter than one day; the business
   has set neither. It closes when the business states one, as a new task.
 
@@ -549,8 +617,23 @@ repository.
 
 | Option | Cost | Closes off |
 |---|---|---|
-| **A. Re-apply deactivations and role removals from the IT department's off-server record before the public listener opens** (chosen at gate 1) | Administrators report every deactivation and role removal to IT. | Nothing. |
-| B. Accept that they are lost on restore | A disabled account can log in again after a restore. | Relying on deactivation after a restore. |
+| **A. Re-apply deactivations, role removals and password resets from the IT department's off-server record, sign out every restored Keycloak session and replace the session-token encryption key, all before the public listener opens** (chosen at gate 1 for deactivations and role removals; extended by the human on 2026-10-24) | Administrators report every deactivation, role removal, role assignment and password reset to IT; every user logs in again after a restore. | Nothing. |
+| B. Re-apply only deactivations and role removals | A password reset after the backup point is undone, and a session ended after it is accepted again. | Relying on a reset or an ended session after a restore. |
+| C. Accept that they are lost on restore | A disabled account can log in again after a restore. | Relying on deactivation after a restore. |
+
+### Revision check and rollback
+
+| Option | Cost | Closes off |
+|---|---|---|
+| **A. The revision check accepts the code's head or a revision descending from it; a rollback to the previous release skips `migrate`** (chosen by the human on 2026-10-24) | The check must establish descent for a revision its own code does not ship. | Nothing. |
+| B. The revision check accepts only the code's head | After a successful expand migration the previous release cannot start, so a failed release is a full outage until a fix-forward or a restore. | Rolling back to the previous release. |
+
+### Backup verification
+
+| Option | Cost | Closes off |
+|---|---|---|
+| **A. The IT department decrypts the newest set off the server every calendar month and checks it against its manifest; the last verified set is kept beyond 30 days** (chosen by the human on 2026-10-24) | A monthly task for IT; personal data in the verified set may stay longer than 30 days. | Nothing. |
+| B. Freshness alert only, restore tested before go-live and after major upgrades | An unusable or forged set goes unnoticed until the next restore, by which time retention may have removed every good set. | Relying on any backup between restore tests. |
 
 ## Controls
 
@@ -560,29 +643,30 @@ Identifier and acceptance criterion only.
 |---|---|
 | ADR-0004-C1 | `docker compose config --services` on the repository's composition (shared-environment profile) lists exactly `proxy`, `frontend`, `backend`, `migrate`, `keycloak`, `postgres` and `backup` (plus a worker only after an ADR-0006 addendum adds it), and no mail catcher. |
 | ADR-0004-C2 | Every `image:` reference in the composition names a full version tag (for PostgreSQL `18.<minor>-<OS release>`) or carries `@sha256:`; none is `latest`, a bare major or `<major>-<OS release>`. |
-| ADR-0004-C3 | In the rendered composition only `proxy` has `ports`; `postgres`, `keycloak`, `backend`, `frontend` and `backup` have none. |
+| ADR-0004-C3 | In the rendered composition only `proxy` has `ports`; `postgres`, `keycloak`, `backend`, `frontend` and `backup` have none; the port mapping of `proxy`'s admin listener is bound to the host's company-network address only, not to `0.0.0.0`, `::` or an address the internet reaches. |
 | ADR-0004-C4 | The rendered composition declares only the named volumes `pgdata` and `proxy-data` for persistent state, mounts no host path into `postgres`, `keycloak`, `backend` or `migrate`, and uses no vendor-specific extension or logging driver of a cloud provider. |
-| ADR-0004-C5 | Against the running composition from an address outside the company network: `https://<app-host>/` and a route under `/api/` answer from `frontend` and `backend`; the application realm's authorization endpoint and login page on `<auth-host>` answer; `/admin/`, `/admin/realms/master/`, `/admin/realms/<application-realm>/users`, `/realms/master/` and `/realms/<application-realm>/account` on `<auth-host>` are refused; `<auth-admin-host>` accepts no connection. From the company network, the administration console loads at `https://<auth-admin-host>` and `/realms/<application-realm>/account` is refused there. |
+| ADR-0004-C5 | Against the running composition from an address outside the company network: `https://<app-host>/` and a route under `/api/` answer from `frontend` and `backend`; the application realm's authorization endpoint and login page on `<auth-host>` answer; `/admin/`, `/admin/realms/master/`, `/admin/realms/<application-realm>/users`, `/realms/master/`, `/realms/<application-realm>/account` and a path under `/realms/<application-realm>/` outside the public allowlist (for example `/realms/<application-realm>/clients-registrations/`) on `<auth-host>` are refused; connecting to the public address of `<auth-host>` over IPv4, and over IPv6 where the host has a public IPv6 address, with SNI and Host `<auth-admin-host>`, gets neither the administration console nor any `/admin/` response; `<auth-admin-host>` accepts no connection. From the company network, the administration console loads at `https://<auth-admin-host>` and `/realms/<application-realm>/account` is refused there. |
 | ADR-0004-C6 | A plain-HTTP request to `<app-host>` or `<auth-host>` gets only a redirect (301 or 308) to the same URL over HTTPS, except the ACME challenge path; HTTPS responses from `<app-host>` carry `Strict-Transport-Security`. |
 | ADR-0004-C7 | The certificates served for `<app-host>` and `<auth-host>` validate against a stock mobile browser trust store, and the IT department's monitoring raises an alert for a test certificate expiring within 14 days. |
-| ADR-0004-C8 | Before a shared environment's public listener is opened, the live application realm reports `bruteForceProtected` true (recorded with the date of the check). |
+| ADR-0004-C8 | Before a shared environment's public listener is opened, the live application realm reports `bruteForceProtected` true, and before its admin listener is started, the live master realm reports `bruteForceProtected` true (each recorded with the date of the check). |
 | ADR-0004-C9 | No tracked file assigns a value to any secret variable of the inventory (the composition references each as a required variable with no default); `.gitignore` and every `.dockerignore` exclude `.env*`; listing the files of the built backend and frontend images finds no `.env` file. |
 | ADR-0004-C10 | Starting `backend`, `migrate`, `keycloak` or `backup` with one of its required secrets unset fails before serving or connecting, with a non-zero exit naming the missing variable; `backend/app/core/settings.py` declares no default for a secret field. |
 | ADR-0004-C11 | In the rendered composition, only the `migrate` service's command contains `alembic upgrade`; the commands and entrypoints of `backend` (and of any worker) do not; `backend` depends on `migrate` with condition `service_completed_successfully`. |
 | ADR-0004-C12 | A test starts two `migrate` runs at the same time against an empty database: both exit 0, `alembic heads` and the database's `alembic_version` agree on one revision, and each revision's DDL was applied once. |
-| ADR-0004-C13 | A test starts `backend` against a database at an older revision than its code's head: it exits non-zero without answering a request and without changing the schema. A second `migrate` run at head exits 0 and leaves a schema dump identical to the one before it. |
-| ADR-0004-C14 | A test applies a failing revision through `migrate`: it exits non-zero, the schema is unchanged, and the previously running `backend` still answers. |
-| ADR-0004-C15 | At the destination, a backup set exists for each of the last 7 days and for the most recent deployment; each holds both databases' dumps, the roles and a manifest with the fields named under *Backup*; none can be decrypted with any key present on the server. |
+| ADR-0004-C13 | A test starts `backend` against a database at an older revision than its code's head: it exits non-zero without answering a request and without changing the schema. A test starts the previous release's `backend`, without `migrate`, against a database at the next release's head after an expand migration: it answers requests and leaves the schema unchanged. A second `migrate` run at head exits 0 and leaves a schema dump identical to the one before it. |
+| ADR-0004-C14 | A test applies a failing revision through `migrate`: it exits non-zero, the schema is unchanged, and the previously running `backend` still answers. || ADR-0004-C15 | At the destination, a backup set exists for each of the last 7 days and for the most recent deployment; each holds both databases' dumps, the roles and a manifest with the fields named under *Backup*; none can be decrypted with any key present on the server. |
 | ADR-0004-C16 | With the `backup` service's credential, deleting or overwriting an existing backup set at the destination is refused. |
 | ADR-0004-C17 | With no new backup set for 26 hours (simulated by stopping `backup`), the IT department receives an alert from a check that does not run on the server. |
-| ADR-0004-C18 | Manual `<YYYY-MM-DD>`: the restore procedure, carried out on a host holding nothing from the original server, from a backup set at the destination and the off-server key and secrets, ends with a test login working and the row counts matching the manifest; in the restored data every staff subject identifier of the application database exists in Keycloak's database. Recorded before go-live and after every PostgreSQL or Keycloak major upgrade. |
+| ADR-0004-C18 | Manual `<YYYY-MM-DD>`: the restore procedure, carried out on a host holding nothing from the original server, from a backup set at the destination and the off-server key and secrets, ends with a test login working and the row counts matching the manifest when compared before `migrate` runs; in the restored data every staff subject identifier of the application database exists in Keycloak's database. Recorded before go-live and after every PostgreSQL or Keycloak major upgrade. |
 | ADR-0004-C19 | On the PostgreSQL server, the backup role has a connection limit greater than zero, and the connection limits of the application, Keycloak and backup roles together are below `max_connections` minus `superuser_reserved_connections`. |
 | ADR-0004-C20 | `backend` and `keycloak` are services of one composition on one host, and the host reports its clock synchronised by NTP (recorded with the date of the check). |
 | ADR-0004-C21 | The block device holding the composition's volumes on each shared-environment host is an encrypted device (recorded with the date of the check). |
-| ADR-0004-C22 | By review of the IT department's operations record: the admin-event reading and the ADR-0003-C22 review were done at intervals of at most 7 days and after every break-glass use, each by a person holding neither `administrator` nor a master-realm role that can change the application realm. |
-| ADR-0004-C23 | In the live master realm: the reviewer's account holds only `view-*` and `query-*` roles of the application realm's management client and no `manage-*`, `realm-admin`, `impersonation` or `admin` role; at most two other accounts hold master-realm administration; no temporary bootstrap admin account exists; and the running `keycloak` container's environment holds no bootstrap admin variable. |
-| ADR-0004-C24 | Against a running composition, the account used by the reviewer reads the application realm's admin events and an account's role mappings, and is refused when it tries to disable an account, assign a role, or change the realm's event settings. |
-| ADR-0004-C25 | By review of the IT department's operations record after a restore: every deactivation and role removal recorded after the backup's time is in effect in the restored realm before the public listener was opened. |
+| ADR-0004-C22 | By review of the IT department's operations record: the admin-event reading and the ADR-0003-C22 review were done at intervals of at most 7 days and after every break-glass use, each by a person holding neither `administrator` nor a master-realm role that can change the application realm, nor administrative rights over the container runtime, PostgreSQL superuser access, the PostgreSQL superuser password or a database role password; each review read the master realm's login and admin events and recorded a comparison of the live holders of `administrator`, `manager` and `rep` with the record of approved assignments, in which every assignment names an approver from the company management who is not the administrator who made it. |
+| ADR-0004-C23 | In the live master realm: login events and admin events are stored; the reviewer's account holds only `view-*` and `query-*` roles of the application realm's and the master realm's management clients and no `manage-*`, `realm-admin`, `impersonation` or `admin` role; at most two other accounts hold master-realm administration; no temporary bootstrap admin account exists; and the running `keycloak` container's environment holds no bootstrap admin variable. |
+| ADR-0004-C24 | Against a running composition, the account used by the reviewer reads the application realm's admin events, the master realm's login and admin events, and an account's role mappings, and is refused when it tries to disable an account, assign a role, or change either realm's event settings. |
+| ADR-0004-C25 | By review of the IT department's operations record after a restore, for the time before the public listener was opened: every deactivation and role removal recorded after the backup's time is in effect in the restored realm; every account with a password reset recorded after that time is disabled or has received a new temporary password; no user session of either realm restored from the backup set is still active; and the session-token encryption key in use differs from the one in use at the backup's time. |
+| ADR-0004-C26 | A test holds a conflicting lock on a table an expand revision alters: `migrate` exits non-zero within its lock timeout, the schema is unchanged, and the previously running `backend` still answers requests that read that table. A test shows that while `backup` holds the advisory lock a `migrate` run applies no DDL until it is released, and that while `migrate` holds it `backup` starts no dump. |
+| ADR-0004-C27 | By review of the IT department's operations record and of the destination: the newest backup set was decrypted off the server and checked against its manifest at intervals of at most one calendar month, and the destination still holds the last set that passed the check, also when it is older than 30 days. |
 
 ## Addenda
 
