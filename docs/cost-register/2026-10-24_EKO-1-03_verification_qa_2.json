@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "task": "EKO-1-03",
+  "phase": "verification",
+  "role": "qa",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a1bd26623811b496c",
+  "tokens": 11539201,
+  "tokenSplit": { "input": 156, "output": 84558, "cacheWrite": 3517582, "cacheRead": 7936905 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 94,
+  "seconds": 13262,
+  "fixRound": 1,
+  "reworkCause": "Re-verification after fix round 1 (Reviewer STOP R-01..R-09, Security Auditor B-01..B-07, Guardian S-01 at 2eaacd5); the Reviewer's six paper breaks of the first doc-check version (M59-M63, M71) could have been caught by QA's own mutation pass in round 0",
+  "notes": "PROOF HOLDS at b727b44, undecidable K-04, K-06; 95 document checks (93 ok, 2 fail on F-02); 107 mutations killed (M59-M63 and M71 survived the old script); one medium finding F-02 (C14 and C15 merged onto one table line by the fix); fresh agent, not a resume of qa_1; boundary-check: clean (tests/doc-checks/)"
+}
