@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "task": "EKO-1-03",
+  "phase": "verification",
+  "role": "qa",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a09b185494a5a9f93",
+  "tokens": 27130030,
+  "tokenSplit": { "input": 246, "output": 152064, "cacheWrite": 1917400, "cacheRead": 25060320 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 148,
+  "seconds": 6629,
+  "fixRound": 2,
+  "reworkCause": "Re-verification after fix round 2 (Reviewer STOP R-10..R-15 and six paper breaks of the doc-checks, Security Auditor B-01/B-05/B-08/B-09, own F-02 at be73027); the six paper breaks could have been caught by QA's own mutation pass in fix round 1",
+  "notes": "PROOF HOLDS at d21c448, undecidable K-04, K-06; 104 document checks green online; 157 mutations killed, 13 contrasts pass; six paper breaks survived the old script; defects found in the script itself (SIGPIPE under pipefail on Linux, a \b next to '<' that never matched, an unscoped WAN ban) fixed; full mutation set run in WSL for speed, cross-checked against Git Bash; cacheRead dominates the token count; boundary-check: clean (tests/doc-checks/)"
+}
