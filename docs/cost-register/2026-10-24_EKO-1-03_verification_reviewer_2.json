@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "task": "EKO-1-03",
+  "phase": "verification",
+  "role": "reviewer",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a59532464fc14e4b8",
+  "tokens": 852035,
+  "tokenSplit": { "input": 32, "output": 27019, "cacheWrite": 91948, "cacheRead": 733036 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 16,
+  "seconds": 399,
+  "fixRound": 1,
+  "reworkCause": "Re-verification after fix round 1 (own STOP R-01..R-09 at 2eaacd5); R-10 and R-11 are the R-03 and R-06 shapes coming back after the fix, which the Architect's self-check of the restore procedure could have caught",
+  "notes": "STOP at be73027, undecidable K-04, K-06; medium R-10 (step 12 test login with public listener closed), R-11 (restore rolls back Keycloak-stored credentials), R-12 (rolled-back state unrecorded, N-1 migrate fails); low R-13, R-14, R-15; R-03 and R-06 marked FIXED came back partly unresolved; boundary-check: clean (read-only, --none)"
+}
