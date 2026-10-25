@@ -1,0 +1,471 @@
+# ADR-0005 — Personal data: holders, logging, retention, archiving and erasure
+
+**Status:** Accepted 2026-10-25
+<!-- Only a human changes this to "Accepted <YYYY-MM-DD>". -->
+
+## Context
+
+Customers are mostly natural persons and the company is their data controller
+([`project-brief.md`](../../product/project-brief.md), section 5). `TEAM-CONTRACT.md` hard stop 6
+forbids changing a file concerning personal data without a decision covering it, so every
+customer, visit, note and action task (EKO-3 onward) waits for this decision. ADR-0001 to ADR-0004
+forward to it which modules hold personal data, what may be logged, how long sessions, Keycloak
+events, the display-name copy and logs are kept, and what archiving and erasure do, backups
+included. Each forwarded item is listed under *Items forwarded to this decision*.
+
+This decision is written ahead of the GDPR impact assessment, which the brief schedules after the
+MVP and before any real customer data is loaded (section 4, Later 13; section 8). The impact
+assessment may revise this decision; a revision is a dated addendum. Nothing this decision relies
+on is proven yet: the capability register ([`capabilities.md`](../capabilities.md)) holds no
+capability.
+
+## Decision
+
+### Synthetic customer data until the impact assessment
+
+- Until the GDPR impact assessment, every environment, the pilot included, holds only synthetic
+  customer data.
+- Synthetic customer data is data invented for the purpose that describes no real person or
+  business. A value copied from a real customer (a real farmer's name, phone or NIP typed into the
+  pilot) is real customer data, whatever environment it is in. Everything the application holds
+  about customers counts: customers, their contacts, visits, notes and actions.
+- Pilot users are told, before they receive access, that only synthetic customer data may be
+  entered.
+- Staff personal data is real from the first shared environment, the pilot included, and falls
+  under this decision's staff rules (*Staff personal data*). Developer and test environments,
+  which are not shared environments, hold only invented staff accounts.
+- Tests (`backend/tests/`, `frontend/tests/`), fixtures, the seed script (SEED-1) and CI hold only
+  synthetic data and are not holders of personal data under this decision.
+
+### Categories of personal data
+
+Every customer is treated as a natural person, whatever its legal form: the data of a company, a
+sole trader and a farmer get the same treatment. A sole trader's NIP identifies a person, and the
+phones and e-mails of a company reach persons.
+
+| Category | Items | Source |
+|---|---|---|
+| **PD-C1 Customer identification** | the customer's name; the NIP; the foreign tax identifier | CUS-1, CUS-5; ADR-0002 |
+| **PD-C2 Customer contact and place** | the address (street and number, postal code, post office or town, voivodeship, county, country); every phone; every e-mail address; a visit's own address where one is given | CUS-1, CUS-8, VIS-3 |
+| **PD-C3 Free text** | the note on each phone and e-mail (who it reaches); the note text (NOT-1, NOT-2); the action description (ACT-1) | CUS-1, NOT-1, NOT-2, ACT-1 |
+| **PD-C4 Customer activity** | the visit's customer and owner, its times, state and flags; the action's owner, author, due date and status; the author of each action status change (ACT-2); the author of each note; the customer's owner and its archived state | VIS-1, ACT-1, ACT-2, NOT-1, CUS-9, CUS-10 |
+| **PD-S1 Staff account** | username, e-mail address, first and last name, password hash, role assignments, enabled state | ADR-0003 *Staff personal data*, Keycloak row |
+| **PD-S2 Staff sessions and events** | Keycloak's active sessions (with their IP address and times); admin events with their representation (acting account, the account changed, its fields, role mappings and credential changes, times); login events (with their IP address and times); staff IP addresses and usernames in logs | ADR-0003 *Staff personal data*, Keycloak row |
+| **PD-S3 Staff in the application** | the subject identifier, in every record that refers to a staff member; the display-name copy (given and family name); the server-side sessions (hashed session identifier, subject, encrypted tokens carrying only the claims ADR-0003 names, created and last-used instants) | ADR-0003 *Staff personal data*, Application row |
+
+- **Free text holds anything.** The PD-C3 items are treated as able to hold any personal data,
+  of the customer, of a third person (a family member, a neighbour, an employee) and of staff,
+  not only the customer's. Every rule of this decision that names customer field values applies
+  to them in full.
+- ADR-0003's short-lived login transactions hold no personal data.
+
+### Where personal data is held
+
+**Paths under the ADR-0001 layout.**
+
+| Path | Holds or processes | Categories |
+|---|---|---|
+| `backend/app/api/**` | receives and returns personal data in HTTP schemas | PD-C1..PD-C4, PD-S3 |
+| `backend/app/services/**` | every read and write of customers, visits, notes and actions | PD-C1..PD-C4, PD-S3 |
+| `backend/app/domain/**` | the entities and rules that carry personal data | PD-C1..PD-C4, PD-S3 |
+| `backend/app/data/**` | stores every application-side category, sessions and the display-name copy included | PD-C1..PD-C4, PD-S3 |
+| `backend/migrations/**` | defines the tables and columns holding personal data; a data migration processes it | PD-C1..PD-C4, PD-S3 |
+| `backend/app/auth/**` | the session, the subject and the display name taken from the verified token | PD-S3 |
+| `backend/app/main.py` | error handling of requests whose bodies carry personal data | PD-C1..PD-C4 |
+| `backend/app/integrations/**` | sends visit data to Google Calendar (*Data sent to Google*) | PD-C1, PD-C2, PD-C4 |
+| `frontend/src/**` | renders and edits personal data in the browser | PD-C1..PD-C4, PD-S3 |
+| `frontend/index.html`, `frontend/public/**` | hold none, but run in the origin that renders it and carries the session cookie | — |
+
+`identity/**` holds no personal data: the realm export holds no staff account (ADR-0003-C14).
+
+**Places off the paths.**
+
+| Place | Holds | Categories |
+|---|---|---|
+| The application database (in the `pgdata` volume) | every application-side category | PD-C1..PD-C4, PD-S3 |
+| Keycloak's database (in the `pgdata` volume) | accounts, sessions, stored admin and login events | PD-S1, PD-S2 |
+| The PostgreSQL volume `pgdata` | both databases above | all |
+| The backup destination | every backup set: both databases' dumps (ADR-0004 *Backup*) | all |
+| The IT department's verification host and a restore host | a decrypted backup set, during the monthly check or a restore (ADR-0004) | all |
+| Container logs on the server | what *What may appear in logs* allows: staff data only, never customer data | PD-S2, PD-S3 subject identifiers |
+| The off-server copy of Keycloak events | the events of *Keycloak events off the server* | PD-S1 fields inside admin-event representations, PD-S2 |
+| The off-server erasure record | the internal identifier of each erased customer and the time, nothing else (*Erasure and backups*) | none beyond the identifier |
+| Google Calendar of each rep | the app-created events of their visits (*Data sent to Google*) | PD-C1, PD-C2, PD-C4 |
+| The user's browser | what a page shows, in the page's memory only (*The user's browser*) | PD-C1..PD-C4, PD-S3 |
+
+The IT department's off-server record of account changes and its request system are its own
+systems outside this application (ADR-0004 *Operator duties*); they hold staff account names and
+times, never a credential value, and their retention is not decided here.
+
+### Classifying columns
+
+No table exists yet. This decision classifies personal data by category and path, not by column.
+Every task that creates or alters a table names, in its pull request, the category of this
+decision (PD-C1..PD-C4, PD-S3) of each new column, or "not personal data". A column holding a
+value derived from personal data (a `_match_key` comparison key, ADR-0002; a search or sort key)
+has the category of its source. A new category is an addendum to this decision.
+
+### The user's browser
+
+- The single-page application holds personal data only in the memory of an open page. It writes
+  no customer data and no staff data to `localStorage`, `sessionStorage`, IndexedDB or the Cache
+  Storage API, and registers no service worker that caches API responses (the brief excludes
+  offline mode).
+- Every API response carrying personal data is sent with `Cache-Control: no-store`.
+- No customer field value appears in a URL path, of the API or of the single-page application:
+  path parameters are opaque record identifiers. The single-page application does not put a
+  customer field value or a search term into its own location (the address bar and the browser
+  history); a search term reaches the API in a request's query string or body only.
+
+### What may appear in logs
+
+**Never written to any log**, by any component, at any level, on any path, error paths included:
+
+- customer field values — every item of PD-C1, PD-C2 and PD-C3, and the values of PD-C4 other
+  than record identifiers and staff subject identifiers;
+- note text, action descriptions and the notes on phones and e-mails (PD-C3);
+- request and response bodies, and the input a validation error rejected (an HTTP 422 echoing the
+  request);
+- query strings;
+- SQL statement text and statement parameters, and a database error's detail (PostgreSQL's
+  `DETAIL` of a unique violation names the duplicated value, for example the NIP of a CUS-6
+  conflict);
+- an exception's message or arguments where they can carry a value of the request or of a row
+  (a Pydantic validation error, a database driver error); the exception's type and code location
+  may be written;
+- session identifiers: the application's session cookie value and its stored hash, the
+  login-transaction identifier, Keycloak's session and authentication-session identifiers and
+  cookie values;
+- tokens: access, refresh and ID tokens, authorization codes, the OIDC `state` and `nonce`, the
+  PKCE verifier, and Google tokens;
+- passwords, temporary passwords included, and credential values;
+- secret values.
+
+No component writes a secret value to its log. This is ADR-0004's rule (*Secret handling*),
+restated without change.
+
+**What each component may write.**
+
+- **The backend** (`backend`, `migrate` and any worker) may write: the time, the HTTP method, the
+  route template or a path holding only opaque identifiers, the status, the duration, the record
+  identifiers concerned, the caller's subject identifier, the type and code location of an error,
+  and its own start, stop and migration progress (revision identifiers).
+- **Keycloak** may write: its start, stop and configuration messages without secret values;
+  errors; and, for each event, the event type, realm, client, the staff account's identifier and
+  username, the IP address and the error code. Keycloak does not run at debug or trace level in a
+  shared environment.
+- **PostgreSQL** may write: connection and authentication events (the role, the database, the
+  client address inside the composition), the server's own messages, and an error's SQLSTATE and
+  primary message. It writes no statement text, no statement parameters and no error detail, for
+  the application's database and Keycloak's alike.
+- **The HTTPS entry point** (`proxy`) may write, per request: the time, the client IP address, the
+  host name, the method, the path without its query string, the status, the size and the
+  duration; and its own certificate and listener messages. It writes no query string and no
+  request or response header value other than the host name. Staff IP addresses in its log are
+  staff personal data under PD-S2.
+- **The other services** (`frontend`'s static file server, `backup`) write no personal data:
+  `frontend` writes no per-request log or one under the entry point's rule above; `backup` writes
+  its run's times, outcome and row counts, never a row's content.
+
+### Who reads logs
+
+- Container logs on the server are read only by the IT department's staff who hold administrative
+  rights over the container runtime (ADR-0004 *Secret handling*), for operating the environment
+  and handling incidents. This holds for the pilot as for production, because pilot logs hold real
+  staff data.
+- Anyone else (a developer investigating a defect, the reviewer) receives only an extract that the
+  IT department hands over for a named incident or defect and has checked against this section.
+- The reviewer reads no container log and is given no right over the container runtime for it
+  (ADR-0004 *Operator duties*).
+
+### Staff personal data
+
+- Staff personal data is held in the places ADR-0003 *Staff personal data* names, and in the
+  places of *Where personal data is held* above that list a PD-S category. It falls under this
+  decision from the first shared environment.
+- How long a deactivated account's username, e-mail address and password hash stay in Keycloak is
+  not decided here (*Forward references*); ADR-0003 forbids deleting an account the application's
+  data refers to.
+
+### Retention
+
+Every retention below counts from the stated start event. "No later than" includes the bound
+itself. The interval at which a deletion runs counts within the bound, never beyond it.
+
+- **Server-side sessions**, abandoned ones included, are deleted together with their encrypted
+  tokens no later than the realm's SSO session maximum lifespan after the session was created.
+  The SSO session maximum is set by EKO-2-01 (ADR-0003 *Forward references*); this rule is
+  relative to it. A session is also deleted at logout and when Keycloak refuses its refresh
+  (ADR-0003).
+- **Login transactions**, abandoned ones included, are deleted no later than 1 hour after they
+  were created.
+- **Admin events of the application realm** are stored and kept in Keycloak for 90 days after the
+  event.
+- **Admin events of the master realm** are stored and kept in Keycloak for 90 days after the
+  event.
+- **Login events of the master realm** are stored and kept in Keycloak for 90 days after the
+  event.
+- **Login events of the application realm** are stored, for the authentication event types only,
+  and kept in Keycloak for 30 days after the event. The stored types are login, login error,
+  logout, password update and its error, password reset, its error and the sending of a reset
+  e-mail, refresh error, and account lockout by brute-force detection. Successful token refreshes
+  (`REFRESH_TOKEN`) and code-to-token exchanges (`CODE_TO_TOKEN`) are never stored, because with an
+  access token of at most 5 minutes (ADR-0003) they record each staff member's use of the
+  application minute by minute.
+- **The display-name copy** is kept while at least one record in the application refers to the
+  subject, and is deleted together with the last such record. A copy that no record refers to is
+  deleted no later than 180 days after the subject's last login; the next login takes it again.
+- **Logs** of every service of the composition (`backend`, `migrate`, `keycloak`, `postgres`,
+  `proxy`, `frontend`, `backup`) are deleted no later than 14 days after they were written, also
+  when they are small; deletion is by time, and rotation by size alone does not meet this rule.
+  The mechanism uses no logging driver of a cloud provider (ADR-0004-C4).
+- **The off-server copy of Keycloak events** keeps admin events of both realms and master-realm
+  login events for 365 days after the event, and application-realm login events for 90 days after
+  the event (*Keycloak events off the server*).
+- **The off-server erasure record** keeps each entry until no backup set taken before its erasure
+  remains at the destination (*Erasure and backups*).
+- No retention of admin events is zero, and admin events are never switched off in any realm of
+  any shared environment (ADR-0003 *Administrator permissions in Keycloak*).
+- Keycloak events and sessions inside backup sets are kept as long as their set (ADR-0004
+  *Backup*); this decision shortens no backup set.
+
+### Keycloak events off the server
+
+- **Which events.** The admin events of the application realm and of the master realm, with their
+  representation; the login events of the master realm; and the login events of the application
+  realm that *Retention* stores. Each copied event carries its type, realm, time, client, acting
+  and affected account, IP address, error, and for an admin event its resource path and
+  representation. It carries no token, no credential value and no session or
+  authentication-session identifier.
+- **Where to.** Append-only storage on a host operated by the IT department that is off the server
+  in the sense of ADR-0004 *Backup* (*Destination: off the server*): another host, not a second
+  disk, volume or directory of the server's own host. The backup destination's host may serve.
+  The credential the server uses there can add events but cannot delete or overwrite any.
+- **How often.** A shipment runs at least every 5 minutes, also when no event is new (a
+  heartbeat), and a check that does not run on the server alerts the IT department when no
+  shipment has arrived for 1 hour.
+- **How long kept there.** Admin events of both realms and master-realm login events: 365 days
+  after the event. Application-realm login events: 90 days after the event. Deletion is done by
+  the destination's own housekeeping, not by the server.
+- **Who reads the copy.** The reviewer (ADR-0004 *Operator duties*), read-only, and the IT
+  department for incident investigation. No holder of the application role `administrator` reads
+  it through that role.
+- **Within the composition.** The shipping works within ADR-0004's composition, its seven
+  services and the official Keycloak image. If the implementing task finds that it cannot, that
+  task stops and the change returns to the human as an addendum to ADR-0004, before any service
+  or image is added. Adding a service would be a deviation from ADR-0004.
+- **Implemented by** EKO-1-09 (#41).
+- Exception EKO-1-03/B-02 lifts only when that task ships; the change to the exception register
+  is the human's own edit.
+
+### Archiving
+
+- Archiving a customer (CUS-9) keeps all of its personal data, in every place that holds it,
+  until the customer is restored or erased. Restoring a customer from the archive keeps its data.
+- The business sets no retention period for active or archived customers now. Until it does, the
+  end event of an archived customer's data is its erasure. The impact assessment may set a period;
+  that is an addendum to this decision.
+
+### Erasure
+
+Permanent erasure is a later feature (brief section 4, Later 14). This section fixes the rule it
+follows when it is built.
+
+- **What it removes.** Erasing a customer removes, from the application database: the customer's
+  row with its name, NIP, foreign tax identifier and address; every phone and e-mail with its note;
+  every note on the customer or on its visits, of every author, the manager's notes (NOT-2)
+  included; every action created from those notes, with its description and its status changes;
+  every value derived from them (comparison and search keys); and every record of background work
+  that carries the customer's data. Every visit of the customer, past and future, of every owner
+  (past visits keep their original owner after a reassignment, CUS-10), loses its customer
+  reference, its own address and every customer value. A visit row is kept only stripped in that
+  way, so that dashboard counts stay; whether it is kept is decided by the erasure feature.
+- **Places excused, and why.** Backups: *Erasure and backups* below. Google Calendar: the
+  app-created events of the customer's visits, past ones included (CUS-9 removes only future
+  events), carry its name, address and phone; what erasure does to them, and what happens when
+  the owner's Google access is lost, is decided by ADR-0006 (EKO-1-05, #18). Logs and the
+  off-server copy of Keycloak events: they hold no customer data (*What may appear in logs*,
+  *Keycloak events off the server*). Keycloak's database: it holds no customer data. The user's
+  browser: it holds customer data only in an open page's memory (*The user's browser*). The IT
+  department's verification host: its decrypted copy is deleted after the check (ADR-0004
+  *Backup*).
+- **What it leaves unchanged.** Erasing one customer changes no other customer's data and no
+  staff attribution of another record (as PRH-5). An archived customer can be erased.
+
+### Erasure and backups
+
+- Erased personal data stays in the backup sets taken before the erasure until ADR-0004's
+  retention removes them: the sets of the last 30 days, and the verified sets kept beyond them
+  until three newer sets have passed the verification. No backup set is purged, shortened or
+  overwritten because of an erasure, and the server gets no right to delete at the destination.
+- **The off-server erasure record.** Before an erasure is carried out, an entry is made in an
+  erasure record kept off the server by the IT department. The entry holds the customer's internal
+  record identifier and the time, never a customer field value. An entry is kept until no backup
+  set taken before its erasure remains at the destination, and then deleted.
+- **Re-apply at restore.** At every restore, every erasure the record holds is carried out again
+  on the restored application database, and on the app-created Google Calendar events as ADR-0006
+  decides. It is carried out between ADR-0004 restore steps 12 and 14: after `migrate` has run at
+  step 12 and the restore has been verified at step 13 (the login and the row counts compared at
+  step 6), and before the public listener is opened to the internet at step 14. Because the
+  re-apply covers every entry the record holds, whatever its time, an erasure that committed while
+  a backup ran is either absent from the set or re-applied; the instant of the backup point does
+  not decide it. The erasures re-applied are named in the restore record that step 14 writes.
+- This duty is a rule of this decision, carried out inside the window ADR-0004 already keeps the
+  public listener closed to the internet. It adds no step to ADR-0004's procedure, changes none of
+  its steps or their order, and does not change ADR-0004. EKO-1-08 (#36) adds a cross-reference to
+  it in ADR-0004's procedure.
+
+### Data sent to Google
+
+- Only the data a visit's calendar event needs is sent to Google: the content VIS-3 fixes (the
+  customer's name in the title, the customer's or the visit's address as the location, the contact
+  phone in the description), the visit's times, and the identifiers the synchronisation needs.
+  Never an e-mail address, a NIP or foreign tax identifier, the note on a phone or e-mail, note
+  text or an action.
+- ADR-0006 (EKO-1-05, #18) lists each field sent, within this rule, decides how Google tokens are
+  stored, and decides what erasure does to past calendar events.
+
+### Changes to accepted decisions
+
+This decision changes no accepted decision: not ADR-0001, ADR-0002, ADR-0003 or ADR-0004, by
+neither edit nor addendum. It works within ADR-0004's backup retention (30 days and the verified
+sets), ADR-0004's destination to which the server can only add, ADR-0004's seven services and the
+official Keycloak image, ADR-0003's bound on deleting abandoned sessions, and ADR-0003's rule that
+admin-event retention is never zero. Gate 1 of EKO-1-04 (#17), on 2026-10-25, ruled that the
+restore re-apply of erasures and the shipping of Keycloak events off the server are within
+ADR-0004 and not deviations; no deviation from an accepted decision was approved.
+
+### Items forwarded to this decision
+
+- **Which modules hold personal data** — ADR-0001 l.184 → decided in *Where personal data is
+  held*.
+- **Logging** — ADR-0001 l.184 → decided in *What may appear in logs*.
+- **Retention** — ADR-0001 l.184 → decided in *Retention*.
+- **Archiving vs. erasure** — ADR-0001 l.184 → decided in *Archiving* and *Erasure*.
+- **Which tables and columns hold personal data** — ADR-0002 l.134 → decided in *Classifying
+  columns*.
+- **Retention, archiving vs. erasure, what may appear in logs** — ADR-0002 l.134-135 → decided in
+  *Retention*, *Archiving*, *Erasure* and *What may appear in logs*.
+- **Deleting abandoned sessions with their encrypted tokens within the SSO session maximum** —
+  ADR-0003 l.93-95 → decided in *Retention*.
+- **Admin-event retention, never zero** — ADR-0003 l.204 → decided in *Retention*.
+- **Whether application-realm login events are stored** — ADR-0003 l.287 → decided in
+  *Retention*.
+- **Retention of sessions, Keycloak events and the display-name copy; what may appear in logs** —
+  ADR-0003 l.291-292 → decided in *Retention* and *What may appear in logs*.
+- **Retention of sessions, admin events, login events and the display-name copy; logging** —
+  ADR-0003 l.316-317 → decided in *Retention* and *What may appear in logs*.
+- **What else may appear in logs** — ADR-0004 l.175-176 → decided in *What may appear in logs*.
+- **How erasure treats backups** — ADR-0004 l.316-317 → decided in *Erasure and backups*.
+- **Master-realm event retention longer than the review interval** — ADR-0004 l.426-427 → decided
+  in *Retention*.
+- **Logs (container logs included); retention of admin events of both realms, master-realm login
+  events, sessions and logs; erasure in backups, verified sets included** — ADR-0004 l.559-561 →
+  decided in *What may appear in logs*, *Retention* and *Erasure and backups*.
+- **The same items** — ADR-0004 l.582-584 → decided in *What may appear in logs*, *Retention* and
+  *Erasure and backups*.
+- **Shipping Keycloak events off the server** — `docs/PLAN.md` l.56-57 → decided in *Keycloak
+  events off the server*.
+- **Erasure in backups** — `docs/PLAN.md` l.56-57 → decided in *Erasure and backups*.
+
+ADR-0003 l.396 names ADR-0005's retention in an option that was not chosen; it is not a forward.
+
+### Forward references (not decided here)
+
+- EKO-1-05 (#18), ADR-0006 — the fields sent to Google within *Data sent to Google*; Google token
+  storage; what erasure does to app-created calendar events, past ones included.
+- EKO-1-06 (#19) — the application realm's event settings in the export under `identity/`, the
+  master realm's event settings at bootstrap, the log settings of each service and the time-bound
+  deletion of logs in the composition, the backend's log and error-handling rules, and
+  `Cache-Control: no-store`.
+- EKO-2-01 (#21) — the SSO session maximum, and the deletion of sessions and login transactions.
+- EKO-1-09 (#41) — shipping Keycloak events off the server.
+- EKO-1-08 (#36) — proving in production the event settings, the log bound and the off-server
+  copy, and the first restore with the erasure re-apply in place; the cross-reference to the
+  re-apply in ADR-0004's restore procedure.
+- Not decided: the GDPR impact assessment; it may revise this decision and has no PLAN entry yet.
+- Not decided: whether reps' private Gmail calendars (VIS-1, VIS-3), which put customer names,
+  addresses and phones into accounts the company does not control, are acceptable; it is a
+  question for the GDPR impact assessment.
+- Not decided: a retention period for active and archived customers; it closes with the impact
+  assessment.
+- Not decided: the permanent-erasure feature; it closes when the feature is planned, or earlier if
+  the impact assessment requires erasure from go-live.
+- Not decided: how long a deactivated account's username, e-mail address and password hash stay
+  in Keycloak; it closes with the impact assessment.
+
+## Options considered
+
+### Erasure and backups (G-3)
+
+| Option | Cost | Closes off |
+|---|---|---|
+| **A. Erased data stays in backups until ADR-0004's retention removes them; an off-server erasure record re-applied at every restore before the public listener opens** (chosen at gate 1, 2026-10-25) | An off-server record kept by IT; one more duty in the restore window; the erasure feature must be idempotent by identifier. | Nothing. |
+| B. Erased data stays in backups; a restore does not re-apply erasures | None now. | Relying on an erasure after a restore: a restore brings an erased customer back silently. |
+| C. Purge erased customers from backup sets | Deviation from ADR-0004 (append-only destination, retention of the verified sets); every verified set re-written. | The write-only destination that protects backups from a compromised server. |
+
+### Application-realm login events (G-2)
+
+| Option | Cost | Closes off |
+|---|---|---|
+| **A. Stored, authentication types only, 30 days** (chosen at gate 1, 2026-10-25) | Staff IP addresses and login times kept 30 days on the server and 90 off it. | Nothing. |
+| B. All types stored | Successful refreshes every 5 minutes become a minute-level record of each staff member's use of the application. | A proportionate staff-data footprint. |
+| C. Not stored | None. | Evidence of an administrator logging in first with a temporary password they set (ADR-0003), and of attacks on the internet-facing login page. |
+
+### Shipping Keycloak events off the server (C-1, G-9)
+
+| Option | Cost | Closes off |
+|---|---|---|
+| **A. Within ADR-0004's composition; the implementing task chooses the means and returns to the human if none fits** (chosen at gate 1, 2026-10-25) | The means is constrained (an existing service, the runtime's own logging, Keycloak's own features). | Nothing: an addendum to ADR-0004 stays possible. |
+| B. A dedicated shipping service added now | A deviation from ADR-0004's seven services, which the Story of EKO-1-04 forbids. | Keeping ADR-0004 unchanged in this task. |
+| C. Only through the daily backup set | None: the backup already holds Keycloak's database. | Detecting events cleared in the day before the next backup (exception EKO-1-03/B-02 stays). |
+
+### Data sent to Google (G-4)
+
+| Option | Cost | Closes off |
+|---|---|---|
+| **A. ADR-0005 sets the rule, ADR-0006 lists the fields** (chosen at gate 1, 2026-10-25) | None now. | Sending any field outside VIS-3 without an addendum here. |
+| B. Left entirely to ADR-0006 | None now. | Nothing, but Google Calendar has no rule from this decision. |
+
+### Display-name copy (G-8)
+
+| Option | Cost | Closes off |
+|---|---|---|
+| **A. Kept while a record refers to the subject; a copy no record refers to deleted 180 days after the last login** (chosen at gate 1, 2026-10-25) | A staff member with no records and no login for 180 days drops out of name lists until the next login. | Nothing. |
+| B. A number after deactivation | The application does not learn of a deactivation, so the rule cannot be applied. | Nothing, but not enforceable. |
+| C. Kept with no end | None. | A bound on staff data after a person leaves. |
+
+### Classification granularity (G-5)
+
+| Option | Cost | Closes off |
+|---|---|---|
+| **A. Category and path now, columns by each table-creating task** (chosen at gate 1, 2026-10-25) | Each such task names its columns' categories. | Nothing. |
+| B. Columns now | No table exists, so the column list would be invented ahead of the design. | Nothing, but rewritten by EKO-3. |
+
+## Controls
+
+Identifier and acceptance criterion only.
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0005-C1 | Every pull request that creates or alters a table names, for each new column, its category from *Categories of personal data* or "not personal data". |
+| ADR-0005-C2 | A test sends to each endpoint that accepts a body a request that fails validation and carries a marker value in every field; the marker appears in no line the backend logs. |
+| ADR-0005-C3 | A test saves a second customer with an existing NIP; the NIP appears neither in the backend's log nor in PostgreSQL's log, and PostgreSQL's log holds no statement text for it. |
+| ADR-0005-C4 | A request through `proxy` with a marker in its query string and a session cookie: `proxy`'s log line for it holds the path without the query string, and neither the marker nor the cookie value. |
+| ADR-0005-C5 | After a login, a token refresh, a failed login and a logout against a running Keycloak, Keycloak's container log holds no token, authorization code, cookie value, password or session identifier, and its log level is neither debug nor trace. |
+| ADR-0005-C6 | The rendered composition and each shared host delete container logs no later than 14 days after they were written; by review of each shared host, no container log line older than 14 days exists (recorded with the date of the check). |
+| ADR-0005-C7 | The realm export under `identity/` stores admin events with their representation, expires them after 90 days, stores login events of only the types *Retention* names, and expires them after 30 days; in each live master realm, login and admin events are stored and expire after 90 days (recorded with the date of the check). |
+| ADR-0005-C8 | With the clock fixed, a test finds no session, and none of its encrypted tokens, whose age since creation exceeds the realm's SSO session maximum, and no login transaction older than 1 hour. |
+| ADR-0005-C9 | A test of the display-name copy: deleting the last record referring to a subject deletes its copy; a copy no record refers to is deleted 180 days after the subject's last login; a copy any record refers to is kept. |
+| ADR-0005-C10 | Against a shared environment: an admin event in each realm and a master-realm login event appear in the off-server copy within 5 minutes; with the server's credential, deleting or overwriting an event in the copy is refused; with shipping stopped, the IT department receives an alert within 1 hour from a check that does not run on the server. |
+| ADR-0005-C11 | By review of the off-server copy: it holds admin events and master-realm login events of the last 365 days and application-realm login events of the last 90 days, and none older (recorded with the date of the check); no copied event holds a token, a credential value or a session identifier. |
+| ADR-0005-C12 | `grep -rnE "localStorage|sessionStorage|indexedDB|caches\.open|serviceWorker" frontend/src` returns nothing; every API response carrying personal data has `Cache-Control: no-store`. |
+| ADR-0005-C13 | Every path parameter in the backend's OpenAPI document is an opaque record identifier; no route of the single-page application puts a customer field value or a search term into its location. |
+| ADR-0005-C14 | Once erasure exists: a test erases a customer and then finds, in the application schema, none of its field values, no reference to its identifier, no note or action of it of any author, and every other customer's rows and every staff attribution of other records unchanged. |
+| ADR-0005-C15 | Once erasure exists: by review of the IT department's records, every erasure has an entry in the off-server erasure record made before it, holding only the identifier and the time; after every restore, every erasure the record holds was in effect before the public listener was opened to the internet, and the restore record names them. |
+| ADR-0005-C16 | By the human's statement per shared environment, recorded with its date: the environment holds only synthetic customer data, until the GDPR impact assessment is done. |
+
+## Addenda
+
+<!-- A change to an accepted decision is a dated addendum with a reason, never an edit of the text
+above. -->
