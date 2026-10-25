@@ -96,6 +96,21 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   by the business; a new task when one is); retention and personal data in backups — EKO-1-04;
   the Google secrets — EKO-1-05; zero-downtime deployment (G-3 A); later restore tests.
 
+- [ ] **EKO-1-09** — Ship Keycloak events off the application server before go-live.
+  *Done when:* tests in the EKO-1-06 composition prove that admin events of both realms,
+  master-realm login events and the stored application-realm login types are shipped with no
+  token, credential or session identifier, at least every 5 minutes with a heartbeat, within
+  ADR-0004's seven services and the official Keycloak image; and, before go-live and no later
+  than 2027-03-31, a dated record confirmed by the IT department shows ADR-0005-C10 met on
+  production against an append-only IT host off the server, with the destination's housekeeping
+  set to 365 days (admin events, master-realm login events) and 90 days (application-realm login
+  events); the capability register lists event shipping as proven.
+  **Out of scope (explicit):** lifting exception EKO-1-03/B-02 — the human's own edit; the
+  recurring review of the copy — an ADR-0004 operator duty; a reading interface; shipping logs or
+  application events; other alerts; self-service resets in the off-server record — #38; server
+  and destination provisioning — EKO-1-08. A new service or image stops the task as an ADR-0004
+  addendum (G-9 A).
+
 ## EKO-2 — Access
 
 - [ ] **EKO-2-01** — Require login for the whole application.
