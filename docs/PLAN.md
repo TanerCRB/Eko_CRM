@@ -37,13 +37,24 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   mutation killed; no recorded exceptions. Forwarded: who reviews admin events and ADR-0003-C22
   (ADR-0004, #16); the Keycloak behaviours behind ADR-0003-C1, C7, C10 and C14..C20 (EKO-1-06, #19).
 
-- [ ] **EKO-1-03** — Record the deployment and backup decision (ADR-0004).
+- [x] **EKO-1-03** — Record the deployment and backup decision (ADR-0004).
   *Done when:* ADR-0004 is "Accepted <date>" and fixes the container runtime and composition, the
   cloud-agnostic constraints, HTTPS exposure under a company domain, secret handling, a daily
   off-server database backup and the restore procedure, with the company IT department as
   operator.
   **Out of scope (explicit):** provisioning the real server; the domain — the human provides it
   later.
+  **Done 2026-10-25:**
+  [`ADR-0004-deployment-and-recovery.md`](architecture/decisions/ADR-0004-deployment-and-recovery.md)
+  (status "Accepted 2026-10-24", revised in place in two fix rounds), the dated ADR-0003 addendum
+  on the backup role's connection budget and the sensitive-paths register citing ADR-0004, merged
+  in [PR #39](https://github.com/TanerCRB/Eko_CRM/pull/39) — QA's document checks
+  (`tests/doc-checks/EKO-1-03.sh`) verified at `2642526`, all 157 named mutations killed; eleven
+  recorded exceptions (`architecture/exception-register.md`), their fixes entry conditions of
+  EKO-1-08 (#36) and EKO-1-06 (#19). Forwarded: the first tested restore, the network topology
+  and the backup and restore controls (EKO-1-08, #36); the composition and the controls behind
+  migrations, bootstrap and the backup role (EKO-1-06, #19); shipping Keycloak events off the
+  server and erasure in backups (EKO-1-04, #17); self-service resets in the off-server record (#38).
 
 - [ ] **EKO-1-04** — Record the personal-data handling decision (ADR-0005).
   *Done when:* ADR-0005 is "Accepted <date>" and names the modules holding customer personal
