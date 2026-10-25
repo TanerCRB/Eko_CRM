@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-23",
+  "task": "EKO-1-03",
+  "phase": "analysis",
+  "role": "analyst",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a92aa577e8f2e4dd8",
+  "tokens": 605482,
+  "tokenSplit": { "input": 30, "output": 14496, "cacheWrite": 78179, "cacheRead": 512777 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 21,
+  "seconds": 504,
+  "fixRound": 0,
+  "reworkCause": "criteria re-aligned to the Product Owner's extended Definition of done (could have been avoided by running the PO before the first Analyst call); one resumed turn to fix the Contrast/Mutation label format for evidence-chain lint (Analyst's self-check)",
+  "notes": "READY FOR GATE 1; K-01..K-07 revised; G-2 withdrawn into K-04 human judgement; new G-10 (C19 addendum is a deviation); record covers the resumed format-fix turn; read-only registered role"
+}

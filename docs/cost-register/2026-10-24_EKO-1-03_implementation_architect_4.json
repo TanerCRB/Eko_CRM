@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "task": "EKO-1-03",
+  "phase": "implementation",
+  "role": "architect",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a50325718dcd1051b",
+  "tokens": 3894862,
+  "tokenSplit": { "input": 64, "output": 60958, "cacheWrite": 156362, "cacheRead": 3677478 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 50,
+  "seconds": 623,
+  "fixRound": 1,
+  "reworkCause": "reviewer R-01..R-08 and security-auditor B-01..B-07 at 2eaacd5 (restore reviving revoked sessions, rollback, restore order, backup verification, lock waits, admin-listener binding, administrator planting paths); the Architect's own design pass could have caught the restore and rollback cases; the Analyst's criteria did not ask for them",
+  "notes": "fix round 1: every finding FIXED except R-09 (forwarded) and F-01 (recorded exception); only ADR-0004 edited; doc-checks 79 passed, 2 skipped offline; seven points returned to the human; boundary-check: clean"
+}

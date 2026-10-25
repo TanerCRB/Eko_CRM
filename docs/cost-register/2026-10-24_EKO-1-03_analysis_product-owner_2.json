@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "task": "EKO-1-03",
+  "phase": "analysis",
+  "role": "product-owner",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Low",
+  "agentId": "a58c46e8b6505f83c",
+  "tokens": 460343,
+  "tokenSplit": { "input": 28, "output": 10516, "cacheWrite": 41890, "cacheRead": 407909 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 14,
+  "seconds": 146,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "gate-1 answers written into #16 (Must stay names the C19 deviation, Clarifications C-1..C-11, deviation box ticked); new Story EKO-1-08 #36 for provisioning and the first tested restore (G-5 A); read-only registered role, no repository files"
+}

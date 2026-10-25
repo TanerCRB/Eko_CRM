@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-25",
+  "task": "EKO-1-03",
+  "phase": "verification",
+  "role": "security-auditor",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a1be128021838ecd4",
+  "tokens": 462545,
+  "tokenSplit": { "input": 20, "output": 16815, "cacheWrite": 66347, "cacheRead": 379363 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 11,
+  "seconds": 216,
+  "fixRound": 2,
+  "reworkCause": "Re-verification after fix round 2 (own reservations B-01, B-02, B-05, B-08, B-09 at be73027); B-10 present since the first draft, missed by the Auditor in two earlier audits",
+  "notes": "PASS WITH RESERVATIONS at 2642526, undecidable K-04, K-06, U-01; B-01, B-08, B-09 resolved; kept medium B-02 (recorded exception), B-05 (partly resolved), new B-10 (restore leaves the private key and decrypted set on the restored server); exception texts proposed; boundary-check: clean (read-only, --none)"
+}

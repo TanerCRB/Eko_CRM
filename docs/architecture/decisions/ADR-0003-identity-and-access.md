@@ -443,3 +443,19 @@ Identifier and acceptance criterion only.
 
 <!-- A change to an accepted decision is a dated addendum with a reason, never an edit of the text
 above. -->
+
+### 2026-10-24 — The connection budget of ADR-0003-C19 includes the backup database role
+
+**What it restates.** The connection budget of *Identity server storage* and of ADR-0003-C19 sums
+two database roles: "the two limits together" of Keycloak's role and the application's role stay
+below `max_connections` minus `superuser_reserved_connections`. ADR-0004 adds a third role that
+connects to the same PostgreSQL server: the `backup` role, which runs `pg_dump` against both
+databases. From this date the budget reads: Keycloak's database role, the application's database
+role and the backup database role each have a connection limit greater than zero, and **the three
+limits together** are below `max_connections` minus `superuser_reserved_connections`. Every other
+clause of ADR-0003-C19 is unchanged. ADR-0004-C19 checks the three-role sum.
+
+**Why.** Kept outside the sum, the backup role's connections would leave ADR-0003-C19 true in
+letter while its guarantee — that no role can use up the shared server's connections — is gone.
+ADR-0004 (deployment and backup) cannot meet the two-role sum as written, so the restatement is a
+declared deviation, approved by the human at gate 1 of EKO-1-03 on 2026-10-24 (G-10 A, Issue #16).

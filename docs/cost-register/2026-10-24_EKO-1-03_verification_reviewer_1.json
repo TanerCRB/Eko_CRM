@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "task": "EKO-1-03",
+  "phase": "verification",
+  "role": "reviewer",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a04e3b713e06eaf78",
+  "tokens": 1199258,
+  "tokenSplit": { "input": 34, "output": 36787, "cacheWrite": 127817, "cacheRead": 1034620 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 20,
+  "seconds": 479,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "STOP at 2eaacd5, undecidable K-04, K-06; one high (R-02 restore revives revoked sessions and passwords), five medium, three low; record includes one resumed turn fixing the medium count in the verdict block; read-only registered role"
+}
