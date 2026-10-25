@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-25",
+  "task": "EKO-1-04",
+  "phase": "fix-1",
+  "role": "architect",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "ae02ea2b0c9edce78",
+  "tokens": 1633232,
+  "tokenSplit": { "input": 44, "output": 26972, "cacheWrite": 99568, "cacheRead": 1506648 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 41,
+  "seconds": 278,
+  "fixRound": 1,
+  "reworkCause": "QA F-01, security-auditor B-01..B-04, reviewer R-01..R-07, guardian S-01/S-02; the Analyst's criteria could have caught R-01/R-03 (re-apply placement against backend start, failed-erasure entries) and the Architect's self-check F-01 and S-01",
+  "notes": "ADR-0005 revised in place per human decisions D-1..D-3: re-apply after migrate step 12, before backend and workers at step 13; IT-only erasure record with completed marks, commit time, snapshot-start backup point, idempotent erasure, no identifier reuse; restore host excused (C18); typed username of unknown-account failed login never logged/stored/shipped; PostgreSQL errors SQLSTATE and position only; residual B-02 case stated; correlation id; proof-status sentence removed; C17, C18 added; register unchanged; boundary-check: clean (ADR-0005, register)"
+}
