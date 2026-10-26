@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-26",
+  "task": "EKO-1-04",
+  "phase": "fix-3",
+  "role": "qa",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "aac95dfbec2d6a2bf",
+  "tokens": 23053026,
+  "tokenSplit": {
+    "input": 224,
+    "output": 128093,
+    "cacheWrite": 4149903,
+    "cacheRead": 18774806
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 132,
+  "seconds": 12873,
+  "fixRound": 3,
+  "reworkCause": "re-verification after fix round 3 (D-6..D-9); four paper survivors from reviewer round 2 (commit time from the request, reconciliation sets, Keycloak event switch-off, stalled restore) were gaps in QA round 2's bans, catchable by QA itself",
+  "notes": "PROOF HOLDS at 941421a, undecidable K-05, no findings; tests/doc-checks/EKO-1-04.sh 85 -> 90 checks, 90 pass online; 262 mutation labels, all killed (M54, C09b online only); batch under WSL bash, equivalence on worktree baseline plus 10 labels; a case-insensitive label collision (Rc2/RC2) found and fixed by QA; boundary-check: clean (tests/doc-checks/)"
+}
