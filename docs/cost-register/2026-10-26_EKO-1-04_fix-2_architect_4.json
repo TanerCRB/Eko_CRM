@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-26",
+  "task": "EKO-1-04",
+  "phase": "fix-2",
+  "role": "architect",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a271dff7ae250a4af",
+  "tokens": 905117,
+  "tokenSplit": {
+    "input": 30,
+    "output": 26811,
+    "cacheWrite": 77976,
+    "cacheRead": 800300
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 28,
+  "seconds": 283,
+  "fixRound": 2,
+  "reworkCause": "reviewer R-08..R-10, security-auditor B-05/B-06, open U-02/U-05; the literal D-2 wording (only completed entries) caused R-08 — the driving session's fix-1 brief could have caught it",
+  "notes": "ADR-0005 revised per D-4 (re-apply every entry not marked failed or cancelled; marks only after DB check; commit time from the server in UTC; unreadable commit time; monthly reconciliation against two verified sets, C19) and D-5 (Keycloak typed-username stop rule); abandoned restore recorded and deleted (C18); no backup before the re-apply; bare EKO-3 dropped in the identifier rule; register unchanged; boundary-check: clean (ADR-0005, register)"
+}
