@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-27",
+  "task": "EKO-1-04",
+  "phase": "fix-4",
+  "role": "reviewer",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a34473b0c3c513453",
+  "tokens": 878758,
+  "tokenSplit": {
+    "input": 32,
+    "output": 25767,
+    "cacheWrite": 94022,
+    "cacheRead": 758937
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 16,
+  "seconds": 324,
+  "fixRound": 4,
+  "reworkCause": "re-verification after fix round 4 (D-10..D-12); R-17 follows from D-10 moving a withdrawal during an in-flight run onto the silent completed path (the Architect named it as choice 3 and the driving session's fix-4 brief could have asked for it to be reported); R-18 from D-11's 'only' wording; R-19 from D-12's wording against ADR-0004's record format",
+  "notes": "STOP at 60add45, undecidable K-05; R-14..R-16 resolved, round-3 paper survivors closed; new R-17 Medium (withdrawal during an in-flight run silently lost), R-18 Low (report cannot name its condition or set; naming the customer needs an unlisted decryption), R-19 Low (D-12 condition rests on an unrecorded fact); four new paper survivors for QA; final round, findings go to recorded exceptions; boundary-check: clean (--none)"
+}
