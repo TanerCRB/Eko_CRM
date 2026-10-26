@@ -84,10 +84,10 @@ phones and e-mails of a company reach persons.
 | Keycloak's database (in the `pgdata` volume) | accounts, sessions, stored admin and login events | PD-S1, PD-S2 |
 | The PostgreSQL volume `pgdata` | both databases above | all |
 | The backup destination | every backup set: both databases' dumps (ADR-0004 *Backup*) | all |
-| The IT department's verification host and a restore host | a decrypted backup set, during the monthly check or a restore (ADR-0004) | all |
+| The IT department's verification host and a restore host | a decrypted backup set, during the monthly check or a restore (ADR-0004); on the verification host, also the customer identifiers the reconciliation compares, during the check (*Erasure and backups*) | all |
 | Container logs on the server | what *What may appear in logs* allows: staff data only, never customer data | PD-S2, PD-S3 subject identifiers |
 | The off-server copy of Keycloak events | the events of *Keycloak events off the server* | PD-S1 fields inside admin-event representations, PD-S2 |
-| The off-server erasure record | for each approved erasure, the customer's internal record identifier, the entry's time, its mark and the erasure's commit time, nothing else (*Erasure and backups*) | none beyond the identifier |
+| The off-server erasure record | for each approved erasure, the customer's internal record identifier, the entry's time, its mark and, once recorded, the erasure's commit time, nothing else; every entry not marked failed or cancelled is re-applied at every restore (*Erasure and backups*) | none beyond the identifier |
 | Google Calendar of each rep | the app-created events of their visits (*Data sent to Google*) | PD-C1, PD-C2, PD-C4 |
 | The user's browser | what a page shows, in the page's memory only (*The user's browser*) | PD-C1..PD-C4, PD-S3 |
 
@@ -155,6 +155,12 @@ restated without change.
   username, the IP address and the error code. For a failed login naming no existing account, the
   typed username is not logged, not stored in an event and not shipped: it may be a password typed
   into the wrong field. Keycloak does not run at debug or trace level in a shared environment.
+  **If the official image cannot keep the typed username out.** The rule on the typed username
+  works with the official Keycloak image (ADR-0004). If the implementing task, EKO-1-06 (#19) or
+  EKO-1-09 (#41), finds that the official Keycloak image cannot leave the typed username of a failed
+  login naming no existing account out of its log and its stored events, that task stops and the
+  change returns to the human as an addendum to this decision, before any provider or image is
+  added and before the stored event types of *Retention* are changed.
 - **PostgreSQL** may write: connection and authentication events (the role, the database, the
   client address inside the composition), its own start, stop, checkpoint and recovery messages,
   and, for an error, at most its SQLSTATE and its position in the statement. It writes no error
@@ -225,8 +231,9 @@ itself. The interval at which a deletion runs counts within the bound, never bey
 - **The off-server copy of Keycloak events** keeps admin events of both realms and master-realm
   login events for 365 days after the event, and application-realm login events for 90 days after
   the event (*Keycloak events off the server*).
-- **The off-server erasure record** keeps each completed entry until no backup set whose snapshot
-  started before the erasure's commit time remains at the destination (*Erasure and backups*).
+- **The off-server erasure record** keeps each entry not marked failed or cancelled, completed
+  entries and entries not yet marked alike, until it holds a commit time and no backup set whose
+  snapshot started before that commit time remains at the destination (*Erasure and backups*).
 - No retention of admin events is zero, and admin events are never switched off in any realm of
   any shared environment (ADR-0003 *Administrator permissions in Keycloak*).
 - Keycloak events and sessions inside backup sets are kept as long as their set (ADR-0004
@@ -298,11 +305,15 @@ follows when it is built.
   logs*, *Keycloak events off the server*). Keycloak's database: it holds no customer data. The
   user's browser: it holds customer data only in an open page's memory (*The user's browser*). The
   IT department's verification host: its decrypted copy is deleted after the check (ADR-0004
-  *Backup*). A restore host: the application database restored on it is covered by the re-apply
-  (*Erasure and backups*); the decrypted backup set it received at ADR-0004 restore step 3 is
-  deleted once the restore is recorded at step 14 or abandoned; and a restore host that does not
-  become the server, a test restore's host included, has its restored databases and volumes
-  deleted once the restore is recorded.
+  *Backup*), and the customer identifiers the reconciliation compares are deleted with it
+  (*Erasure and backups*). A restore host: the application database restored on it is covered by
+  the re-apply (*Erasure and backups*); the decrypted backup set it received at ADR-0004 restore
+  step 3 is deleted once the restore is recorded at step 14 or abandoned; a restore host that does
+  not become the server, a test restore's host included, has its restored databases and volumes
+  deleted once the restore is recorded or abandoned; and an abandoned restore, on any host, has
+  its restored databases and volumes deleted once it is abandoned. The IT department records an
+  abandoned restore in its operations record, with its date, the backup set used, who performed
+  it, the host and the step at which it stopped.
 - **What it leaves unchanged.** Erasing one customer changes no other customer's data and no
   staff attribution of another record (as PRH-5). An archived customer can be erased.
 
@@ -315,39 +326,80 @@ follows when it is built.
 - **The off-server erasure record.** Only the IT department writes the erasure record, off the
   server, after the erasure is approved and before it is carried out; the server holds no
   credential that can write it. An entry holds the customer's internal record identifier, the
-  entry's time, its mark and, once completed, the erasure's commit time, never a customer field
-  value. An entry is marked completed with the erasure's commit time; an entry whose erasure failed
-  or was cancelled is marked so and is never re-applied.
+  entry's time, its mark and, once recorded, the erasure's commit time, never a customer field
+  value. An entry is marked completed with the erasure's commit time. An entry is marked failed or
+  cancelled only after the live application database is shown to still hold its identifier, and an
+  entry marked failed or cancelled is never re-applied. Every other entry, completed or not yet
+  marked, is re-applied at every restore (*Re-apply at restore*).
+- **The commit time.** The commit time of an erasure is the commit time of its database
+  transaction, in UTC, taken from the server: the clock behind the snapshot start of *The backup
+  point*. A time taken elsewhere (the approval, a user's report, a workstation's clock) is not a
+  commit time.
+- **An entry whose commit time cannot be read.** When the commit time cannot be read from the
+  server (for example, the server was lost before the IT department marked the entry), the entry
+  keeps being re-applied at every restore, and it is never deleted on the strength of a time
+  earlier than the true commit. If a commit time is recorded for it later, it is a time known to be
+  no earlier than the commit, such as the time the IT department confirmed the identifier absent
+  from the live application database.
 - **The backup point.** The backup point of a set is the start of its application-database
   dump's snapshot. A set whose backup point cannot be shown to be after an erasure's commit time
   counts as started before it.
-- **When an entry is deleted.** A completed entry is deleted only when no backup set whose
-  snapshot started before the erasure's commit time remains at the destination.
+- **When an entry is deleted.** An entry not marked failed or cancelled is deleted only once it
+  holds a commit time and no backup set whose snapshot started before that commit time remains at
+  the destination. An entry that holds no commit time is kept.
 - **Erasure is idempotent by identifier.** Erasing an identifier that is absent from the database
   is a no-op, not a failure, and erasing an identifier again changes nothing further.
 - **Customer identifiers are never reused.** An identifier once issued to a customer is never
   issued to another customer, also after a restore from an earlier backup set, so an old entry can
   never match a new customer. ADR-0002 fixes no key type; this rule binds the task that creates
-  the first customer table (EKO-3) and does not change ADR-0002.
-- **Re-apply at restore.** At every restore, every completed entry of the record is carried out
-  again on the restored application database. It is carried out after `migrate` has run at
+  the first customer table and does not change ADR-0002.
+- **Re-apply at restore.** At every restore, every entry of the record that is not marked failed
+  or cancelled, completed entries and entries not yet marked alike, is carried out again on the
+  restored application database. Because erasure is idempotent by identifier, re-applying an entry
+  whose erasure is not yet confirmed is safe. The re-apply is carried out after `migrate` has run at
   ADR-0004 restore step 12 and before `backend` and any worker are started at step 13, so that
-  every completed erasure is in effect before the backend or any worker serves or synchronises the
+  every such erasure is in effect before the backend or any worker serves or synchronises the
   restored data, and so before the public listener is opened to the internet at step 14. Step 13's
   verification is unaffected: the row counts it relies on are those compared at step 6, before any
   migration and before the re-apply. What the re-apply does to app-created Google Calendar events
-  is forwarded to EKO-1-05 (#18) for ADR-0006 to decide. Because the re-apply covers every
-  completed entry, whatever its time, an erasure that committed while a backup ran is either absent
-  from the set or re-applied; the instant of the backup point does not decide it.
+  is forwarded to EKO-1-05 (#18) for ADR-0006 to decide. Because the re-apply covers every entry
+  not marked failed or cancelled, whatever its time, an erasure that committed while a backup ran
+  is either absent from the set or re-applied; the instant of the backup point does not decide it.
+- **No backup before the re-apply.** No backup set is written to the destination from a restored
+  application database before the re-apply has run on it: the `backup` service is not started on a
+  restore host before then. ADR-0004's procedure takes its first backup at step 14, after the
+  re-apply.
+- **Reconciliation.** At every monthly verification of ADR-0004 *Backup*, the IT department
+  reconciles the erasure record with the live application database, by customer identifier only:
+  - every customer identifier that the set verified at that check, or the verified set before it,
+    holds and the live application database does not hold has an entry not marked failed or
+    cancelled; an identifier without one is an erasure carried out with no entry, and the IT
+    department writes its entry, marked completed with a time known to be no earlier than the
+    commit (*An entry whose commit time cannot be read*). When a restore has been recorded since
+    the verified set before it, only the set verified at that check is compared;
+  - the identifier of every entry marked completed is absent from the live application database,
+    and the identifier of every entry marked failed or cancelled is present in it, unless another
+    entry for the same identifier is not marked failed or cancelled.
+
+  A mark that contradicts the database is corrected: an entry marked failed or cancelled whose
+  identifier the live database does not hold is marked completed, with a time under the same rule;
+  a completed entry whose identifier the live database still holds is reported to the human, and
+  the entry is not deleted while that stands. The customer identifiers compared are deleted after
+  the check, with the decrypted copies. The reconciliation does not catch an erasure with no entry of
+  a customer that neither compared set holds; against that case only the order of *The off-server
+  erasure record* holds, the entry written before the erasure is carried out.
 - **The restore record.** The IT department records the re-applied erasures with the restore
   record that step 14 writes, by their count and by their entries' own references in the erasure
   record only, never by a customer identifier or field value.
-- This duty is a rule of this decision, carried out inside the window ADR-0004 already keeps the
+- The re-apply is a rule of this decision, carried out inside the window ADR-0004 already keeps the
   public listener closed to the internet, between steps 12 and 14. It adds no step to ADR-0004's
   procedure, changes none of its steps or their order, and does not change ADR-0004; ADR-0004's
   text is not edited for it, and a cross-reference there would be a dated addendum to ADR-0004.
   If the erasure feature finds that it cannot carry out the re-apply within ADR-0004's composition
   before `backend` or any worker starts, that task stops and the change returns to the human.
+- The reconciliation is likewise a duty of this decision, carried out by the IT department on the
+  occasion and the host of ADR-0004's monthly verification. It changes none of that check's own
+  comparisons and does not change ADR-0004.
 
 ### Data sent to Google
 
@@ -371,7 +423,11 @@ restore re-apply of erasures and the shipping of Keycloak events off the server 
 ADR-0004 and not deviations; no deviation from an accepted decision was approved. On 2026-10-25,
 after the first evaluation, the human placed the re-apply after `migrate` at ADR-0004 restore
 step 12 and before `backend` and any worker start at step 13, within gate 1's "between steps 12
-and 14".
+and 14". On 2026-10-26, after the second evaluation, the human decided that a restore re-applies
+every entry of the erasure record not marked failed or cancelled, that the IT department
+reconciles the record with the live application database, and that an official Keycloak image
+unable to keep the typed username of a failed login naming no existing account out of its log
+and stored events returns the change to the human as an addendum to this decision.
 
 ### Items forwarded to this decision
 
@@ -420,11 +476,13 @@ already in that task's *Done when*.
   `identity/`, the master realm's event settings at bootstrap, the log settings of each service
   (PostgreSQL's error logging and Keycloak's typed username of a failed login naming no existing
   account included) and the time-bound deletion of logs in the composition, the backend's log and
-  error-handling rules, and `Cache-Control: no-store`.
+  error-handling rules, and `Cache-Control: no-store`; it stops under *What may appear in logs* if
+  the official Keycloak image cannot keep that typed username out.
 - EKO-2-01 (#21) receives: the SSO session maximum, and the deletion of sessions and login
   transactions.
 - EKO-1-09 (#41) receives: shipping Keycloak events off the server, without the typed username of
-  a failed login naming no existing account.
+  a failed login naming no existing account; it stops under *What may appear in logs* if the
+  official Keycloak image cannot keep that typed username out.
 - EKO-1-08 (#36) receives: proving in production the event settings, the log bound and the
   off-server copy, and making the re-apply duty of *Erasure and backups* part of the restore it
   carries out. The re-apply itself cannot be proven at EKO-1-08, because erasure is a later
@@ -510,10 +568,11 @@ Identifier and acceptance criterion only.
 | ADR-0005-C12 | `grep -rnE "localStorage|sessionStorage|indexedDB|caches\.open|serviceWorker" frontend/src` returns nothing; every API response carrying personal data has `Cache-Control: no-store`. |
 | ADR-0005-C13 | Every path parameter in the backend's OpenAPI document is an opaque record identifier; no route of the single-page application puts a customer field value or a search term into its location. |
 | ADR-0005-C14 | Once erasure exists: a test erases a customer and then finds, in the application schema, none of its field values, no reference to its identifier, no note or action of it of any author, and every other customer's rows and every staff attribution of other records unchanged; erasing the same identifier again, and erasing an absent identifier, succeeds and changes nothing. |
-| ADR-0005-C15 | Once erasure exists: by review of the IT department's records, every erasure has an entry in the off-server erasure record, written by the IT department after the erasure was approved and before it was carried out, holding only the identifier, the entry's time, its mark and the commit time; the server holds no credential that can write the record; every entry is marked completed with the erasure's commit time, or failed or cancelled; after every restore, every completed entry was in effect before `backend` or any worker served or synchronised the restored data, no entry marked failed or cancelled was re-applied, and the restore record names the re-applied erasures by count and entry reference only; no completed entry was deleted while a backup set whose snapshot started before its commit time remained. |
+| ADR-0005-C15 | Once erasure exists: by review of the IT department's records, every erasure has an entry in the off-server erasure record, written by the IT department after the erasure was approved and before it was carried out, holding only the identifier, the entry's time, its mark and the commit time; the server holds no credential that can write the record; every commit time recorded is the erasure transaction's commit time in UTC taken from the server, or a time known to be no earlier than it; every entry marked failed or cancelled was so marked only after the live application database was shown to still hold its identifier; after every restore, every entry not marked failed or cancelled, completed or not yet marked, was in effect before `backend` or any worker served or synchronised the restored data, no entry marked failed or cancelled was re-applied, no backup set was written to the destination from the restored database before the re-apply, and the restore record names the re-applied erasures by count and entry reference only; no entry was deleted while it held no commit time or while a backup set whose snapshot started before its commit time remained. |
 | ADR-0005-C16 | By the human's statement per shared environment, recorded with its date: the environment holds only synthetic customer data, until the GDPR impact assessment is done. |
 | ADR-0005-C17 | A test creates customers after a backup set was taken, restores the database from that set, creates a customer, and finds that its identifier is none of those issued after the set. |
-| ADR-0005-C18 | By the IT department's dated record of each restore: the decrypted backup set was deleted once the restore was recorded or abandoned, and a restore host that did not become the server holds no restored database or volume. |
+| ADR-0005-C18 | By the IT department's dated record of each restore, abandoned restores included: every abandoned restore is recorded with its date, the backup set used, who performed it, the host and the step at which it stopped; the decrypted backup set was deleted once the restore was recorded or abandoned; the restored databases and volumes of an abandoned restore, and of a restore host that did not become the server, were deleted once the restore was recorded or abandoned. |
+| ADR-0005-C19 | Once erasure exists: by the IT department's dated record of each monthly verification, the reconciliation of *Erasure and backups* was carried out; every customer identifier that a compared verified set holds and the live application database does not hold has an entry not marked failed or cancelled; the identifier of every entry marked completed is absent from the live application database and that of every entry marked failed or cancelled is present in it, or the contradiction was corrected or reported to the human as that section says; the customer identifiers compared were deleted after the check. |
 
 ## Addenda
 
