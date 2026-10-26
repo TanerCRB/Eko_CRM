@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-26",
+  "task": "EKO-1-04",
+  "phase": "fix-1",
+  "role": "reviewer",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a28deb6e4b33ece63",
+  "tokens": 908317,
+  "tokenSplit": {
+    "input": 30,
+    "output": 27599,
+    "cacheWrite": 97251,
+    "cacheRead": 783437
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 16,
+  "seconds": 355,
+  "fixRound": 1,
+  "reworkCause": "re-verification after fix round 1 of ADR-0005",
+  "notes": "STOP at 0f54d08; R-01..R-07 resolved; new R-08 High (committed but unmarked or wrongly marked erasure not re-applied; commit-time source undefined), R-09 Medium (abandoned restore keeps databases), R-10 Low (backup set written before the re-apply); undecidable K-05, U-02; boundary-check: clean (--none)"
+}
