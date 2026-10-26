@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-26",
+  "task": "EKO-1-04",
+  "phase": "fix-1",
+  "role": "security-auditor",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a5ce34518b5fbdbd8",
+  "tokens": 456650,
+  "tokenSplit": {
+    "input": 24,
+    "output": 17826,
+    "cacheWrite": 53290,
+    "cacheRead": 385510
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 13,
+  "seconds": 249,
+  "fixRound": 1,
+  "reworkCause": "re-verification after fix round 1 of ADR-0005",
+  "notes": "PASS WITH RESERVATIONS at 0f54d08; B-01..B-04 resolved, U-02/U-03 closed; new B-05 Medium (a committed erasure marked failed is never re-applied), B-06 Low (abandoned restore host keeps its databases); undecidable K-05, U-01, U-04, U-05; boundary-check: clean (--none)"
+}
