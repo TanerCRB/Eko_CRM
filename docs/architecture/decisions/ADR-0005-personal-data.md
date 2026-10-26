@@ -324,17 +324,23 @@ follows when it is built.
   until three newer sets have passed the verification. No backup set is purged, shortened or
   overwritten because of an erasure, and the server gets no right to delete at the destination.
 - **The off-server erasure record.** Only the IT department writes the erasure record, off the
-  server, after the erasure is approved and before it is carried out; the server holds no
+  server, after the erasure is approved and before it is carried out, except the entry that
+  *Reconciliation* allows for an erasure already carried out with no entry; the server holds no
   credential that can write it. An entry holds the customer's internal record identifier, the
   entry's time, its mark and, once recorded, the erasure's commit time, never a customer field
-  value. An entry is marked completed with the erasure's commit time. An entry is marked failed or
-  cancelled only after the live application database is shown to still hold its identifier, and an
-  entry marked failed or cancelled is never re-applied. Every other entry, completed or not yet
-  marked, is re-applied at every restore (*Re-apply at restore*).
-- **The commit time.** The commit time of an erasure is the commit time of its database
-  transaction, in UTC, taken from the server: the clock behind the snapshot start of *The backup
-  point*. A time taken elsewhere (the approval, a user's report, a workstation's clock) is not a
-  commit time.
+  value. An entry is marked completed with the erasure's commit time. An entry is marked failed
+  only after the live application database is shown to still hold its identifier, and only once
+  the erasure can no longer commit: no request for it is in flight and no run of it is queued. An
+  entry is marked cancelled when the withdrawal of its erasure is received, after the live
+  application database is shown to still hold its identifier. An entry marked failed or cancelled
+  is never re-applied. Any further attempt to erase an identifier whose entry is marked failed or
+  cancelled needs a new entry, written before the attempt runs. Every other entry, completed or not
+  yet marked, is re-applied at every restore (*Re-apply at restore*).
+- **The commit time.** The commit time of an erasure is a time in UTC taken from the server, on
+  the clock behind the snapshot start of *The backup point*, after the erasure's database
+  transaction has committed. The transaction's start, which PostgreSQL's `now()` and
+  `transaction_timestamp()` return, is not a commit time. A time taken elsewhere (the approval, a
+  user's report, a workstation's clock) is not a commit time.
 - **An entry whose commit time cannot be read.** When the commit time cannot be read from the
   server (for example, the server was lost before the IT department marked the entry), the entry
   keeps being re-applied at every restore, and it is never deleted on the strength of a time
@@ -356,7 +362,9 @@ follows when it is built.
 - **Re-apply at restore.** At every restore, every entry of the record that is not marked failed
   or cancelled, completed entries and entries not yet marked alike, is carried out again on the
   restored application database. Because erasure is idempotent by identifier, re-applying an entry
-  whose erasure is not yet confirmed is safe. The re-apply is carried out after `migrate` has run at
+  whose erasure was already carried out changes nothing further. An approved erasure that a
+  restore reaches before it is carried out or cancelled is carried out by the re-apply, and can no
+  longer be cancelled. The re-apply is carried out after `migrate` has run at
   ADR-0004 restore step 12 and before `backend` and any worker are started at step 13, so that
   every such erasure is in effect before the backend or any worker serves or synchronises the
   restored data, and so before the public listener is opened to the internet at step 14. Step 13's
@@ -370,24 +378,41 @@ follows when it is built.
   restore host before then. ADR-0004's procedure takes its first backup at step 14, after the
   re-apply.
 - **Reconciliation.** At every monthly verification of ADR-0004 *Backup*, the IT department
-  reconciles the erasure record with the live application database, by customer identifier only:
-  - every customer identifier that the set verified at that check, or the verified set before it,
-    holds and the live application database does not hold has an entry not marked failed or
-    cancelled; an identifier without one is an erasure carried out with no entry, and the IT
-    department writes its entry, marked completed with a time known to be no earlier than the
-    commit (*An entry whose commit time cannot be read*). When a restore has been recorded since
-    the verified set before it, only the set verified at that check is compared;
-  - the identifier of every entry marked completed is absent from the live application database,
-    and the identifier of every entry marked failed or cancelled is present in it, unless another
-    entry for the same identifier is not marked failed or cancelled.
+  reconciles the erasure record with the live application database, by customer identifier only.
+  The reconciliation never writes an entry or changes a mark on its own; it does only what the
+  points below say:
+  - **The sets compared.** The live application database is compared with the set verified at
+    that check and with the verified set before it. When a restore from a set older than the
+    verified set before it has been recorded since that verified set, only the set verified at
+    that check is compared; after any other restore, both sets are compared.
+  - **An identifier absent with no entry.** An identifier that a compared set holds and the live
+    application database does not hold, with no entry that is not marked failed or cancelled, is
+    reported to the human. An entry is written for it only against a shown approved erasure of
+    that customer, marked completed with the time the IT department confirmed the identifier
+    absent from the live application database. Such an entry does not make that erasure meet the
+    order of *The off-server erasure record*: the erasure was carried out with no entry. Without a
+    shown approval, the human decides; the customer can be recovered from a compared set that
+    holds it while that set remains at the destination.
+  - **Entries not yet marked.** Every entry not yet marked is resolved. When the live application
+    database does not hold its identifier, the entry is marked completed with the time the IT
+    department confirmed the identifier absent. When it holds it, the IT department checks the
+    erasure's approval: the entry of a withdrawn erasure is marked cancelled, and the entry of an
+    erasure still pending stays unmarked. An entry that is unmarked, and whose identifier the live
+    application database holds, at two consecutive reconciliations is reported to the human.
+  - **Entries marked completed.** The identifier of every entry marked completed is absent from the
+    live application database. A completed entry whose identifier the live database still holds is
+    reported to the human, and the entry is not deleted while that stands.
+  - **Entries marked failed or cancelled.** An entry marked failed or cancelled whose identifier the
+    live application database does not hold, with no other entry for that identifier that is not
+    marked failed or cancelled, is reported to the human and is not marked completed.
 
-  A mark that contradicts the database is corrected: an entry marked failed or cancelled whose
-  identifier the live database does not hold is marked completed, with a time under the same rule;
-  a completed entry whose identifier the live database still holds is reported to the human, and
-  the entry is not deleted while that stands. The customer identifiers compared are deleted after
-  the check, with the decrypted copies. The reconciliation does not catch an erasure with no entry of
-  a customer that neither compared set holds; against that case only the order of *The off-server
-  erasure record* holds, the entry written before the erasure is carried out.
+  The customer identifiers compared are deleted after the check, with the decrypted copies. The
+  reconciliation does not catch an erasure with no entry of a customer that no compared set holds.
+  Nor does it catch an erasure with no entry, or a mark made false later, that a restore reaches
+  before the next check: the restore brings the customer back, and the live application database
+  then agrees with the record. Against these cases only the order of *The off-server erasure
+  record* holds: the entry written before the erasure is carried out, a failed mark only once the
+  erasure can no longer commit, and a new entry before any further attempt.
 - **The restore record.** The IT department records the re-applied erasures with the restore
   record that step 14 writes, by their count and by their entries' own references in the erasure
   record only, never by a customer identifier or field value.
@@ -427,7 +452,15 @@ and 14". On 2026-10-26, after the second evaluation, the human decided that a re
 every entry of the erasure record not marked failed or cancelled, that the IT department
 reconciles the record with the live application database, and that an official Keycloak image
 unable to keep the typed username of a failed login naming no existing account out of its log
-and stored events returns the change to the human as an addendum to this decision.
+and stored events returns the change to the human as an addendum to this decision. On 2026-10-26,
+after the third evaluation, the human decided that the reconciliation never writes or promotes an
+entry on its own and reports to the human an identifier absent with no entry and a failed or
+cancelled entry whose identifier is absent; that every entry not yet marked is resolved at each
+monthly reconciliation, and a withdrawn erasure's entry is marked cancelled when the withdrawal is
+received; that an entry is marked failed only once its erasure can no longer commit, that a
+further attempt on such an identifier needs a new entry, and that the reconciliation leaves out
+the verified set before the newest one only after a restore from a set older than it; and that
+the commit time is a time taken after the erasure transaction commits.
 
 ### Items forwarded to this decision
 
@@ -487,6 +520,9 @@ already in that task's *Done when*.
   off-server copy, and making the re-apply duty of *Erasure and backups* part of the restore it
   carries out. The re-apply itself cannot be proven at EKO-1-08, because erasure is a later
   feature (brief section 4, Later 14); it is proven once erasure exists (ADR-0005-C15).
+- The task that builds the permanent-erasure feature receives: recording each erased customer's
+  identifier with a time in UTC taken from the server after the erasure transaction commits, so
+  that the IT department can read the commit time of *Erasure and backups* (*The commit time*).
 - Not decided: the GDPR impact assessment; it may revise this decision and has no PLAN entry yet.
 - Not decided: whether reps' private Gmail calendars (VIS-1, VIS-3), which put customer names,
   addresses and phones into accounts the company does not control, are acceptable; it is a
@@ -568,11 +604,11 @@ Identifier and acceptance criterion only.
 | ADR-0005-C12 | `grep -rnE "localStorage|sessionStorage|indexedDB|caches\.open|serviceWorker" frontend/src` returns nothing; every API response carrying personal data has `Cache-Control: no-store`. |
 | ADR-0005-C13 | Every path parameter in the backend's OpenAPI document is an opaque record identifier; no route of the single-page application puts a customer field value or a search term into its location. |
 | ADR-0005-C14 | Once erasure exists: a test erases a customer and then finds, in the application schema, none of its field values, no reference to its identifier, no note or action of it of any author, and every other customer's rows and every staff attribution of other records unchanged; erasing the same identifier again, and erasing an absent identifier, succeeds and changes nothing. |
-| ADR-0005-C15 | Once erasure exists: by review of the IT department's records, every erasure has an entry in the off-server erasure record, written by the IT department after the erasure was approved and before it was carried out, holding only the identifier, the entry's time, its mark and the commit time; the server holds no credential that can write the record; every commit time recorded is the erasure transaction's commit time in UTC taken from the server, or a time known to be no earlier than it; every entry marked failed or cancelled was so marked only after the live application database was shown to still hold its identifier; after every restore, every entry not marked failed or cancelled, completed or not yet marked, was in effect before `backend` or any worker served or synchronised the restored data, no entry marked failed or cancelled was re-applied, no backup set was written to the destination from the restored database before the re-apply, and the restore record names the re-applied erasures by count and entry reference only; no entry was deleted while it held no commit time or while a backup set whose snapshot started before its commit time remained. |
+| ADR-0005-C15 | Once erasure exists: by review of the IT department's records, every erasure has an entry in the off-server erasure record, written by the IT department after the erasure was approved and before it was carried out, holding only the identifier, the entry's time, its mark and the commit time; an erasure that the reconciliation found carried out with no entry does not meet this, also once its entry is written; the server holds no credential that can write the record; every commit time recorded is a time in UTC taken from the server after the erasure transaction committed, never the transaction's start, or a time known to be no earlier than the commit; every entry marked failed was so marked only after the live application database was shown to still hold its identifier and once no request for the erasure was in flight and no run of it was queued; every entry marked cancelled was so marked on the withdrawal of its erasure, after the live application database was shown to still hold its identifier; every attempt to erase an identifier whose entry was marked failed or cancelled had a new entry written before it ran; after every restore, every entry not marked failed or cancelled, completed or not yet marked, was in effect before `backend` or any worker served or synchronised the restored data, no entry marked failed or cancelled was re-applied, no backup set was written to the destination from the restored database before the re-apply, and the restore record names the re-applied erasures by count and entry reference only; no entry was deleted while it held no commit time or while a backup set whose snapshot started before its commit time remained. |
 | ADR-0005-C16 | By the human's statement per shared environment, recorded with its date: the environment holds only synthetic customer data, until the GDPR impact assessment is done. |
 | ADR-0005-C17 | A test creates customers after a backup set was taken, restores the database from that set, creates a customer, and finds that its identifier is none of those issued after the set. |
 | ADR-0005-C18 | By the IT department's dated record of each restore, abandoned restores included: every abandoned restore is recorded with its date, the backup set used, who performed it, the host and the step at which it stopped; the decrypted backup set was deleted once the restore was recorded or abandoned; the restored databases and volumes of an abandoned restore, and of a restore host that did not become the server, were deleted once the restore was recorded or abandoned. |
-| ADR-0005-C19 | Once erasure exists: by the IT department's dated record of each monthly verification, the reconciliation of *Erasure and backups* was carried out; every customer identifier that a compared verified set holds and the live application database does not hold has an entry not marked failed or cancelled; the identifier of every entry marked completed is absent from the live application database and that of every entry marked failed or cancelled is present in it, or the contradiction was corrected or reported to the human as that section says; the customer identifiers compared were deleted after the check. |
+| ADR-0005-C19 | Once erasure exists: by the IT department's dated record of each monthly verification, the reconciliation of *Erasure and backups* was carried out; the live application database was compared with the set verified at that check and with the verified set before it, or, only after a restore from a set older than that verified set, with the set verified at that check alone; every customer identifier that a compared set holds and the live application database does not hold has an entry not marked failed or cancelled, or was reported to the human, and an entry was written for it only against a shown approved erasure, marked completed with the time the IT department confirmed the identifier absent; every entry not yet marked was marked completed with the time its identifier was confirmed absent, marked cancelled for a withdrawn erasure, or left unmarked for an erasure still pending, and an entry left unmarked with its identifier present at two consecutive reconciliations was reported to the human; the identifier of every entry marked completed is absent from the live application database, or the entry was reported to the human and not deleted; every entry marked failed or cancelled whose identifier the live application database does not hold, with no other entry for that identifier not marked failed or cancelled, was reported to the human and not marked completed; no entry was written or had its mark changed by the reconciliation other than as that section says; the customer identifiers compared were deleted after the check. |
 
 ## Addenda
 
