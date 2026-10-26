@@ -668,9 +668,17 @@ K02_STOP_EXCUSED=(
   "If the implementing task, EKO-1-06 (#19) or EKO-1-09 (#41), finds that the official Keycloak image cannot leave the typed username of a failed login naming no existing account out of its log and its stored events, that task stops and the change returns to the human as an addendum to this decision, before any provider or image is added and before the stored event types of Retention are changed."
   "If the implementing task finds that it cannot, that task stops and the change returns to the human as an addendum to ADR-0004, before any service or image is added."
 )
+# Fix round 3: the sentences that pair events with switching off or removing, by exact text: one
+# forbids switching admin events off, the other says what CUS-9 removes from Google Calendar.
+K02_EVENT_OFF_EXCUSED=(
+  "- No retention of admin events is zero, and admin events are never switched off in any realm of any shared environment (ADR-0003 Administrator permissions in Keycloak)."
+  "Google Calendar: the app-created events of the customer's visits, past ones included (CUS-9 removes only future events), carry its name, address and phone; what erasure does to them, and what happens when the owner's Google access is lost, is forwarded to EKO-1-05 (#18) for ADR-0006 to decide."
+  # The typed-username ban (B-02): "not stored in an event" keeps a value out, not an event type.
+  "For a failed login naming no existing account, the typed username is not logged, not stored in an event and not shipped: it may be a password typed into the wrong field."
+)
 k02_keycloak_stop() {
   local kc fr; kc="$(grep -E '^- Keycloak may write:' <<< "$LOGS_P")"
-  need "$kc" ' If the official image cannot keep the typed username out\. The rule on the typed username works with the official Keycloak image \(ADR-0004\)\. If the implementing task, EKO-1-06 \(#19\) or EKO-1-09 \(#41\), finds that the official Keycloak image cannot leave the typed username of a failed login naming no existing account out of its log and its stored events, that task stops and the change returns to the human as an addendum to this decision, before any provider or image is added and before the stored event types of \*?Retention\*? are changed\.' 'the Keycloak bullet' || return 1
+  need "$kc" ' If the official image cannot keep the typed username out\. The rule on the typed username works with the official Keycloak image \(ADR-0004\)\. If the implementing task, EKO-1-06 \(#19\) or EKO-1-09 \(#41\), finds that the official Keycloak image cannot leave the typed username of a failed login naming no existing account out of its log and its stored events, that task stops and the change returns to the human as an addendum to this decision, before any provider or image is added and before the stored event types of \*?Retention\*? are changed\.$' 'the Keycloak bullet, ending with the stop rule' || return 1
   # The same form as the G-9 shipping rule it is modelled on, which must still read so.
   need "$DECISION_SENTS" '^If the implementing task finds that it cannot, that task stops and the change returns to the human as an addendum to ADR-0004, before any service or image is added\.$' 'the G-9 shipping rule' || return 1
   fr="$(sub_paras '^### Forward references')"
@@ -682,6 +690,13 @@ k02_keycloak_stop() {
   local all; all="$(without "$DECISION_SENTS" "${K02_STOP_EXCUSED[@]}")"
   forbid "$all" '\b(providers?|extensions?|SPIs?|event listeners?|plugins?|custom (images?|builds?|themes?)|(another|own|derived|patched) images?)\b' '\bcloud provider\b' || return 1
   forbid "$all" '\b(LOGIN_ERROR|login errors?|stored event types?)\b[^.]*\b(not|never|no longer) (be )?(stored|kept)\b|\b(stored event types?)\b[^.]*\b(changed|reduced|removed|dropped)\b' || return 1
+  # Fix round 3: the ban above needs "login error" with a space and "not/never/no longer stored",
+  # so "EKO-1-06 then switches off the storing of login-error events in the application realm."
+  # passed (reviewer, round 2). Any sentence pairing a login error, an event or an event type with
+  # switching it off, disabling it, ceasing to store it or removing it fails, in either order.
+  local evoff='\b(switch(es|ed|ing)? off|turn(s|ed|ing)? off|disabl\w*|(stop|stops|stopped|stopping|cease[sd]?|ceasing) (the )?(storing|storage|recording|keeping|saving)|no longer (stores?|stored|kept|keeps?|recorded|saved)|(not|never) (be )?(stored|kept|recorded|saved)|exclud\w*|omit\w*|filter\w* out|drop(s|ped|ping)?|remov(e|es|ed|ing))\b'
+  local evt='\b(LOGIN_ERROR|login[- ]errors?|login[- ]error events?|login events?|events?|event types?|stored types?)\b'
+  forbid "$(without "$all" "${K02_EVENT_OFF_EXCUSED[@]}")" "$evt[^.]*$evoff|$evoff[^.]*$evt" || return 1
 }
 check "if the official Keycloak image cannot keep the typed username out, the implementing task stops and the change returns to the human (D-5)" k02_keycloak_stop
 
@@ -919,6 +934,56 @@ ERA="$(sents <<< "$ERA_P")"
 REMOVES="$(grep -Ei '^- What it removes\.' <<< "$ERA_P")"
 EXCUSED_P="$(grep -Ei '^- Places excused, and why\.' <<< "$ERA_P")"
 EB="$(sub_sents '^### Erasure and backups')"
+# need_line <text> <exact sentence> [<where>] — the sentence is a whole line of the text, compared
+# literally with emphasis marks (*) removed on both sides (fix round 3: the revised sentences are
+# pinned this way, so a reworded one fails without a hand-escaped regex per sentence).
+need_line() {
+  grep -Fxq -- "$(tr -d '*' <<< "$2")" <<< "$(tr -d '*' <<< "$1")" || { WHY="missing${3:+ in $3}: \"$(cut -c1-200 <<< "$2")\""; return 1; }
+}
+# Fix round 3 (D-6..D-8): the revised sentences of The off-server erasure record, by exact text.
+WRITER_SENT="Only the IT department writes the erasure record, off the server, after the erasure is approved and before it is carried out, except the entry that Reconciliation allows for an erasure already carried out with no entry; the server holds no credential that can write it."
+FAILED_SENT="An entry is marked failed only after the live application database is shown to still hold its identifier, and only once the erasure can no longer commit: no request for it is in flight and no run of it is queued."
+CANCELLED_SENT="An entry is marked cancelled when the withdrawal of its erasure is received, after the live application database is shown to still hold its identifier."
+NEVER_REAPPLIED_SENT="An entry marked failed or cancelled is never re-applied."
+NEW_ENTRY_SENT="Any further attempt to erase an identifier whose entry is marked failed or cancelled needs a new entry, written before the attempt runs."
+# Fix round 3 (D-7 residual B-08): the re-apply sentences that replace "...is safe".
+REAPPLY_IDEM_SENT="Because erasure is idempotent by identifier, re-applying an entry whose erasure was already carried out changes nothing further."
+RESIDUAL_SENT="An approved erasure that a restore reaches before it is carried out or cancelled is carried out by the re-apply, and can no longer be cancelled."
+# Fix round 3 (D-9): the commit time.
+COMMIT_DEF_SENT="The commit time of an erasure is a time in UTC taken from the server, on the clock behind the snapshot start of The backup point, after the erasure's database transaction has committed."
+COMMIT_START_SENT="The transaction's start, which PostgreSQL's now() and transaction_timestamp() return, is not a commit time."
+COMMIT_FWD="- The task that builds the permanent-erasure feature receives: recording each erased customer's identifier with a time in UTC taken from the server after the erasure transaction commits, so that the IT department can read the commit time of Erasure and backups (The commit time)."
+# Fix round 3 (D-6..D-8): every sentence of Reconciliation, in order, by exact text.
+RECON_SENTS=(
+  "- Reconciliation."
+  "At every monthly verification of ADR-0004 Backup, the IT department reconciles the erasure record with the live application database, by customer identifier only."
+  "The reconciliation never writes an entry or changes a mark on its own; it does only what the points below say:"
+  "- The sets compared."
+  "The live application database is compared with the set verified at that check and with the verified set before it."
+  "When a restore from a set older than the verified set before it has been recorded since that verified set, only the set verified at that check is compared; after any other restore, both sets are compared."
+  "- An identifier absent with no entry."
+  "An identifier that a compared set holds and the live application database does not hold, with no entry that is not marked failed or cancelled, is reported to the human."
+  "An entry is written for it only against a shown approved erasure of that customer, marked completed with the time the IT department confirmed the identifier absent from the live application database."
+  "Such an entry does not make that erasure meet the order of The off-server erasure record: the erasure was carried out with no entry."
+  "Without a shown approval, the human decides; the customer can be recovered from a compared set that holds it while that set remains at the destination."
+  "- Entries not yet marked."
+  "Every entry not yet marked is resolved."
+  "When the live application database does not hold its identifier, the entry is marked completed with the time the IT department confirmed the identifier absent."
+  "When it holds it, the IT department checks the erasure's approval: the entry of a withdrawn erasure is marked cancelled, and the entry of an erasure still pending stays unmarked."
+  "An entry that is unmarked, and whose identifier the live application database holds, at two consecutive reconciliations is reported to the human."
+  "- Entries marked completed."
+  "The identifier of every entry marked completed is absent from the live application database."
+  "A completed entry whose identifier the live database still holds is reported to the human, and the entry is not deleted while that stands."
+  "- Entries marked failed or cancelled."
+  "An entry marked failed or cancelled whose identifier the live application database does not hold, with no other entry for that identifier that is not marked failed or cancelled, is reported to the human and is not marked completed."
+  "The customer identifiers compared are deleted after the check, with the decrypted copies."
+  "The reconciliation does not catch an erasure with no entry of a customer that no compared set holds."
+  "Nor does it catch an erasure with no entry, or a mark made false later, that a restore reaches before the next check: the restore brings the customer back, and the live application database then agrees with the record."
+  "Against these cases only the order of The off-server erasure record holds: the entry written before the erasure is carried out, a failed mark only once the erasure can no longer commit, and a new entry before any further attempt."
+)
+RS() { printf '%s\n' "${RECON_SENTS[$1]}"; }  # RS <index> — one Reconciliation sentence
+# The human's record of D-6..D-9 (fix round 3), by exact text.
+CHANGES3="On 2026-10-26, after the third evaluation, the human decided that the reconciliation never writes or promotes an entry on its own and reports to the human an identifier absent with no entry and a failed or cancelled entry whose identifier is absent; that every entry not yet marked is resolved at each monthly reconciliation, and a withdrawn erasure's entry is marked cancelled when the withdrawal is received; that an entry is marked failed only once its erasure can no longer commit, that a further attempt on such an identifier needs a new entry, and that the reconciliation leaves out the verified set before the newest one only after a restore from a set older than it; and that the commit time is a time taken after the erasure transaction commits."
 
 k04_archive() {
   need "$ARCH" '^- Archiving a customer \(CUS-9\) keeps all of its personal data, in every place that holds it, until the customer is restored or erased\.$' 'Archiving' || return 1
@@ -1009,12 +1074,12 @@ K04_RECORD_EXCUSED=(
   "An entry holds the customer's internal record identifier, the entry's time, its mark and, once recorded, the erasure's commit time, never a customer field value."
   "The IT department records the re-applied erasures with the restore record that step 14 writes, by their count and by their entries' own references in the erasure record only, never by a customer identifier or field value."
   # Fix round 2 (C19): the reconciliation compares customer identifiers with the record's entries.
-  "At every monthly verification of ADR-0004 Backup, the IT department reconciles the erasure record with the live application database, by customer identifier only:"
-  "- every customer identifier that the set verified at that check, or the verified set before it, holds and the live application database does not hold has an entry not marked failed or cancelled; an identifier without one is an erasure carried out with no entry, and the IT department writes its entry, marked completed with a time known to be no earlier than the commit (An entry whose commit time cannot be read)."
+  # Fix round 3: the lead-in now ends with a full stop; the round-2 sub-bullet is gone (D-6).
+  "At every monthly verification of ADR-0004 Backup, the IT department reconciles the erasure record with the live application database, by customer identifier only."
 )
 k04_record() {
   need "$EB" '^- The off-server erasure record\.$' 'Erasure and backups' || return 1
-  need "$EB" '^Only the IT department writes the erasure record, off the server, after the erasure is approved and before it is carried out; the server holds no credential that can write it\.$' 'Erasure and backups' || return 1
+  need_line "$EB" "$WRITER_SENT" 'Erasure and backups' || return 1
   need "$EB" '^An entry holds the customer.s internal record identifier, the entry.s time, its mark and, once recorded, the erasure.s commit time, never a customer field value\.$' 'Erasure and backups' || return 1
   local r; r="$(awk -F'|' 'tolower($2) ~ /off-server erasure record/' <<< "$PLACE_ROWS")"
   need "$(cell "$r" 3)" "^for each approved erasure, the customer's internal record identifier, the entry's time, its mark and, once recorded, the erasure's commit time, nothing else; every entry not marked failed or cancelled is re-applied at every restore \\(\\*Erasure and backups\\*\\)$" 'the erasure-record place row' || return 1
@@ -1050,14 +1115,20 @@ REAPPLY_EXCUSED=(
   # Fix round 2: gate 1's ruling ("not deviations" is said of ADR-0004, not of the re-apply), and
   # the reconciliation's stated limit ("the erasure is carried out" is the erasure itself).
   "Gate 1 of EKO-1-04 (#17), on 2026-10-25, ruled that the restore re-apply of erasures and the shipping of Keycloak events off the server are within ADR-0004 and not deviations; no deviation from an accepted decision was approved."
-  "The reconciliation does not catch an erasure with no entry of a customer that neither compared set holds; against that case only the order of The off-server erasure record holds, the entry written before the erasure is carried out."
   # Fix round 2 (D-4, R-10): what is re-applied, the unreadable commit time, no backup before it.
   "| The off-server erasure record | for each approved erasure, the customer's internal record identifier, the entry's time, its mark and, once recorded, the erasure's commit time, nothing else; every entry not marked failed or cancelled is re-applied at every restore (Erasure and backups) | none beyond the identifier |"
-  "An entry is marked failed or cancelled only after the live application database is shown to still hold its identifier, and an entry marked failed or cancelled is never re-applied."
   "Every other entry, completed or not yet marked, is re-applied at every restore (Re-apply at restore)."
   "When the commit time cannot be read from the server (for example, the server was lost before the IT department marked the entry), the entry keeps being re-applied at every restore, and it is never deleted on the strength of a time earlier than the true commit."
   "At every restore, every entry of the record that is not marked failed or cancelled, completed entries and entries not yet marked alike, is carried out again on the restored application database."
-  "Because erasure is idempotent by identifier, re-applying an entry whose erasure is not yet confirmed is safe."
+  # Fix round 3 (D-6..D-8): the sentences that replace the round-2 ones above. The failed-or-
+  # cancelled sentence is split; the residual says "no longer" of a cancellation, not of the
+  # re-apply; the reconciliation's sentences that say "the erasure is carried out" are the erasure.
+  "$NEVER_REAPPLIED_SENT"
+  "$REAPPLY_IDEM_SENT"
+  "$RESIDUAL_SENT"
+  "$WRITER_SENT"
+  "$(RS 9)"
+  "$(RS 24)"
   "No backup set is written to the destination from a restored application database before the re-apply has run on it: the backup service is not started on a restore host before then."
   "ADR-0004's procedure takes its first backup at step 14, after the re-apply."
   "On 2026-10-26, after the second evaluation, the human decided that a restore re-applies every entry of the erasure record not marked failed or cancelled, that the IT department reconciles the record with the live application database, and that an official Keycloak image unable to keep the typed username of a failed login naming no existing account out of its log and stored events returns the change to the human as an addendum to this decision."
@@ -1074,7 +1145,10 @@ k04_reapply() {
   local c
   need "$EB" '^- Re-apply at restore\.$' 'Erasure and backups' || return 1
   need "$EB" '^At every restore, every entry of the record that is not marked failed or cancelled, completed entries and entries not yet marked alike, is carried out again on the restored application database\.$' 'Erasure and backups' || return 1
-  need "$EB" '^Because erasure is idempotent by identifier, re-applying an entry whose erasure is not yet confirmed is safe\.$' 'Erasure and backups' || return 1
+  # Fix round 3 (D-7, B-08): "re-applying an entry whose erasure is not yet confirmed is safe" is
+  # gone; the idempotence claim is narrowed to erasures already carried out, and the residual stated.
+  need_line "$EB" "$REAPPLY_IDEM_SENT" 'Erasure and backups' || return 1
+  need_line "$EB" "$RESIDUAL_SENT" 'Erasure and backups' || return 1
   [ "$(grep -c . <<< "$PLACE_SENT")" -eq 1 ] || { WHY="expected one placement sentence 'The re-apply is carried out after migrate has run at ADR-0004 restore step <a> and before backend and any worker are started at step <b>, ..., and so before the public listener is opened to the internet at step <c>.'"; return 1; }
   c="$(place_n 3)"
   grep -Eq "^$c\\. Only then open the public listener to the internet" <<< "$ADR4_STEPS" || { WHY="ADR-0004 restore step $c is not the opening of the public listener: $(grep -E "^$c\\. " <<< "$ADR4_STEPS" | cut -c1-80)"; return 1; }
@@ -1123,7 +1197,8 @@ K04_DELETE_EXCUSED=(
   # They keep an entry, or forbid its deletion ("keep" in the human's record is the typed username's).
   "On 2026-10-26, after the second evaluation, the human decided that a restore re-applies every entry of the erasure record not marked failed or cancelled, that the IT department reconciles the record with the live application database, and that an official Keycloak image unable to keep the typed username of a failed login naming no existing account out of its log and stored events returns the change to the human as an addendum to this decision."
   "When the commit time cannot be read from the server (for example, the server was lost before the IT department marked the entry), the entry keeps being re-applied at every restore, and it is never deleted on the strength of a time earlier than the true commit."
-  "A mark that contradicts the database is corrected: an entry marked failed or cancelled whose identifier the live database does not hold is marked completed, with a time under the same rule; a completed entry whose identifier the live database still holds is reported to the human, and the entry is not deleted while that stands."
+  # Fix round 3 (D-6): the round-2 correction sentence is gone; its second half is a sentence now.
+  "$(RS 18)"
 )
 # "the entry point" (the proxy) is not an entry of the erasure record.
 no_entry_point() { sed -E 's/\b[Ee]ntry point/ENTRYPOINT/g'; }
@@ -1158,19 +1233,47 @@ K04_COMMIT_EXCUSED=(
   "A time taken elsewhere (the approval, a user's report, a workstation's clock) is not a commit time."
   "An entry holds the customer's internal record identifier, the entry's time, its mark and, once recorded, the erasure's commit time, never a customer field value."
   "| The off-server erasure record | for each approved erasure, the customer's internal record identifier, the entry's time, its mark and, once recorded, the erasure's commit time, nothing else; every entry not marked failed or cancelled is re-applied at every restore (Erasure and backups) | none beyond the identifier |"
+  # Fix round 3 (D-9): the sentence that names the transaction's start to exclude it.
+  "$COMMIT_START_SENT"
 )
-COMMIT_ELSEWHERE='\b(approv\w*|(user|staff|customer|rep|manager).s reports?|workstations?|local (time|clock)|time ?zones?|client|browser|entry.s time|time of the entry|wall[- ]clock|laptop|IT department.s clock)\b'
+# Fix round 3: "request" added. "The commit time is the time of the erasure request." passed the
+# round-2 suite (reviewer, round 2).
+COMMIT_ELSEWHERE='\b(approv\w*|(user|staff|customer|rep|manager).s reports?|workstations?|local (time|clock)|time ?zones?|client|browser|entry.s time|time of the entry|wall[- ]clock|laptop|IT department.s clock|(erasure |delete |deletion )?requests?|requested)\b'
+# Fix round 3 (D-9): a time from the transaction's start, or the transaction's own time, which in
+# PostgreSQL is its start. Round 2's contrast "The server's transaction time counts as the commit
+# time." passed and is wrong under D-9; it is now a mutation (CT5), not a contrast.
+COMMIT_START='\btransaction.?s? (start|time|timestamp|begin\w*|clock)\b|\b(start|begin\w*) of the (erasure.s |database )?(erasure|transaction)\b|\bnow\(\)|\btransaction_timestamp\b|\bstatement_timestamp\b|\bcurrent_timestamp\b|\b(when|as) the (erasure|transaction) (starts|begins|is started|is begun)\b|\bbefore the (erasure.s |database )?transaction (has )?committ\w*\b|\bbefore (it|the erasure) (has )?committ\w*\b'
 k04_commit_time() {
   need "$EB" '^- The commit time\.$' 'Erasure and backups' || return 1
-  need "$EB" '^The commit time of an erasure is the commit time of its database transaction, in UTC, taken from the server: the clock behind the snapshot start of \*?The backup point\*?\.$' 'Erasure and backups' || return 1
+  # Fix round 3 (D-9): round 2's definition "the commit time of its database transaction, in UTC,
+  # taken from the server: the clock behind..." is replaced by a time taken after the commit.
+  need_line "$EB" "$COMMIT_DEF_SENT" 'Erasure and backups' || return 1
   need "$EB" '^A time taken elsewhere \(the approval, a user.s report, a workstation.s clock\) is not a commit time\.$' 'Erasure and backups' || return 1
   need "$EB" '^An entry is marked completed with the erasure.s commit time\.$' 'Erasure and backups' || return 1
-  need "$(control C15)" 'every commit time recorded is the erasure transaction.s commit time in UTC taken from the server, or a time known to be no earlier than it' 'ADR-0005-C15' || return 1
+  need "$(control C15)" 'every commit time recorded is a time in UTC taken from the server after the erasure transaction committed, never the transaction.s start, or a time known to be no earlier than the commit;' 'ADR-0005-C15' || return 1
   # No other sentence takes a commit time from anywhere else.
   local all; all="$(without "$DECISION_SENTS" "${K04_COMMIT_EXCUSED[@]}")"
   forbid "$all" "\\bcommit(ted)? times?\\b[^.]*$COMMIT_ELSEWHERE|$COMMIT_ELSEWHERE[^.]*\\bcommit(ted)? times?\\b" || return 1
+  forbid "$all" "\\bcommit(ted)? times?\\b[^.]*($COMMIT_START)|($COMMIT_START)[^.]*\\bcommit(ted)? times?\\b" || return 1
 }
 check 'the commit time of an erasure is its transaction commit time, in UTC, taken from the server (D-4)' k04_commit_time
+
+# Fix round 3 (D-9, R-13): the commit time is taken after the transaction commits, the transaction's
+# start is not one, and the permanent-erasure feature receives the duty to record it so.
+k04_commit_after() {
+  need_line "$EB" "$COMMIT_DEF_SENT" 'Erasure and backups' || return 1
+  need_line "$EB" "$COMMIT_START_SENT" 'Erasure and backups' || return 1
+  need "$(control C15)" 'a time in UTC taken from the server after the erasure transaction committed, never the transaction.s start' 'ADR-0005-C15' || return 1
+  # The forward, in the D-3 form D-9 asks for: it names the receiving task in words (it has no PLAN
+  # entry) and claims nothing about that task's Done when (k06_forwards bans that everywhere).
+  local fr; fr="$(sub_paras '^### Forward references' | grep -E '^- ' | tr -d '*')"
+  grep -Fxq -- "$COMMIT_FWD" <<< "$fr" || { WHY="missing in Forward references: \"$(cut -c1-120 <<< "$COMMIT_FWD")\""; return 1; }
+  need "$(sub_sents '^### Changes to accepted decisions')" 'and that the commit time is a time taken after the erasure transaction commits\.$' 'Changes to accepted decisions' || return 1
+  # No sentence anywhere in the Decision ties a commit time to the transaction's start; the
+  # exclusion sentence is excused by its text only.
+  forbid "$(without "$DECISION_SENTS" "$COMMIT_START_SENT")" "\\bcommit(ted)? times?\\b[^.]*($COMMIT_START)|($COMMIT_START)[^.]*\\bcommit(ted)? times?\\b" || return 1
+}
+check 'the commit time is a time taken after the erasure transaction commits, never its start, and the permanent-erasure feature receives the duty to record it (D-9)' k04_commit_after
 
 # Fix round 2 (D-4, R-08 a): an entry whose commit time cannot be read keeps being re-applied, is
 # never deleted on an earlier time, and a time recorded later is no earlier than the commit.
@@ -1187,11 +1290,12 @@ check 'an entry whose commit time cannot be read keeps being re-applied and is n
 
 # D-2: who writes the record. Fix round 2: the reconciliation's own entry, written by the IT department.
 K04_WRITER_EXCUSED=(
-  "Only the IT department writes the erasure record, off the server, after the erasure is approved and before it is carried out; the server holds no credential that can write it."
-  "- every customer identifier that the set verified at that check, or the verified set before it, holds and the live application database does not hold has an entry not marked failed or cancelled; an identifier without one is an erasure carried out with no entry, and the IT department writes its entry, marked completed with a time known to be no earlier than the commit (An entry whose commit time cannot be read)."
+  # Fix round 3 (D-6): the writer sentence now carves out the reconciliation's entry; the round-2
+  # sub-bullet in which the IT department wrote that entry on its own is gone.
+  "$WRITER_SENT"
 )
 k04_writer() {
-  need "$EB" '^Only the IT department writes the erasure record, off the server, after the erasure is approved and before it is carried out; the server holds no credential that can write it\.$' 'Erasure and backups' || return 1
+  need_line "$EB" "$WRITER_SENT" 'Erasure and backups' || return 1
   need "$(control C15)" 'written by the IT department after the erasure was approved and before it was carried out' 'ADR-0005-C15' || return 1
   need "$(control C15)" 'the server holds no credential that can write the record' 'ADR-0005-C15' || return 1
   # "off-server" says where the record is, not who writes it.
@@ -1207,15 +1311,27 @@ check 'only the IT department writes the erasure record, after the erasure is ap
 # identifier; every other entry, completed or not yet marked, is re-applied.
 K04_MARK_EXCUSED=(
   "At every restore, every entry of the record that is not marked failed or cancelled, completed entries and entries not yet marked alike, is carried out again on the restored application database."
-  "An entry is marked failed or cancelled only after the live application database is shown to still hold its identifier, and an entry marked failed or cancelled is never re-applied."
   "| The off-server erasure record | for each approved erasure, the customer's internal record identifier, the entry's time, its mark and, once recorded, the erasure's commit time, nothing else; every entry not marked failed or cancelled is re-applied at every restore (Erasure and backups) | none beyond the identifier |"
-  "A mark that contradicts the database is corrected: an entry marked failed or cancelled whose identifier the live database does not hold is marked completed, with a time under the same rule; a completed entry whose identifier the live database still holds is reported to the human, and the entry is not deleted while that stands."
+  # Fix round 3 (D-7, D-8): round 2's one sentence ("marked failed or cancelled only after...") is
+  # split into the failed mark, the cancelled mark and the never-re-applied rule; round 2's
+  # correction ("...is marked completed, with a time under the same rule") is gone (D-6). The
+  # reconciliation sentences that mark an entry cancelled, and the human's record, by exact text.
+  "$FAILED_SENT"
+  "$CANCELLED_SENT"
+  "$NEVER_REAPPLIED_SENT"
+  "$NEW_ENTRY_SENT"
+  "$(RS 14)"
+  "$(RS 24)"
+  "$CHANGES3"
 )
 k04_marks() {
   need "$EB" '^An entry is marked completed with the erasure.s commit time\.$' 'Erasure and backups' || return 1
-  need "$EB" '^An entry is marked failed or cancelled only after the live application database is shown to still hold its identifier, and an entry marked failed or cancelled is never re-applied\.$' 'Erasure and backups' || return 1
+  need_line "$EB" "$FAILED_SENT" 'Erasure and backups' || return 1
+  need_line "$EB" "$CANCELLED_SENT" 'Erasure and backups' || return 1
+  need_line "$EB" "$NEVER_REAPPLIED_SENT" 'Erasure and backups' || return 1
   need "$EB" '^Every other entry, completed or not yet marked, is re-applied at every restore \(\*?Re-apply at restore\*?\)\.$' 'Erasure and backups' || return 1
-  need "$(control C15)" 'every entry marked failed or cancelled was so marked only after the live application database was shown to still hold its identifier' 'ADR-0005-C15' || return 1
+  need "$(control C15)" 'every entry marked failed was so marked only after the live application database was shown to still hold its identifier and once no request for the erasure was in flight and no run of it was queued;' 'ADR-0005-C15' || return 1
+  need "$(control C15)" 'every entry marked cancelled was so marked on the withdrawal of its erasure, after the live application database was shown to still hold its identifier;' 'ADR-0005-C15' || return 1
   need "$(control C15)" 'every entry not marked failed or cancelled, completed or not yet marked, was in effect before' 'ADR-0005-C15' || return 1
   need "$(control C15)" 'no entry marked failed or cancelled was re-applied' 'ADR-0005-C15' || return 1
   # D-4 reverses round 1's "only completed entries": a re-apply sentence that limits the re-apply
@@ -1267,6 +1383,11 @@ k04_restore_host() {
   awk -F'|' 'tolower($2) ~ /restore host/' <<< "$PLACE_ROWS" | grep -q . || { WHY="no place row names the restore host"; return 1; }
   # Any other sentence on an abandoned restore is a new rule about it (kept, not recorded, later).
   forbid "$(without "$DECISION_SENTS" "${K04_ABANDON_EXCUSED[@]}")" '\babandon\w*\b[^.]*\brestor\w*|\brestor\w*\b[^.]*\babandon\w*' || return 1
+  # Fix round 3: the ban above needs "abandon", so "A stalled restore may be resumed later on the
+  # same volumes." passed (reviewer, round 2: the R-09 resume case). A restore that is stalled,
+  # paused, interrupted, unfinished, resumed, continued or retried is a new rule about it too.
+  local halt='\b(stall\w*|resum\w*|paus\w*|suspend\w*|interrupt\w*|unfinished|incomplete|half[- ]done|continu\w*|picked up|pick(s|ing)? up|next attempt|later attempt|retr(y|ies|ied|ying)|re-?attempt\w*|restart\w*)\b'
+  forbid "$(without "$DECISION_SENTS" "${K04_ABANDON_EXCUSED[@]}")" "$halt[^.]*\\brestor\\w*|\\brestor\\w*\\b[^.]*$halt" || return 1
 }
 check 'a restore host is excused: its restored database is re-applied, its decrypted set is deleted, a host that does not become the server keeps nothing, and an abandoned restore is recorded and keeps nothing (C18)' k04_restore_host
 
@@ -1291,42 +1412,164 @@ k04_no_backup_before_reapply() {
 check 'no backup set is written to the destination from a restored database before the re-apply has run on it (R-10)' k04_no_backup_before_reapply
 
 # Fix round 2 (D-4 c, B-05, C19): the monthly reconciliation of the record with the live database.
+# Fix round 3 (D-6..D-8): the Reconciliation bullet is rewritten into five points. Every one of its
+# sentences is pinned by exact text (RECON_SENTS), C19 as a whole row, and any other sentence on the
+# reconciliation, or comparing sets, entries or identifiers, is a new rule about it.
+C15_ROW="| ADR-0005-C15 | Once erasure exists: by review of the IT department's records, every erasure has an entry in the off-server erasure record, written by the IT department after the erasure was approved and before it was carried out, holding only the identifier, the entry's time, its mark and the commit time; an erasure that the reconciliation found carried out with no entry does not meet this, also once its entry is written; the server holds no credential that can write the record; every commit time recorded is a time in UTC taken from the server after the erasure transaction committed, never the transaction's start, or a time known to be no earlier than the commit; every entry marked failed was so marked only after the live application database was shown to still hold its identifier and once no request for the erasure was in flight and no run of it was queued; every entry marked cancelled was so marked on the withdrawal of its erasure, after the live application database was shown to still hold its identifier; every attempt to erase an identifier whose entry was marked failed or cancelled had a new entry written before it ran; after every restore, every entry not marked failed or cancelled, completed or not yet marked, was in effect before backend or any worker served or synchronised the restored data, no entry marked failed or cancelled was re-applied, no backup set was written to the destination from the restored database before the re-apply, and the restore record names the re-applied erasures by count and entry reference only; no entry was deleted while it held no commit time or while a backup set whose snapshot started before its commit time remained. |"
+C19_ROW="| ADR-0005-C19 | Once erasure exists: by the IT department's dated record of each monthly verification, the reconciliation of Erasure and backups was carried out; the live application database was compared with the set verified at that check and with the verified set before it, or, only after a restore from a set older than that verified set, with the set verified at that check alone; every customer identifier that a compared set holds and the live application database does not hold has an entry not marked failed or cancelled, or was reported to the human, and an entry was written for it only against a shown approved erasure, marked completed with the time the IT department confirmed the identifier absent; every entry not yet marked was marked completed with the time its identifier was confirmed absent, marked cancelled for a withdrawn erasure, or left unmarked for an erasure still pending, and an entry left unmarked with its identifier present at two consecutive reconciliations was reported to the human; the identifier of every entry marked completed is absent from the live application database, or the entry was reported to the human and not deleted; every entry marked failed or cancelled whose identifier the live application database does not hold, with no other entry for that identifier not marked failed or cancelled, was reported to the human and not marked completed; no entry was written or had its mark changed by the reconciliation other than as that section says; the customer identifiers compared were deleted after the check. |"
+# control_row <id> <exact row> — the control row, compared literally with emphasis marks removed.
+control_row() {
+  local c; c="$(control "$1" | tr -d '*')"
+  [ "$(grep -c . <<< "$c")" -eq 1 ] || { WHY="expected one ADR-0005-$1 row"; return 1; }
+  [ "$c" = "$2" ] || { WHY="ADR-0005-$1 does not read as revised (fix round 3): $(cut -c1-160 <<< "$c")"; return 1; }
+}
 K04_RECON_EXCUSED=(
   "| The IT department's verification host and a restore host | a decrypted backup set, during the monthly check or a restore (ADR-0004); on the verification host, also the customer identifiers the reconciliation compares, during the check (Erasure and backups) | all |"
   "The IT department's verification host: its decrypted copy is deleted after the check (ADR-0004 Backup), and the customer identifiers the reconciliation compares are deleted with it (Erasure and backups)."
-  "- Reconciliation."
-  "At every monthly verification of ADR-0004 Backup, the IT department reconciles the erasure record with the live application database, by customer identifier only:"
-  "The reconciliation does not catch an erasure with no entry of a customer that neither compared set holds; against that case only the order of The off-server erasure record holds, the entry written before the erasure is carried out."
+  "${RECON_SENTS[@]}"
+  "$WRITER_SENT"
   "- The reconciliation is likewise a duty of this decision, carried out by the IT department on the occasion and the host of ADR-0004's monthly verification."
   "On 2026-10-26, after the second evaluation, the human decided that a restore re-applies every entry of the erasure record not marked failed or cancelled, that the IT department reconciles the record with the live application database, and that an official Keycloak image unable to keep the typed username of a failed login naming no existing account out of its log and stored events returns the change to the human as an addendum to this decision."
+  "$CHANGES3"
+  # Not the reconciliation: a key derived for comparison (K-01), and ADR-0004's own comparisons.
+  "A column holding a value derived from personal data (a _match_key comparison key, ADR-0002; a search or sort key) has the category of its source."
+  "Erasing a customer removes, from the application database: the customer's row with its name, NIP, foreign tax identifier and address; every phone and e-mail with its note; every note on the customer or on its visits, of every author, the manager's notes (NOT-2) included; every action created from those notes, with its description and its status changes; every value derived from them (comparison and search keys); and every record of background work that carries the customer's data."
+  "It changes none of that check's own comparisons and does not change ADR-0004."
 )
 k04_reconciliation() {
-  need "$EB" '^- Reconciliation\.$' 'Erasure and backups' || return 1
-  need "$EB" '^At every monthly verification of ADR-0004 \*?Backup\*?, the IT department reconciles the erasure record with the live application database, by customer identifier only:$' 'Erasure and backups' || return 1
-  # (c) an erasure carried out with no entry, from the two newest verified sets.
-  need "$EB" '^- every customer identifier that the set verified at that check, or the verified set before it, holds and the live application database does not hold has an entry not marked failed or cancelled; an identifier without one is an erasure carried out with no entry, and the IT department writes its entry, marked completed with a time known to be no earlier than the commit \(\*?An entry whose commit time cannot be read\*?\)\.$' 'Erasure and backups' || return 1
-  need "$EB" '^When a restore has been recorded since the verified set before it, only the set verified at that check is compared;$' 'Erasure and backups' || return 1
-  # B-05: a mark that contradicts the database.
-  need "$EB" '^- the identifier of every entry marked completed is absent from the live application database, and the identifier of every entry marked failed or cancelled is present in it, unless another entry for the same identifier is not marked failed or cancelled\.$' 'Erasure and backups' || return 1
-  need "$EB" '^A mark that contradicts the database is corrected: an entry marked failed or cancelled whose identifier the live database does not hold is marked completed, with a time under the same rule; a completed entry whose identifier the live database still holds is reported to the human, and the entry is not deleted while that stands\.$' 'Erasure and backups' || return 1
-  need "$EB" '^The customer identifiers compared are deleted after the check, with the decrypted copies\.$' 'Erasure and backups' || return 1
-  need "$EB" '^The reconciliation does not catch an erasure with no entry of a customer that neither compared set holds; against that case only the order of \*?The off-server erasure record\*? holds, the entry written before the erasure is carried out\.$' 'Erasure and backups' || return 1
+  local i
+  # Every sentence of the Reconciliation bullet, by exact text (fix round 3: the round-2 sub-bullets,
+  # the correction paragraph and the old stated limit are gone, D-6..D-8).
+  for i in "${!RECON_SENTS[@]}"; do need_line "$EB" "${RECON_SENTS[$i]}" 'Erasure and backups, Reconciliation' || return 1; done
+  # ... in the order written, one after another.
+  local got; got="$(tr -d '*' <<< "$EB" | grep -Fx -A $(( ${#RECON_SENTS[@]} - 1 )) -- "${RECON_SENTS[0]}")"
+  [ "$got" = "$(printf '%s\n' "${RECON_SENTS[@]}")" ] || { WHY="the sentences of Reconciliation are not in their written order, or another sentence sits among them"; return 1; }
   need "$EB" '^- The reconciliation is likewise a duty of this decision, carried out by the IT department on the occasion and the host of ADR-0004.s monthly verification\.$' 'Erasure and backups' || return 1
   need "$EB" '^It changes none of that check.s own comparisons and does not change ADR-0004\.$' 'Erasure and backups' || return 1
+  need_line "$(sub_sents '^### Changes to accepted decisions')" "$CHANGES3" 'Changes to accepted decisions' || return 1
   local r; r="$(awk -F'|' 'tolower($2) ~ /verification host/' <<< "$PLACE_ROWS")"
   need "$(cell "$r" 3)" 'on the verification host, also the customer identifiers the reconciliation compares, during the check \(\*Erasure and backups\*\)$' 'the verification-host place row' || return 1
   # ADR-0004 runs the monthly verification on which the reconciliation is carried out.
   grep -Fq 'decrypts the newest set off the server every calendar month' <<< "$ADR4_PARAS" || { WHY="ADR-0004 no longer runs a monthly verification of the newest set"; return 1; }
-  local c; c="$(control C19)"
-  [ "$(grep -c . <<< "$c")" -eq 1 ] || { WHY="expected one ADR-0005-C19 row"; return 1; }
-  need "$c" '^\| ADR-0005-C19 \| Once erasure exists: by the IT department.s dated record of each monthly verification, the reconciliation of \*Erasure and backups\* was carried out; every customer identifier that a compared verified set holds and the live application database does not hold has an entry not marked failed or cancelled; the identifier of every entry marked completed is absent from the live application database and that of every entry marked failed or cancelled is present in it, or the contradiction was corrected or reported to the human as that section says; the customer identifiers compared were deleted after the check\. \|$' 'ADR-0005-C19' || return 1
+  control_row C19 "$C19_ROW" || return 1
   # Any other sentence on the reconciliation is a new rule about it (skipped, deferred, narrowed).
   local all; all="$(without "$DECISION_SENTS" "${K04_RECON_EXCUSED[@]}")"
   forbid "$all" '\breconcil\w*' || return 1
+  # Fix round 3: the ban above reads only "reconcil", so "When a restore has been recorded since the
+  # verified set before it, no set is compared." and "The monthly verification compares only
+  # completed entries with the database." passed (reviewer, round 2). Any other sentence comparing
+  # sets, entries, identifiers or marks, or tying the monthly verification to entries, marks or the
+  # erasure record, fails. Inside the Reconciliation bullet, the order check above already fails any
+  # sentence that is not one of its own.
+  local cmpw='\b(sets?|entr(y|ies)|identifiers?|marks?|marked)\b'
+  forbid "$all" "\\bcompar\\w*\\b[^.]*$cmpw|$cmpw[^.]*\\bcompar\\w*\\b" || return 1
+  forbid "$all" '\b(monthly (verification|check)|verification)\b[^.]*\b(entr(y|ies)|marks?|marked|erasure record)\b|\b(entr(y|ies)|marks?|marked|erasure record)\b[^.]*\b(monthly (verification|check)|verification)\b' || return 1
   # The compared identifiers are kept nowhere after the check.
   forbid "$all" '\b(customer identifiers?|identifiers? compared)\b[^.]*\b(kept|keeps?|retained|stored|archived|copied|listed)\b|\b(kept|keeps?|retains?|stores?|archives?|copies|lists?)\b[^.]*\b(customer identifiers?|identifiers? compared)\b' || return 1
 }
 check 'the IT department reconciles the erasure record with the live database at every monthly verification, catching an erasure with no entry and a mark that contradicts the database (C19)' k04_reconciliation
+
+# Fix round 3 (D-6, B-07): the reconciliation never writes an entry or changes a mark on its own.
+# Round 2's rules are inverted: an identifier absent with no entry was given an entry marked
+# completed by the IT department, and a failed or cancelled entry whose identifier is absent was
+# marked completed. Now both are reported to the human; an entry is written only against a shown
+# approved erasure, and it does not make that erasure meet the order of C15.
+K04_OWN_EXCUSED=(
+  "$WRITER_SENT"
+  "An entry is marked completed with the erasure's commit time."
+  "$NEW_ENTRY_SENT"
+  "${RECON_SENTS[@]}"
+  "$CHANGES3"
+  "The IT department records the re-applied erasures with the restore record that step 14 writes, by their count and by their entries' own references in the erasure record only, never by a customer identifier or field value."
+)
+k04_recon_own() {
+  need_line "$EB" "$(RS 2)" 'Reconciliation' || return 1
+  need_line "$EB" "$(RS 7)" 'Reconciliation' || return 1
+  need_line "$EB" "$(RS 8)" 'Reconciliation' || return 1
+  need_line "$EB" "$(RS 9)" 'Reconciliation' || return 1
+  need_line "$EB" "$(RS 10)" 'Reconciliation' || return 1
+  need_line "$EB" "$(RS 20)" 'Reconciliation' || return 1
+  need_line "$EB" "$WRITER_SENT" 'The off-server erasure record' || return 1
+  need "$(control C15)" '; an erasure that the reconciliation found carried out with no entry does not meet this, also once its entry is written;' 'ADR-0005-C15' || return 1
+  need "$(control C19)" '; no entry was written or had its mark changed by the reconciliation other than as that section says;' 'ADR-0005-C19' || return 1
+  need "$(control C19)" 'or was reported to the human, and an entry was written for it only against a shown approved erasure' 'ADR-0005-C19' || return 1
+  control_row C15 "$C15_ROW" || return 1
+  local all; all="$(without "$DECISION_SENTS" "${K04_OWN_EXCUSED[@]}" | no_entry_point)"
+  # No other sentence marks an entry completed, or promotes or upgrades a mark.
+  forbid "$all" '\b(is|are|gets?|get|be|been|was|were) (then |also )?marked (as )?completed\b|\bmarks?\b[^.]*\bcompleted\b|\b(promot\w*|upgrad\w*|correct(s|ed|ing)?|fix(es|ed)?|overwrit\w*)\b[^.]*\b(entr(y|ies)|marks?)\b|\b(entr(y|ies)|marks?)\b[^.]*\b(promot\w*|upgrad\w*|corrected|overwritten)\b' || return 1
+  # No other sentence writes, adds or creates an entry.
+  forbid "$all" '\b(writes?|wrote|adds?|added|creates?|created|appends?|appended|inserts?|inserted|fills? in|filled in)\b[^.]*\bentr(y|ies)\b|\bentr(y|ies)\b[^.]*\b(written|added|created|appended|inserted|filled in)\b' || return 1
+}
+check 'the reconciliation never writes an entry or changes a mark on its own; an identifier absent with no entry, or a failed or cancelled entry now absent, is reported to the human (D-6)' k04_recon_own
+
+# Fix round 3 (D-7, R-11, F-01, B-08): every entry not yet marked is resolved at each reconciliation,
+# a withdrawn erasure's entry is marked cancelled when the withdrawal is received, and an approved
+# erasure a restore reaches before it is carried out or cancelled is carried out by the re-apply.
+K04_UNMARKED_EXCUSED=(
+  "${RECON_SENTS[@]}"
+  "$CHANGES3"
+  "At every restore, every entry of the record that is not marked failed or cancelled, completed entries and entries not yet marked alike, is carried out again on the restored application database."
+  "Every other entry, completed or not yet marked, is re-applied at every restore (Re-apply at restore)."
+  "- The off-server erasure record keeps each entry not marked failed or cancelled, completed entries and entries not yet marked alike, until it holds a commit time and no backup set whose snapshot started before that commit time remains at the destination (Erasure and backups)."
+)
+k04_unmarked() {
+  local i; for i in 11 12 13 14 15; do need_line "$EB" "$(RS $i)" 'Reconciliation, Entries not yet marked' || return 1; done
+  need_line "$EB" "$CANCELLED_SENT" 'The off-server erasure record' || return 1
+  need_line "$EB" "$RESIDUAL_SENT" 'Re-apply at restore' || return 1
+  need "$(control C19)" '; every entry not yet marked was marked completed with the time its identifier was confirmed absent, marked cancelled for a withdrawn erasure, or left unmarked for an erasure still pending, and an entry left unmarked with its identifier present at two consecutive reconciliations was reported to the human;' 'ADR-0005-C19' || return 1
+  need "$(control C15)" '; every entry marked cancelled was so marked on the withdrawal of its erasure, after the live application database was shown to still hold its identifier;' 'ADR-0005-C15' || return 1
+  # Any other sentence on an entry not yet marked, or on a withdrawal, is a new rule about it.
+  local all; all="$(without "$DECISION_SENTS" "${K04_UNMARKED_EXCUSED[@]}" "$CANCELLED_SENT" "$RESIDUAL_SENT" | no_entry_point)"
+  # (A sentence on the re-apply is left to the re-apply check's negation, timing and stop bans,
+  # which kill "An unmarked entry is not re-applied." (UM1) and pass "...is re-applied" (UMc).)
+  forbid "$(grep -Eiv -- "$REAPPLY_SEL" <<< "$all")" '\b(unmarked|not yet marked|without a mark|no mark|pending)\b[^.]*\bentr(y|ies)\b|\bentr(y|ies)\b[^.]*\b(unmarked|not yet marked|without a mark|no mark|pending)\b' || return 1
+  forbid "$all" '\bwithdraw\w*\b|\brevok\w*\b|\brevocation\b' || return 1
+  # The residual: nothing cancels an erasure the re-apply has carried out.
+  # ("cancelled" as a mark is not a cancelling: "not marked failed or cancelled is re-applied".)
+  local undo='\b(cancels?|cancell?ing|(can|may|could|will|is|are|be) (still |then |later )?(be )?cancell?ed|undo\w*|undone|revers\w*|roll(s|ed|ing)? back)\b'
+  forbid "$all" "$undo[^.]*\\bre-appl\\w*|\\bre-appl\\w*[^.]*$undo" || return 1
+}
+check "every entry not yet marked is resolved at each reconciliation, a withdrawn erasure's entry is marked cancelled, and an approved erasure a restore reaches is carried out by the re-apply (D-7, B-08)" k04_unmarked
+
+# Fix round 3 (D-8, R-12): an entry is marked failed only once the erasure can no longer commit, and
+# any further attempt on an identifier whose entry is marked failed or cancelled needs a new entry.
+K04_ATTEMPT_EXCUSED=(
+  "$NEW_ENTRY_SENT"
+  "$(RS 24)"
+  "$CHANGES3"
+)
+k04_failed_mark() {
+  need_line "$EB" "$FAILED_SENT" 'The off-server erasure record' || return 1
+  need_line "$EB" "$NEW_ENTRY_SENT" 'The off-server erasure record' || return 1
+  need "$(control C15)" '; every entry marked failed was so marked only after the live application database was shown to still hold its identifier and once no request for the erasure was in flight and no run of it was queued;' 'ADR-0005-C15' || return 1
+  need "$(control C15)" '; every attempt to erase an identifier whose entry was marked failed or cancelled had a new entry written before it ran;' 'ADR-0005-C15' || return 1
+  # Any other sentence on a further attempt, a retry or a repeated erasure of a failed or cancelled
+  # entry's identifier fails unless it gives that attempt a new entry first.
+  local all; all="$(without "$DECISION_SENTS" "${K04_ATTEMPT_EXCUSED[@]}")"
+  local again='\b(further|another|second|repeated|new|later|next) (attempts?|runs?|requests?|erasures?)\b|\battempt\w*\b|\bretr(y|ies|ied|ying)\b|\bre-?run\w*\b|\brepeat\w*\b|\b(erase|erasing|erased)\b[^.]*\bagain\b'
+  local fc='\b(failed|cancell?ed)\b'
+  forbid "$all" "($again)[^.]*$fc|$fc[^.]*($again)" '\b(needs|with|after|has|gets|under) a new entry\b' || return 1
+  # The condition "can no longer commit" is not loosened (an error, a timeout, a report).
+  forbid "$all" '\b(time[sd]? ?out|timeouts?|reports? an error|returns an error|errors?)\b[^.]*\bmarked\b|\bmarked\b[^.]*\b(time[sd]? ?out|timeouts?|on an error|after an error)\b' || return 1
+}
+check 'an entry is marked failed only once its erasure can no longer commit, and any further attempt on an identifier whose entry is marked failed or cancelled needs a new entry first (D-8)' k04_failed_mark
+
+# Fix round 3 (D-8, R-12): both verified sets are compared, the older left out only after a restore
+# from a set older than it; and the stated limit names an erasure with no entry, or a mark made
+# false later, that a restore reaches before the next check. Round 2's exception ("When a restore
+# has been recorded since the verified set before it, only the set verified at that check is
+# compared") and its narrower limit ("...a customer that neither compared set holds") are inverted.
+k04_recon_sets() {
+  local i; for i in 3 4 5 22 23 24; do need_line "$EB" "$(RS $i)" 'Reconciliation' || return 1; done
+  need "$(control C19)" '; the live application database was compared with the set verified at that check and with the verified set before it, or, only after a restore from a set older than that verified set, with the set verified at that check alone;' 'ADR-0005-C19' || return 1
+  need "$(sub_sents '^### Changes to accepted decisions')" 'the reconciliation leaves out the verified set before the newest one only after a restore from a set older than it' 'Changes to accepted decisions' || return 1
+  # ADR-0004 keeps the last three verified sets beyond 30 days, so the verified set before the
+  # newest is still at the destination to be compared.
+  grep -Fq 'last three sets that passed the monthly verification' <<< "$ADR4_PARAS" || { WHY="ADR-0004 no longer keeps verified sets beyond the 30 days"; return 1; }
+  # The round-2 exception, on any recorded restore, does not come back in any wording.
+  forbid "$DECISION_SENTS" '\b(when|after|once|if) (a|any) restore (has been |is |was )?recorded\b[^.]*\bonly\b|\bafter (a|any|every) restore\b[^.]*\bonly the (set verified|newest)\b' || return 1
+}
+check 'the reconciliation compares both verified sets, leaves out the older only after a restore from a set older than it, and states what it cannot catch (D-8)' k04_recon_sets
 
 # R-07: the restore record names re-applied erasures by count and entry reference only.
 k04_restore_record() {
@@ -1419,6 +1662,10 @@ k06_pointers() {
   local fr; fr="$(sub_paras '^### Forward references' | grep -E '^- ')"
   [ -n "$fr" ] || { WHY="no forward references"; return 1; }
   while IFS= read -r e; do
+    # Fix round 3 (D-9): the human worded one forward to a task with no PLAN entry yet, "the task
+    # that builds the permanent-erasure feature" (the D-3 form). That one forward is accepted by its
+    # exact text (COMMIT_FWD), and only it: any other forward naming a task in words still fails.
+    [ "$(tr -d '*' <<< "$e")" = "$COMMIT_FWD" ] && continue
     grep -Eq '^- (EKO-[0-9]+-[0-9]+ \(#[0-9]+\)|Not decided)' <<< "$e" || { WHY="forward reference names no task as EKO-x-yy (#n) and is not 'Not decided': $(cut -c1-120 <<< "$e")"; return 1; }
     pairs_ok "$e" || return 1
   done <<< "$fr"
