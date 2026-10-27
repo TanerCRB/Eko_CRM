@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-27",
+  "task": "EKO-1-05",
+  "phase": "analysis",
+  "role": "analyst",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a4f92b6abddd9f1ba",
+  "tokens": 1051719,
+  "tokenSplit": {
+    "input": 28,
+    "output": 31633,
+    "cacheWrite": 109767,
+    "cacheRead": 910291
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 29,
+  "seconds": 335,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "READY FOR GATE 1; K-01..K-07, all judged by test; gate-1 questions G-1 (PO) plus Q-1 register rows, Q-2 staff data category, Q-3 which phone, Q-4 orphan events at restore; boundary-check: clean (--none)"
+}
