@@ -337,6 +337,22 @@ k01_shared_account() {
 }
 check "one Google account linked by two staff members never carries one owner's change to the other's event" k01_shared_account
 
+# Fix round 1 (B-02): a calendar holding another owner's marked event holds the link unused, at
+# link or relink and at every poll, and no choice of the owner lifts the hold.
+K01_HOLD_EXCUSED=(
+  "- When the list holds an event the application records in another owner's calendar, the link stays held unused whatever else is found, and no choice of the owner lifts the hold (*Ownership*)."
+)
+k01_ownership_hold() {
+  local o; o="$(flat <<< "$(bullet "$S_RECOG" 'Ownership')")"
+  need_sent "$o" 'Ownership' '^Such an event also holds that link unused: at a link or relink\b' '\band at every poll\b' "\\ba link whose calendar holds a live event carrying this environment.s marker that the application records in another owner.s calendar is no longer used\\b" "\\bits owner.s jobs are suspended\\b" '\bwith no customer value and no staff member named\b' || return 1
+  need_sent "$o" 'Ownership' '^The hold sends nothing more into that calendar\b' || return 1
+  need_sent "$(flat <<< "$S_OAUTH")" 'Relinking a different Google account' "^- When the list holds an event the application records in another owner.s calendar, the link stays held unused whatever else is found, and no choice of the owner lifts the hold\\b" || return 1
+  # No sentence lets an owner's choice, or a confirmation, lift that hold.
+  local all; all="$(without "$DECISION_SENTS" "${K01_HOLD_EXCUSED[@]}")"
+  forbid "$all" '\b(lifts?|lifted|releases?|released|ends?|ended|removes?|removed)\b[^.]*\bhold\b|\bhold\b[^.]*\b(is|are) (lifted|released|ended|removed)\b' 'until they unlink or relink another account' || return 1
+}
+check "a calendar holding another owner's marked event holds the link unused, at link, relink and every poll, and no choice of the owner lifts the hold" k01_ownership_hold
+
 k01_callback() {
   local b; b="$(flat <<< "$(bullet "$S_OAUTH" 'Binding to the rep.s own session')")"
   need_sent "$b" 'Binding' '\bcallback path https://<app-host>/[a-z0-9/_-]+\b' || return 1
@@ -436,17 +452,26 @@ k02_tokens() {
 }
 check 'the refresh token is encrypted at rest, the access token and any Google account identifier are never stored' k02_tokens
 
-K02_KEY_EXCUSED=()
+
 k02_key_location() {
   local s k; s="$(flat <<< "$S_TOKEN")"
   k="$(sent_with "$s" '\b(the|Google token encryption) key\b' '\b(neither in|not in|outside|never in)\b[^.:;]*\bapplication database\b' '\b(nor in|not in|outside|never in)\b[^.:;]*\b(any|every) backup set\b')" \
     || { WHY="no sentence placing the key outside the application database and every backup set"; return 1; }
   need_sent "$s" 'Token storage' '\bkey\b' '\benvironment variable\b' '\benvironment file\b' || return 1
   # No sentence of the Decision places the key in the database, a column, a table or a backup set.
-  local all; all="$(without "$DECISION_SENTS" "$k")"
+  local all; all="$(without "$DECISION_SENTS" "$k" "${K02_KEY_EXCUSED[@]}")"
   forbid "$all" '\b(encryption key|the key)\b[^.;]*\b(is|are)? ?(held|kept|stored|placed|saved|written|lives?|sits?)\b[^.;:]*\b(in|inside|into|beside|next to|with)\b[^.;:]*\b(application database|database|column|table|backup sets?)\b' || return 1
   forbid "$all" '\b(application database|database|column|table|backup sets?)\b[^.;]*\b(holds?|stores?|keeps?|contains?)\b[^.;]*\b(encryption key|the key)\b' || return 1
+  # Fix round 1 (R-07 (3)): a verb list misses "is also in", "a copy of the key goes to". Any
+  # sentence naming a key together with the database, a column, a table or a backup set fails,
+  # unless it is one of the excused sentences by its exact text.
+  local hits; hits="$(grep -Ei '\bkeys?\b' <<< "$all" | grep -Ei '\b(application database|database|column|table|backups?|backup sets?|dump)\b')"
+  [ -z "$hits" ] || { WHY="a sentence names a key with the database or a backup set: $(head -n 1 <<< "$hits" | cut -c1-220)"; return 1; }
 }
+K02_KEY_EXCUSED=(
+  "A link whose token was encrypted before a key replacement made after the backup set was taken cannot be decrypted, and is handled as under *Token storage*: access lost, the token kept until the owner relinks."
+  "A restore takes the Google token encryption key from its master copy like every other secret (ADR-0004 restore step 2) and does not replace it, so restored links keep working; a link whose grant was revoked since the backup is refused by Google at its first use and handled as lost access."
+)
 check 'the token encryption key is held neither in the application database nor in any backup set' k02_key_location
 
 k02_rotation() {
@@ -456,10 +481,46 @@ k02_rotation() {
 }
 check 'a key rotation makes every stored link unusable and every linked rep relinks' k02_rotation
 
+# Fix round 1 (R-09): a token the key in use cannot decrypt is kept, not deleted, until relink or a
+# corrected key value; it is not one of the events that delete a token.
+K02_UNDECRYPTABLE_EXCUSED=(
+  "- A token that cannot be decrypted with the key in use (after a key replacement, after a restore from a set taken before the last key replacement, or with a wrong key value) is not deleted: the link state becomes \"access lost\" and the owner relinks, which replaces the token."
+)
+k02_undecryptable_kept() {
+  local b; b="$(flat <<< "$(bullet "$S_TOKEN" '^- A token that cannot be decrypted')")"
+  [ -n "$b" ] || { WHY="no top-level 'A token that cannot be decrypted' item in Token storage"; return 1; }
+  need_sent "$b" 'Token storage' '^- A token that cannot be decrypted with the key in use\b' '\bis not deleted: the link state becomes "access lost"' '\bwhich replaces the token\.$' || return 1
+  need_sent "$b" 'Token storage' '^When the key value is corrected and the token decrypts again, the link works again\b' || return 1
+  need_sent "$(flat <<< "$S_SECRETS")" 'Secrets' '\bcannot be decrypted\b' '\bthe token kept until the owner relinks\.$' || return 1
+  # The deletion list names no undecryptable token, and no sentence deletes one.
+  local d; d="$(flat <<< "$(bullet "$S_TOKEN" 'When a stored token is deleted')")"
+  forbid "$d" '\b(decrypt|undecryptable|key)\b' || return 1
+  local all; all="$(without "$DECISION_SENTS" "${K02_UNDECRYPTABLE_EXCUSED[@]}")"
+  forbid "$all" '\b(cannot be decrypted|undecryptable|does not decrypt)\b[^.]*\b(is|are|gets?) (then )?(deleted|removed|erased|dropped)\b|\b(delet(e|es|ed)|remov(e|es|ed))\b[^.]*\b(undecryptable|cannot be decrypted)\b' || return 1
+}
+check 'a token the key in use cannot decrypt is kept, not deleted, and works again when the key value is corrected' k02_undecryptable_kept
+
+# Fix round 1 (B-01): on suspected compromise the grants are revoked first, the client secret is
+# rotated with the key, and every client-secret rotation deletes the old secret in the project.
+k02_compromise_rotation() {
+  local rk rs
+  rk="$(cell "$(trows <<< "$S_SECRETS" | grep -Ei '^\| *Google token encryption key *\|')" 6)"
+  rs="$(cell "$(trows <<< "$S_SECRETS" | grep -Ei '^\| *Google OAuth client secret *\|')" 6)"
+  need "$rk" '\bon suspected compromise, every grant whose token is on record is first revoked at Google while the key in use still decrypts it\b' 'the Rotation cell of the Google token encryption key' || return 1
+  need "$rk" '\band the Google OAuth client secret is rotated with it\b' 'the Rotation cell of the Google token encryption key' || return 1
+  need "$rs" '\bevery rotation ends by deleting the old secret in the Google Cloud project\b' 'the Rotation cell of the Google OAuth client secret' || return 1
+  need "$rs" '\bwhenever the Google token encryption key is replaced on suspected compromise\b' 'the Rotation cell of the Google OAuth client secret' || return 1
+  forbid "$rs" '\b(keeps?|kept|leaves?|left)\b[^|;]*\bold secret\b|\bold secret\b[^|;]*\b(stays|remains|is kept|is left)\b' || return 1
+}
+check 'a key replacement on suspected compromise first revokes every grant on record and rotates the client secret, and every client-secret rotation deletes the old secret' k02_compromise_rotation
+
 k02_token_deleted() {
   local b; b="$(flat <<< "$(bullet "$S_TOKEN" 'When a stored token is deleted')")"
   need_sent "$b" 'When a stored token is deleted' '^- When a stored token is deleted\.' || return 1
   need_sent "$b" 'When a stored token is deleted' '^- at unlink by the owner\b' '\brevokes the token at Google\b' || return 1
+  # Fix round 1: the token is deleted only once Google confirms or calls the grant invalid, the
+  # link is never used after unlink, and a failed revocation is retried.
+  need_sent "$b" 'When a stored token is deleted' '^- at unlink by the owner\b' '\bdeletes it once Google confirms the revocation or answers that the grant is no longer valid\b' '\bfrom the unlink on the link is never used\b' '\ba revocation request that fails is retried\b' || return 1
   need_sent "$b" 'When a stored token is deleted' '\bwhen Google refuses a refresh\b' '\bexpired or was revoked\b' || return 1
 }
 check 'the events that delete a stored token are stated: unlink, and a refresh Google refuses' k02_token_deleted
@@ -594,11 +655,67 @@ k04_tie() {
 }
 check 'VIS-5 has a tie rule for equal instants' k04_tie
 
+K04_DELETION_EXCUSED=(
+  "- A deletion in Google always puts the visit into Awaiting decision (VIS-11), whatever the instants: a later application change does not undo it."
+  "An application change made after the deletion stays on the visit, and rescheduling from the prompt creates the event with it."
+)
 k04_deletion_wins() {
-  need_sent "$(flat <<< "$S_CONFLICT")" 'Conflict rule' '^- A deletion in Google always puts the visit into Awaiting decision \(VIS-11\)' || return 1
+  # Fix round 1 (R-07 (1)): the sentence is anchored whole, so a tail that limits it fails.
+  need_sent "$(flat <<< "$S_CONFLICT")" 'Conflict rule' '^- A deletion in Google always puts the visit into Awaiting decision \(VIS-11\), whatever the instants: a later application change does not undo it\.$' || return 1
+  need_sent "$(flat <<< "$S_CONFLICT")" 'Conflict rule' '^An application change made after the deletion stays on the visit, and rescheduling from the prompt creates the event with it\.$' || return 1
   need_sent "$(flat <<< "$S_CONFLICT")" 'Conflict rule' '\bdeletion or cancellation in the application\b' '\bis final against a Google change\b' || return 1
+  # No other sentence lets an application change re-create, restore or undo a Google deletion.
+  local all; all="$(without "$DECISION_SENTS" "${K04_DELETION_EXCUSED[@]}")"
+  forbid "$all" '\b(later|subsequent|newer|next) (application|app) change\b[^.]*\b(re-?creates?|restores?|undoes|undo|overrides?|wins|revives?|brings? back)\b|\bdeletion in Google\b[^.]*\buntil\b[^.]*\b(application|app) change\b|\b(application|app) change\b[^.]*\b(re-?creates?|restores?|undoes|revives?)\b[^.]*\bdeleted\b' || return 1
 }
 check 'a deletion on either side wins over a later change of the other' k04_deletion_wins
+
+# Fix round 1 (R-03): every update job reads before it writes, a later Google change wins, the
+# write is conditional on the etag it read, and suspended jobs run only after a first read.
+k04_read_before_write() {
+  local b; b="$(flat <<< "$(bullet "$S_CONFLICT" '^- Read before write[.]')")"
+  [ -n "$b" ] || { WHY="no 'Read before write' item in Conflict rule"; return 1; }
+  need_sent "$b" 'Read before write' '^- Read before write\.$' || return 1
+  need_sent "$b" 'Read before write' '^Every update job first reads the visit.s event by its identifier\b' '\bapplies this rule to what it reads before it writes\b' || return 1
+  need_sent "$b" 'Read before write' '\blater than the application.s change, the Google date, time and duration win and are applied to the visit\b' '\bthe job writes only the values Google does not own\b' || return 1
+  need_sent "$b" 'Read before write' '^Otherwise the job writes, conditional on the event version it read \(the event.s etag\); a write Google refuses because the event changed since that read goes back to the read\.$' || return 1
+  need_sent "$b" 'Read before write' '^Jobs suspended while access was lost run only after a first read of the owner.s calendar at the link or relink\b' || return 1
+  need_sent "$(flat <<< "$S_RETRY")" 'Retry' "^Before they run, the worker reads the owner.s calendar once as polling does\\b" '\bcompared under \*?Conflict rule\b' || return 1
+  need_sent "$(flat <<< "$S_EVENT")" 'What is read back' '\bid, status, start, end, updated, etag and the private extended properties\b' || return 1
+  forbid "$DECISION_SENTS" '\b(writes?|updates?|sent|sends?)\b[^.]*\b(without|before) (first )?reading\b|\bunconditional(ly)?\b[^.]*\b(write|update)\b|\b(write|update)\b[^.]*\bunconditional(ly)?\b' || return 1
+}
+check 'every update job reads the event before it writes, a later Google change wins, and the write is conditional on the etag it read' k04_read_before_write
+
+# Fix round 1 (R-01): every create other than a retry of the same create chooses a new identifier.
+k04_new_identifier() {
+  local b; b="$(flat <<< "$(bullet "$S_RETRY" '^- A new create uses a new identifier[.]')")"
+  [ -n "$b" ] || { WHY="no 'A new create uses a new identifier' item in Retry"; return 1; }
+  need_sent "$b" 'A new create uses a new identifier' '^- A new create uses a new identifier\.$' || return 1
+  need_sent "$b" 'A new create uses a new identifier' '^Every create other than a retry of the same create\b' '\brescheduling after a deletion in Google\b' '\breassignment to a new owner\b' '\bconfirmed relink\b' '\bany later create for the same visit\b' '\bchooses a new event identifier\b' '\bnever meets an identifier Google already holds\b' || return 1
+  local idv; idv="$(cell "$(trows <<< "$S_EVENT" | grep -E '^\| *id *\|')" 2)"
+  need "$idv" '\bchooses for each create before its first attempt\b' 'the id field' || return 1
+  need "$idv" '\bthe environment identifier and a random value new to that create, and kept across that create.s retries$' 'the id field' || return 1
+  need_sent "$(flat <<< "$S_CHANGE")" 'Reassignment' '\bcreated in the new owner.s with a new event identifier\b' || return 1
+  forbid "$DECISION_SENTS" '\breus(e|es|ed|ing)\b[^.]*\b(event )?identifier\b|\b(same|previous|old|earlier) event identifier\b[^.]*\b(re-?creat|later create|new calendar|new owner)' 'Visit identifiers are never reused' || return 1
+}
+check 'every create other than a retry of the same create chooses a new event identifier' k04_new_identifier
+
+# Fix round 1 (R-04): answers that show a retry cannot succeed end the job, and an ended job never
+# holds back later jobs.
+k04_answers_end() {
+  local b; b="$(flat <<< "$(bullet "$S_RETRY" '^- Answers that end a job[.]')")"
+  [ -n "$b" ] || { WHY="no 'Answers that end a job' item in Retry"; return 1; }
+  need_sent "$b" 'Answers that end a job' '^- Answers that end a job\.$' || return 1
+  need_sent "$b" 'Answers that end a job' '^A job is not retried when Google.s answer shows that a retry cannot succeed\.$' || return 1
+  need_sent "$b" 'Answers that end a job' '^An update answered that the event is deleted or absent ends, and the event is read directly by its identifier as polling does\b' '\bVIS-11\b' || return 1
+  need_sent "$b" 'Answers that end a job' '^A deletion answered that the event is already deleted or absent is done\b' || return 1
+  need_sent "$b" 'Answers that end a job' '^Any other refusal of the request itself\b' '\bends the job; the visit stays flagged Unsynchronised\b' || return 1
+  need_sent "$b" 'Answers that end a job' '^An ended job never holds back the later jobs of its visit\.$' || return 1
+  forbid "$b" '\b(refusal|refused|rejected|not found|gone|absent)\b[^.;]*\b(is|are) retried\b|\bretried (indefinitely|forever|until (it|they) succeeds?)\b' || return 1
+  local all; all="$(without "$DECISION_SENTS" 'An ended job never holds back the later jobs of its visit.')"
+  forbid "$all" '\bended job\b[^.]*\b(holds?|blocks?|stops?) (back )?(the )?later jobs\b|\blater jobs\b[^.]*\bwait\b[^.]*\bended job\b' || return 1
+}
+check 'answers that show a retry cannot succeed end the job, and an ended job never holds back the later jobs of its visit' k04_answers_end
 
 k04_retry() {
   local s; s="$(flat <<< "$S_RETRY")"
@@ -705,6 +822,14 @@ k05_closed_list() {
 }
 check 'the event fields form a closed table, each field with its value, its ADR-0005 category and why the sync needs it' k05_closed_list
 
+# The Event content sentences that name a forbidden value to say it is NOT sent or NOT read back.
+K05_PROSE_EXCUSED=(
+  "- No attendee is ever set, and no notification or invitation is sent."
+  "Every insert, update and delete is sent with notifications to guests switched off (sendUpdates none)."
+  "The customer is never an attendee (VIS-3, PRH-1)."
+  "- Never sent: an e-mail address, the NIP, the foreign tax identifier, the note on a phone or an e-mail, note text, an action, the visit's state or flags, any other phone, and any other customer value (ADR-0005)."
+  "The application never reads back summary, location, description, attendees, or the creator's or organiser's e-mail address."
+)
 k05_no_forbidden() {
   local r f v
   while IFS= read -r r; do
@@ -714,6 +839,14 @@ k05_no_forbidden() {
     if has "$v" "$FORBIDDEN_VALUE"; then WHY="field '$f' sends '$(grep -Eio -- "$FORBIDDEN_VALUE" <<< "$v" | head -n 1)': $v"; return 1; fi
     if has "$v" '\b(NIP|tax|e-?mail)\b'; then WHY="field '$f' sends a forbidden value: $v"; return 1; fi
   done <<< "$FIELD_ROWS"
+  # Fix round 1 (R-07 (2)): the prose of Event content, outside the table, adds no forbidden value
+  # either; only the sentences that say what is NOT sent are excused, by their exact text.
+  local prose; prose="$(without "$(flat <<< "$S_EVENT" | grep -v '^|')" "${K05_PROSE_EXCUSED[@]}")"
+  forbid "$prose" "$FORBIDDEN_VALUE" || return 1
+  forbid "$prose" '\b(NIP|tax|e-?mail)\b' || return 1
+  # Nowhere in the Decision is a customer value added to an event, as a guest or in any field.
+  local all; all="$(without "$DECISION_SENTS" "${K05_PROSE_EXCUSED[@]}")"
+  forbid "$all" "\b(customer.s|their) (e-?mail( address)?|NIP|tax identifier|notes?|note text|actions?|other phones?)\b[^.]*\b(is|are) (also )?(added|sent|set|written|included|copied|put)\b|\b(add|adds|added|send|sends|write|writes|include|includes|copy|copies|put|puts)\b[^.]*\b(customer.s )?(e-?mail( address)?|NIP|tax identifier|note text)\b[^.]*\b(event|Google|calendar|description|summary|location|guest|attendee)\b" || return 1
   # Identifiers: derived only from the visit's opaque record identifier and the environment.
   local id; id="$(cell "$(frow id)" 2)"
   need "$id" "\\bderived from the visit.s opaque record identifier\\b" 'the id field' || return 1
@@ -740,6 +873,15 @@ k05_no_attendee() {
   need_sent "$s" 'Event content' '^- No attendee is ever set, and no notification or invitation is sent\.$' || return 1
   need_sent "$s" 'Event content' '\bsendUpdates none\b' || return 1
   need_sent "$s" 'Event content' '^The customer is never an attendee \(VIS-3, PRH-1\)\.$' || return 1
+  # Fix round 1 (R-07 (2)): the positive sentences alone pass a list that also adds a guest. No
+  # other Decision sentence names a guest, attendee, invitation or organiser.
+  # The two assumption rows (A-10, A-11) name attendees and the organiser to state what Google does.
+  local rows_ok=(
+    "| A-10 | Partial-response field selection limits the fields Google returns, the creator's and organiser's e-mail address included | Google APIs' standard fields parameter | *What is read back* |"
+    "| A-11 | With no attendee and sendUpdates none, Google sends no invitation or notification to anyone | Calendar API events.insert/update/delete reference | *Event content* |"
+  )
+  local all; all="$(without "$DECISION_SENTS" "${K05_PROSE_EXCUSED[@]}" "${rows_ok[@]}")"
+  forbid "$all" '\b(guests?|attendees?|invit(e|es|ed|ing|ation|ations)|organi[sz]ers?|participants?)\b' || return 1
 }
 check 'no attendee is set and no notification or invitation is sent' k05_no_attendee
 
@@ -767,9 +909,48 @@ check "erasure reaches the events in every owner's calendar, the original owner'
 
 k06_inflight() {
   need_sent "$(flat <<< "$S_ERASE")" 'Erasure' '^- In-flight sync\.' || return 1
-  need_sent "$(flat <<< "$S_ERASE")" 'Erasure' "\\bjob of the erased customer.s visit that is queued or running when the erasure commits sends none of the customer.s data afterwards\\b"
+  need_sent "$(flat <<< "$S_ERASE")" 'Erasure' "\\bjob of the erased customer.s visit that is queued or running when the erasure commits sends none of the customer.s data afterwards\\b" || return 1
+  # Fix round 1 (R-07 (4)): the half R-02 depends on, a request already sent, is anchored too.
+  need_sent "$(flat <<< "$S_ERASE")" 'Erasure' "\\bit reads the stripped visit when it runs and sends nothing for it\\b" '\band a request already sent when the erasure commits is followed by the deletion job of that event, which runs after it\.$' || return 1
 }
 check "a sync of the erased customer's visit queued or running at erasure sends none of its data afterwards" k06_inflight
+
+# Fix round 1 (R-02): an erasure's deletion job is ordered as a job of its visit, after every
+# earlier job (a request already sent included); the event record is written before the first
+# attempt; and "absent" after an unanswered create is read again before it counts as done.
+k06_erasure_order() {
+  local bg; bg="$(flat <<< "$S_BG")"
+  need_sent "$bg" 'Background work' '^Jobs of one visit run one at a time, in the order they were queued\.$' || return 1
+  need_sent "$bg" 'Background work' '^A deletion job queued by an erasure counts, for this order, as a job of the visit whose event it deletes, so it runs only after every earlier job of that visit has ended, a request already sent included\.$' || return 1
+  local h; h="$(flat <<< "$(bullet "$S_ERASE" '^- How[.]')")"
+  [ -n "$h" ] || { WHY="no 'How' item in Erasure and calendar events"; return 1; }
+  need_sent "$h" 'Erasure, How' "^Each such job runs only after every earlier job of that event.s visit has ended\\b" || return 1
+  need_sent "$h" 'Erasure, How' '\bexcept after a create of that identifier that Google never answered: then the job reads the event again at its next retry step\b' '\bdeletes it if it is there, and counts as done only when that read also finds it deleted or absent\.$' || return 1
+  forbid "$DECISION_SENTS" '\b(erasure|deletion) jobs?\b[^.]*\b(runs?|is run|are run|starts?) (at once|immediately|first|ahead of|before)\b|\b(erasure|deletion) jobs?\b[^.]*\b(skips?|jumps?|bypass(es)?) the (queue|order)\b' || return 1
+}
+check "an erasure's deletion job runs as a job of its visit, after every earlier job, and absent after an unanswered create is read again" k06_erasure_order
+
+k06_record_first() {
+  local b; b="$(flat <<< "$(bullet "$S_BG" '^- The event record comes first[.]')")"
+  [ -n "$b" ] || { WHY="no 'The event record comes first' item in Background work"; return 1; }
+  need_sent "$b" 'The event record comes first' '^The record of an event \(its identifier and the owner in whose calendar it is created\) is written in the same transaction that queues its create, before the first attempt\b' '\bsent and never answered is still recorded, and erasure finds it\.$' || return 1
+  forbid "$DECISION_SENTS" '\b(event )?record\b[^.]*\b(is|are) written\b[^.]*\b(after|once|when)\b[^.]*\b(Google (confirms|answers)|the create (succeeds|is confirmed))\b' || return 1
+}
+check 'the event record is written in the transaction that queues its create, before the first attempt, so erasure finds an unanswered create' k06_record_first
+
+# Fix round 1 (R-06): a confirmed other account records every removal due for the earlier calendar
+# as not carried out, never sends it to the new one, and leaves the data there to the GDPR impact
+# assessment, not accepted.
+k06_account_switch() {
+  local b; b="$(flat <<< "$(bullet "$S_LOST" '^- When the owner confirms another account')")"
+  [ -n "$b" ] || { WHY="no 'When the owner confirms another account' item in Lost access"; return 1; }
+  need_sent "$b" 'Lost access' '^- When the owner confirms another account\b' '\bno longer tracked and never counts as deleted\b' '\bis recorded as not carried out and is never sent to the new calendar\.$' || return 1
+  need_sent "$b" 'Lost access' "\\bthe customers. names, addresses and phones left in the earlier account are not settled by this decision: they are a question for the GDPR impact assessment\\b" || return 1
+  need_sent "$(flat <<< "$S_ERASE")" 'Erasure' '^- The owner.s access lost\.' || return 1
+  need_sent "$(flat <<< "$S_ERASE")" 'Erasure' '\bunless the owner confirms another account, when it is recorded as not carried out\b' || return 1
+  forbid "$b" '\b(accept(s|ed)?|tolerat(e|es|ed)|acceptable|settled by this decision:? (it|they) (is|are) accepted)\b' || return 1
+}
+check 'a confirmed other account records the removals due there as not carried out and names the data left there for the GDPR impact assessment, not accepted' k06_account_switch
 
 k06_reapply() {
   local b; b="$(flat <<< "$(bullet "$S_ERASE" 'The re-apply at restore')")"
