@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-27",
+  "task": "EKO-1-05",
+  "phase": "fix-2",
+  "role": "architect",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a10fa1da1bd273b35",
+  "tokens": 5311959,
+  "tokenSplit": {
+    "input": 74,
+    "output": 59205,
+    "cacheWrite": 192304,
+    "cacheRead": 5060376
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 63,
+  "seconds": 626,
+  "fixRound": 2,
+  "reworkCause": "Reviewer R-10..R-14 and Security Auditor B-03, B-04 plus the undecryptable-token unlink end state: flaws in mechanisms fix round 1 added; could have been caught by the Architect's own review of round-1 interactions (record-first vs link check, updated vs value comparison)",
+  "notes": "all 8 FIXED, none NEEDS A HUMAN; A-21, C24..C26 added; B-04 sweep narrowed to app-form identifiers (PRH-2), option B left to human; no shell (driver ran doc-checks 74/75, expected fail k02_undecryptable_kept until QA excuse; check-links clean); boundary-check: clean (ADR-0006, ADR-0004)"
+}
