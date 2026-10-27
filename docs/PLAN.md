@@ -56,12 +56,24 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   migrations, bootstrap and the backup role (EKO-1-06, #19); shipping Keycloak events off the
   server and erasure in backups (EKO-1-04, #17); self-service resets in the off-server record (#38).
 
-- [ ] **EKO-1-04** — Record the personal-data handling decision (ADR-0005).
+- [x] **EKO-1-04** — Record the personal-data handling decision (ADR-0005).
   *Done when:* ADR-0005 is "Accepted <date>" and names the modules holding customer personal
   data, what is logged and what never is, archiving vs. erasure, and that only synthetic data is
   used until the GDPR impact assessment; `docs/architecture/architecture-sensitive-paths.md`
   lists those paths.
   **Out of scope (explicit):** the GDPR impact assessment — after the MVP; erasure — later.
+  **Done 2026-10-27:**
+  [`ADR-0005-personal-data.md`](architecture/decisions/ADR-0005-personal-data.md) (status
+  "Accepted 2026-10-25", revised in place in four fix rounds under the human's decisions
+  D-1..D-12) and the sensitive-paths register citing ADR-0005 with the `personal-data` class,
+  merged in [PR #44](https://github.com/TanerCRB/Eko_CRM/pull/44) — QA's document checks
+  (`tests/doc-checks/EKO-1-04.sh`, 93 checks) verified at `60add45`, all 262 named mutations
+  killed; six recorded exceptions (`architecture/exception-register.md`), fixed by an ADR-0005
+  addendum in #43. Forwarded: the fields sent to Google, token storage and erasure's effect on
+  calendar events (EKO-1-05, #18); the re-apply at the first tested restore and restore-host
+  cleanup (EKO-1-08, #36); shipping Keycloak events off the server (EKO-1-09, #41); the Keycloak
+  log and event settings (EKO-1-06, #19); recording an erased identifier with a time taken after
+  the commit (the task that builds the permanent-erasure feature, carried in #43 until planned).
 
 - [ ] **EKO-1-05** — Record the Google Calendar integration decision (ADR-0006).
   *Done when:* ADR-0006 is "Accepted <date>" and fixes the OAuth flow and scope, token storage
