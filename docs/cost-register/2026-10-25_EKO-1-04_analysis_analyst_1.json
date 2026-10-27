@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-25",
+  "task": "EKO-1-04",
+  "phase": "analysis",
+  "role": "analyst",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a74d386f7ef90bf9a",
+  "tokens": 991932,
+  "tokenSplit": { "input": 30, "output": 28863, "cacheWrite": 89765, "cacheRead": 873274 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 28,
+  "seconds": 314,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "READY FOR GATE 1; K-01..K-07 (K-05 judged by human); gate-1 G-1..G-8 (G-6 legal form, G-7 restore re-apply vs ADR-0004, G-8 display-name end event); boundary-check: clean (--none)"
+}

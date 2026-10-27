@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-26",
+  "task": "EKO-1-04",
+  "phase": "fix-2",
+  "role": "qa",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a8b84a429ef8e682b",
+  "tokens": 17859006,
+  "tokenSplit": {
+    "input": 198,
+    "output": 118868,
+    "cacheWrite": 2820271,
+    "cacheRead": 14919669
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 113,
+  "seconds": 10244,
+  "fixRound": 2,
+  "reworkCause": "re-verification after fix round 2 (D-4, D-5, R-09/B-06, R-10); three paper survivors from reviewer round 1 (UM1, ID1, P4) were gaps in QA round 1's bans, catchable by QA itself",
+  "notes": "PROOF HOLDS at 0cd0d8e, undecidable K-05; tests/doc-checks/EKO-1-04.sh 80 -> 85 checks, 85 pass online; 182 mutation labels re-run, all killed (M54, C09b online only); batch run under WSL bash (grep 3.12) for time, equivalence shown on baseline plus 17 outputs; F-01 Low: an unmarked entry of a withdrawn erasure is re-applied at every restore and no control surfaces it; boundary-check: clean (tests/doc-checks/)"
+}

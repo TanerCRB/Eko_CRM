@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-26",
+  "task": "EKO-1-04",
+  "phase": "fix-1",
+  "role": "invariant-guardian",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "ab4d4187470e72093",
+  "tokens": 841975,
+  "tokenSplit": {
+    "input": 32,
+    "output": 9609,
+    "cacheWrite": 64236,
+    "cacheRead": 768098
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 21,
+  "seconds": 383,
+  "fixRound": 1,
+  "reworkCause": "re-verification after fix round 1 of ADR-0005",
+  "notes": "PASS at 0f54d08, no findings; S-01 and S-02 resolved; doc check offline 78 passed, 2 skipped; undecidable K-05; boundary-check: clean (--none)"
+}

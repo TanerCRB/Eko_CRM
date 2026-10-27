@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-26",
+  "task": "EKO-1-04",
+  "phase": "fix-3",
+  "role": "invariant-guardian",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a5efb659270231fcb",
+  "tokens": 843746,
+  "tokenSplit": {
+    "input": 34,
+    "output": 10191,
+    "cacheWrite": 118260,
+    "cacheRead": 715261
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 19,
+  "seconds": 1259,
+  "fixRound": 3,
+  "reworkCause": "re-verification after fix round 3 (D-6..D-9)",
+  "notes": "PASS at 45ecdb1, undecidable K-05, no findings; doc checks offline 88 pass, 2 skipped; weakening/leftovers clean; notes the K-06 one-forward exception and the D-9 forward with no PLAN task; boundary-check: clean (--none)"
+}

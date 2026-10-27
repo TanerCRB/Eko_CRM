@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-26",
+  "task": "EKO-1-04",
+  "phase": "fix-3",
+  "role": "reviewer",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "ab691556b20956955",
+  "tokens": 876136,
+  "tokenSplit": {
+    "input": 32,
+    "output": 26982,
+    "cacheWrite": 93929,
+    "cacheRead": 755193
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 17,
+  "seconds": 400,
+  "fixRound": 3,
+  "reworkCause": "re-verification after fix round 3 (D-6..D-9); R-14 follows from D-8 applying the in-flight guard to failed marks only (the driving session's fix-3 brief could have applied it to cancelled marks too); R-15 and R-16 come from the D-6 reports and the D-8 exception wording",
+  "notes": "STOP at 45ecdb1, undecidable K-05; R-11..R-13 resolved, round-2 paper survivors closed; new R-14 Medium (cancelled mark while the erasure is queued), R-15 Medium (report to the human has no content, holder or retention; recovery has no procedure), R-16 Low (test restore triggers the restore exception); four new paper survivors for QA; boundary-check: clean (--none)"
+}

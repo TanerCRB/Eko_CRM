@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-26",
+  "task": "EKO-1-04",
+  "phase": "fix-3",
+  "role": "architect",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a9b84a80fcc26d899",
+  "tokens": 720130,
+  "tokenSplit": {
+    "input": 24,
+    "output": 17973,
+    "cacheWrite": 76208,
+    "cacheRead": 625925
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 18,
+  "seconds": 171,
+  "fixRound": 3,
+  "reworkCause": "reviewer R-11..R-13, security-auditor B-07/B-08, QA F-01; all arise from the D-4 reconciliation and mark rules as framed by the driving session in the fix-2 brief, which could have stated the unmarked-entry exit and the approval check up front",
+  "notes": "extra round approved by the human; ADR-0005 revised per D-6 (reconciliation never writes or promotes an entry on its own), D-7 (unmarked entries resolved monthly; cancelled on withdrawal; B-08 residual stated), D-8 (failed only once the erasure can no longer commit; new entry before a further attempt; narrower restore exception; wider stated limit), D-9 (commit time taken after commit; forward to the permanent-erasure feature); register unchanged; boundary-check: clean (ADR-0005, register)"
+}

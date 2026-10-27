@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-26",
+  "task": "EKO-1-04",
+  "phase": "fix-1",
+  "role": "qa",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "af5e0180c1c8c5ff4",
+  "tokens": 11476418,
+  "tokenSplit": { "input": 138, "output": 102902, "cacheWrite": 3534937, "cacheRead": 7838441 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 87,
+  "seconds": 63573,
+  "fixRound": 1,
+  "reworkCause": "ADR-0005 revised in fix round 1 (F-01, B-01..B-04, R-01..R-07, S-01/S-02); reviewer's four test gaps — QA's own round-0 checks could have caught them",
+  "notes": "PROOF HOLDS at 291f405, undecidable K-05, no findings; 80 checks, all green online, check 45 (F-01) now passes; 125 mutations (57 rebased round-0, 13 contrasts, 55 new) all killed, M54 online only; the reviewer's four paper survivors N01, N02, N03, N04 fixed and killed; run cut by an API connection error (ECONNREFUSED) and resumed with SendMessage, so seconds include the idle gap until the resume (wall clock, not work time); boundary-check: clean (tests/doc-checks/)"
+}

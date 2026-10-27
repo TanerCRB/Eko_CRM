@@ -6,24 +6,25 @@ always goes through the Architect, and its risk classes decide whether the Secur
 and whether a surviving mutation may be let through. A path missing from this list is a path the
 fast lane will wave through — when in doubt, add it.
 
-Paths follow the layout fixed by ADR-0001, ADR-0002, ADR-0003 and ADR-0004.
-Rows that mark a decision as "pending" (ADR-0005 or 0006) are governed by decisions not yet
-accepted; each of those tasks edits its own rows.
+Paths follow the layout fixed by ADR-0001, ADR-0002, ADR-0003 and ADR-0004; the personal-data
+class follows ADR-0005 (*Where personal data is held*).
+Rows that mark a decision as "pending" (ADR-0006) are governed by a decision not yet accepted;
+that task edits its own rows.
 
 | Path (glob) | Risk classes | Governing decisions | Why it's sensitive |
 |---|---|---|---|
-| `backend/app/data/**` | schema, personal-data, auth | ADR-0002, ADR-0003; personal-data pending ADR-0005 | persistence of contacts and customer records; server-side sessions holding encrypted tokens |
-| `backend/migrations/**` | schema | ADR-0002 | expand → deploy → contract |
+| `backend/app/data/**` | schema, personal-data, auth | ADR-0002, ADR-0003, ADR-0005 | persistence of contacts and customer records; server-side sessions holding encrypted tokens |
+| `backend/migrations/**` | schema, personal-data | ADR-0002, ADR-0005 | expand → deploy → contract; defines the tables and columns holding personal data, and a data migration processes it |
 | `backend/alembic.ini` | schema | ADR-0002 | migration tool configuration, where revisions are found |
-| `backend/app/auth/**` | auth | ADR-0003 | authentication, the browser session, the shared access dependency, permissions |
-| `backend/app/api/**` | auth, personal-data | ADR-0001, ADR-0003; pending ADR-0005 | every endpoint is an access decision over personal data |
-| `backend/app/main.py` | auth | ADR-0001, ADR-0003 | wires the app-wide access dependency and the error handling |
-| `backend/app/domain/**` | personal-data | ADR-0001; pending ADR-0005 | the contact model and what it keeps out of logs |
-| `backend/app/services/**` | personal-data | ADR-0001; pending ADR-0005 | every read and write of contacts goes through here |
-| `frontend/src/**` | personal-data | ADR-0001, ADR-0003; pending ADR-0005 | renders contacts; holds no token (ADR-0003: HttpOnly session cookie, one origin) |
+| `backend/app/auth/**` | auth, personal-data | ADR-0003, ADR-0005 | authentication, the browser session, the shared access dependency, permissions; the session, subject and display name |
+| `backend/app/api/**` | auth, personal-data | ADR-0001, ADR-0003, ADR-0005 | every endpoint is an access decision over personal data |
+| `backend/app/main.py` | auth, personal-data | ADR-0001, ADR-0003, ADR-0005 | wires the app-wide access dependency and the error handling of requests carrying personal data |
+| `backend/app/domain/**` | personal-data | ADR-0001, ADR-0005 | the contact model and what it keeps out of logs |
+| `backend/app/services/**` | personal-data | ADR-0001, ADR-0005 | every read and write of contacts goes through here |
+| `frontend/src/**` | personal-data | ADR-0001, ADR-0003, ADR-0005 | renders contacts; holds no token (ADR-0003: HttpOnly session cookie, one origin) |
 | `backend/app/core/settings.py` | secrets | ADR-0001, ADR-0004 | the one place configuration and secrets are read |
 | `backend/app/core/**` | secrets | ADR-0001, ADR-0004 | configuration code beside settings.py |
-| `backend/app/integrations/**` | external, personal-data | ADR-0001; pending ADR-0005, ADR-0006 | adapters to external systems receive personal data |
+| `backend/app/integrations/**` | external, personal-data | ADR-0001, ADR-0005; pending ADR-0006 | adapters to external systems receive personal data |
 | `backend/pyproject.toml` | dependencies | ADR-0001 | backend package manifest |
 | `backend/*.lock` | dependencies | ADR-0001 | backend lock file (`uv.lock`) |
 | `frontend/package.json` | dependencies | ADR-0001 | frontend package manifest |
@@ -38,8 +39,8 @@ accepted; each of those tasks edits its own rows.
 | `**/.dockerignore` | secrets | ADR-0001, ADR-0004 | what enters the image build context; a dropped `.env` line bakes secrets into an image |
 | `Caddyfile*` | auth, secrets | ADR-0004 | entry-point routing at the repository root (`**/Caddyfile*` needs a slash): HTTPS, the public/admin split of Keycloak's pages, which paths the internet reaches |
 | `**/Caddyfile*` | auth, secrets | ADR-0004 | entry-point and static-file-server configuration: a dropped refusal rule exposes Keycloak's admin console or account console to the internet |
-| `frontend/index.html` | dependencies, personal-data | ADR-0001, ADR-0003; pending ADR-0005 | a script tag here runs in the SPA beside personal data and same-origin requests carrying the session cookie |
-| `frontend/public/**` | dependencies, personal-data | ADR-0001, ADR-0003; pending ADR-0005 | static files served unbundled from the SPA's origin, the origin the session cookie belongs to |
+| `frontend/index.html` | dependencies, personal-data | ADR-0001, ADR-0003, ADR-0005 | a script tag here runs in the SPA beside personal data and same-origin requests carrying the session cookie |
+| `frontend/public/**` | dependencies, personal-data | ADR-0001, ADR-0003, ADR-0005 | static files served unbundled from the SPA's origin, the origin the session cookie belongs to |
 | `identity/**` | auth, secrets | ADR-0003, ADR-0004 | realm export: roles, registration off, token lifespans, client and scope settings, SMTP settings |
 | `.npmrc` | dependencies, secrets | ADR-0001 | registry, ignore-scripts, auth tokens at the repository root (`**/.npmrc` needs a slash) |
 | `**/.npmrc` | dependencies, secrets | ADR-0001 | registry, ignore-scripts, auth tokens |

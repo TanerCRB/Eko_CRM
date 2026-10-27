@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-25",
+  "task": "EKO-1-04",
+  "phase": "verification",
+  "role": "security-auditor",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "ab23df1a01ad1ea99",
+  "tokens": 591189,
+  "tokenSplit": { "input": 22, "output": 22151, "cacheWrite": 82508, "cacheRead": 486508 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 13,
+  "seconds": 331,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "PASS WITH RESERVATIONS at 826e085; B-01..B-04 Medium (shipper under break-glass control; typed username as password in events; erasure record writer unnamed; re-apply after backend start vs Google sync); undecidable K-05, U-01..U-04; report sent back once (verdict block not last), resend passed markers; figures include the resend; boundary-check: clean (--none)"
+}
