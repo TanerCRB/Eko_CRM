@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-27",
+  "task": "EKO-1-05",
+  "phase": "fix-2",
+  "role": "qa",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a260e62ef0eb94cba",
+  "tokens": 6812396,
+  "tokenSplit": {
+    "input": 112,
+    "output": 69655,
+    "cacheWrite": 1837320,
+    "cacheRead": 4905309
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 68,
+  "seconds": 7247,
+  "fixRound": 2,
+  "reworkCause": "Checks for the mechanisms added by fix round 2 (Reviewer R-10..R-14, Security Auditor B-03, B-04, undecryptable unlink) and the R-05 link-check gap the Reviewer named; QA round 1 could have caught the link-check gap",
+  "notes": "PROOF HOLDS at 54bfaa6; 75 -> 84 checks; 92 runs (68 kills all KILLED, 9 contrasts passed, 14 first-version SURVIVED); one dead ban regex found and fixed; Q-01 Low (id cell lacks the prefix the sweep relies on); seconds include a harness-backgrounded batch of about 57 min; boundary-check: clean (tests/doc-checks/)"
+}
