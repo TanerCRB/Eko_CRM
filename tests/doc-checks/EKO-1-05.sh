@@ -353,6 +353,23 @@ k01_ownership_hold() {
 }
 check "a calendar holding another owner's marked event holds the link unused, at link, relink and every poll, and no choice of the owner lifts the hold" k01_ownership_hold
 
+# Fix round 2 (B-03): the hold falls on every link that wrote into the shared calendar, not only on
+# the link that found it, so "the hold sends nothing more into that calendar" holds in either order.
+k01_hold_every_link() {
+  local o; o="$(flat <<< "$(bullet "$S_RECOG" 'Ownership')")"
+  need_sent "$o" 'Ownership' "^When a link is held so, every other link whose owner.s recorded events were found in that calendar is held unused in the same way, and its owner is told in the same way, so the link that wrote them is held too\\.$" || return 1
+  forbid "$DECISION_SENTS" "\\b(other|first|earlier|writing) link\\b[^.]*\\b(keeps|stays|remains|is still) (working|used|in use|writing|linked)\\b|\\bonly the link\\b[^.]*\\b(found|linked (second|last|later))\\b[^.]*\\bheld\\b|\\blink that wrote them\\b[^.]*\\b(keeps|stays|is not held)\\b" || return 1
+}
+check 'when a hold falls on a calendar, every other link whose recorded events were found there is held too, the link that wrote them included' k01_hold_every_link
+
+# Fix round 2 (R-13): a reassignment's old event keeps a record naming the old owner and does not
+# hold the old owner's link under Ownership, so a routine CUS-10 move never freezes that link.
+k01_reassign_no_hold() {
+  need_sent "$(flat <<< "$S_CHANGE")" 'Reassignment' "^Until the deletion is carried out, the old event keeps its record, which names the old owner, and counts nowhere: it is no longer the visit.s event, its changes in Google do not flow back, and it does not hold the old owner.s link under \\*?Ownership\\*?, which concerns only an event the application records in another owner.s calendar\\.$" || return 1
+  forbid "$DECISION_SENTS" "\\bold event\\b[^.]*\\b(is|counts as) (another|the new) owner.s event\\b|\\bold event\\b[^.]*\\b(holds?|freezes?|suspends?)\\b[^.]*\\b(old owner.s )?link\\b" 'does not hold the old owner.s link' || return 1
+}
+check "a reassignment's old event keeps a record naming the old owner and does not hold the old owner's link" k01_reassign_no_hold
+
 k01_callback() {
   local b; b="$(flat <<< "$(bullet "$S_OAUTH" 'Binding to the rep.s own session')")"
   need_sent "$b" 'Binding' '\bcallback path https://<app-host>/[a-z0-9/_-]+\b' || return 1
@@ -485,6 +502,11 @@ check 'a key rotation makes every stored link unusable and every linked rep reli
 # corrected key value; it is not one of the events that delete a token.
 K02_UNDECRYPTABLE_EXCUSED=(
   "- A token that cannot be decrypted with the key in use (after a key replacement, after a restore from a set taken before the last key replacement, or with a wrong key value) is not deleted: the link state becomes \"access lost\" and the owner relinks, which replaces the token."
+  # Fix round 2: the one stated deletion of an undecryptable token, at unlink by the owner. It is
+  # excused by its exact text only, so a wider trigger (at relink, at a poll, at a refused refresh)
+  # or a dropped "no revocation is sent" brings it back under the ban below. That the sentence is
+  # there at all is proven by k02_undecryptable_unlink, not by this excuse.
+  "At unlink by the owner, a token that cannot be decrypted with the key in use is deleted at once and no revocation is sent, because none can be sent without the token in clear; the owner is told that the application could not withdraw its access and how to remove it in their Google account, with no customer value."
 )
 k02_undecryptable_kept() {
   local b; b="$(flat <<< "$(bullet "$S_TOKEN" '^- A token that cannot be decrypted')")"
@@ -499,6 +521,20 @@ k02_undecryptable_kept() {
   forbid "$all" '\b(cannot be decrypted|undecryptable|does not decrypt)\b[^.]*\b(is|are|gets?) (then )?(deleted|removed|erased|dropped)\b|\b(delet(e|es|ed)|remov(e|es|ed))\b[^.]*\b(undecryptable|cannot be decrypted)\b' || return 1
 }
 check 'a token the key in use cannot decrypt is kept, not deleted, and works again when the key value is corrected' k02_undecryptable_kept
+
+# Fix round 2 (Security Auditor, undecryptable token at unlink): the end of storage of a token the
+# key in use cannot decrypt is the owner's unlink: deleted at once, no revocation sent, the owner
+# told how to remove the access, with no customer value. The deletion list's unlink item points to
+# it, and the safety argument names the revoke-first rotation and the deleted old client secret.
+k02_undecryptable_unlink() {
+  local b; b="$(flat <<< "$(bullet "$S_TOKEN" '^- A token that cannot be decrypted')")"
+  [ -n "$b" ] || { WHY="no top-level 'A token that cannot be decrypted' item in Token storage"; return 1; }
+  need_sent "$b" 'Token storage' '^At unlink by the owner, a token that cannot be decrypted with the key in use is deleted at once and no revocation is sent\b' "\\bthe owner is told that the application could not withdraw its access and how to remove it in their Google account, with no customer value\\.$" || return 1
+  need_sent "$b" 'Token storage' '^This is safe:' '\bafter a replacement on suspected compromise its grant was revoked first\b' '\bwhich is rotated with the key and its old value deleted \(A-18\)' || return 1
+  local d; d="$(flat <<< "$(bullet "$S_TOKEN" 'When a stored token is deleted')")"
+  need_sent "$d" 'When a stored token is deleted' '^- at unlink by the owner\b' '\buntil Google gives one of those answers, except as the bullet after this list says;$' || return 1
+}
+check 'at unlink, a token the key in use cannot decrypt is deleted at once with no revocation sent, and the owner is told how to remove the access' k02_undecryptable_unlink
 
 # Fix round 1 (B-01): on suspected compromise the grants are revoked first, the client secret is
 # rotated with the key, and every client-secret rotation deletes the old secret in the project.
@@ -748,6 +784,66 @@ k04_no_second() {
 }
 check 'a retried create produces no second event' k04_no_second
 
+# Fix round 2 (R-10): a record whose create Google has not confirmed is pending. The link check and
+# polling neither compare it nor read it directly, it never counts as a deletion in Google (VIS-11,
+# VIS-8), and an owner with no confirmed event (a first link included) is linked with no choice.
+k04_pending_record() {
+  local p; p="$(flat <<< "$(bullet "$S_BG" '^- A record counts once Google confirms it[.]')")"
+  [ -n "$p" ] || { WHY="no 'A record counts once Google confirms it' item in Background work"; return 1; }
+  need_sent "$p" 'A record counts once Google confirms it' '^An event record counts as an event in its calendar only once Google has confirmed its create: answered it as created\b' || return 1
+  need_sent "$p" 'A record counts once Google confirms it' '^Until then the record is pending, whether its create was never sent, is suspended, is waiting for its next retry step or was never answered: the link check \(\*?Relinking a different Google account\*?\) and polling neither compare it with the calendar nor read it directly, and it never counts as a deletion in Google\.$' || return 1
+  need_sent "$p" 'A record counts once Google confirms it' '\berasure still deletes it\b' || return 1
+  local r; r="$(flat <<< "$(bullet "$S_OAUTH" '^- Relinking a different Google account[.]')")"
+  need_sent "$r" 'Relinking a different Google account' '\bcompares them with every confirmed event the application records for that owner\b' || return 1
+  need_sent "$r" 'Relinking a different Google account' '^A record whose create Google has not confirmed is neither compared nor read directly here; its create runs once the link is used\.$' || return 1
+  need_sent "$r" 'Relinking a different Google account' '^- When it finds every confirmed event of the calendar in use, or the owner has no confirmed event at all \(a first link included\), the link is used, without the choice below\.$' || return 1
+  local c; c="$(flat <<< "$S_CHANGE")"
+  need_sent "$c" 'Polling' '\bcompares them with the visits the application holds as synchronised in that calendar \(their confirmed events\b' || return 1
+  need_sent "$c" 'Polling' '^A confirmed event missing from the list is read directly by its identifier\b' || return 1
+  # The anchored "Until then the record is pending" sentence is excused by its exact text.
+  local all; all="$(without "$DECISION_SENTS" "$(sent_with "$p" '^Until then the record is pending\b')")"
+  forbid "$all" '\b(pending|unconfirmed|not (yet )?confirmed)\b[^.;]*\b(is|are) (compared|read directly|counted as (a )?delet(ed|ion))\b|\b(pending|unconfirmed)\b[^.;]*\bcounts? as (a )?(deleted|deletion)\b|\bfirst link\b[^.]*\bowner chooses\b' || return 1
+}
+check 'a record whose create Google has not confirmed is never compared at link, relink or poll and never counts as a deletion, and a first link is used with no choice' k04_pending_record
+
+# Fix round 2 (R-11): a Google change, for read-before-write as for polling, is a change of start or
+# end; a change to any other field moves updated but does not win over the application's change.
+k04_google_change_dates() {
+  local b; b="$(flat <<< "$(bullet "$S_CONFLICT" '^- Read before write[.]')")"
+  [ -n "$b" ] || { WHY="no 'Read before write' item in Conflict rule"; return 1; }
+  need_sent "$b" 'Read before write' "^When the event carries a Google change \\(its start or end differs from the values the application last wrote to it, and its updated instant is not the application.s own write\\) later than the application.s change\\b" || return 1
+  need_sent "$b" 'Read before write' '^A change in Google to any other field \(the title, a reminder, the colour\) moves updated but is not a Google change for this rule, as it is not for polling\b' || return 1
+  forbid "$DECISION_SENTS" '\b(title|reminder|colou?r|description|location|any other field)\b[^.]*\b(is|counts as|makes it) a Google change\b|\b(any|every) change (to|of) (the event|updated)\b[^.]*\bGoogle change\b|\bupdated\b[^.]*\balone\b[^.]*\b(is|counts as) a Google change\b' '\bis not a Google change\b' || return 1
+}
+check 'a Google change that wins over the application is a change of start or end; a title, reminder or colour change does not win' k04_google_change_dates
+
+# Fix round 2 (R-05 gap, Reviewer "Tests I couldn't break on paper"): the link check compares past
+# and planned events alike, holds the link with no state change while it runs, reads directly each
+# event it does not find before any deletion counts (VIS-11), and offers the three choices only when
+# it finds none of the calendar in use.
+k04_link_check() {
+  local r; r="$(flat <<< "$(bullet "$S_OAUTH" '^- Relinking a different Google account[.]')")"
+  [ -n "$r" ] || { WHY="no 'Relinking a different Google account' item in OAuth flow and scope"; return 1; }
+  need_sent "$r" 'Relinking a different Google account' '^At every link and relink, before any change is sent or read\b' '\bpast and planned alike, in the calendar in use and in each calendar the owner left by confirming another account\.$' || return 1
+  need_sent "$r" 'Relinking a different Google account' '^Until the outcome below is settled, the link is held unused, no event counts as deleted, no visit state changes and no prompt is raised\.$' || return 1
+  need_sent "$r" 'Relinking a different Google account' '^- When it finds some confirmed events of the calendar in use and not others, the link is used, and each confirmed event not found is read directly by its identifier, as polling does\b' || return 1
+  need_sent "$r" 'Relinking a different Google account' '^- When it finds none of them while the owner has some, the owner chooses one of three: relink the account they used before; confirm that this is the same calendar, after which each confirmed event not found is read directly by its identifier, as polling does, and a deletion found so counts under VIS-11; or confirm a new calendar\b' || return 1
+  forbid "$DECISION_SENTS" '\b(not found|missing from the list|absent from the list)\b[^.;]*\bcounts? (as (a )?(deleted|deletion)|under VIS-11)\b' '\bread directly\b' || return 1
+}
+check 'the link check compares past and planned events, changes no visit state while it runs, and reads every event it does not find before a deletion counts' k04_link_check
+
+# Fix round 2 (R-14): a calendar the owner left is compared at every link and relink; when its
+# confirmed events are found it is taken back with no choice, its records tracked again, and only a
+# planned visit with no confirmed event there is created in it, so no visit gets a second event.
+k04_earlier_calendar() {
+  local r; r="$(flat <<< "$(bullet "$S_OAUTH" '^- Relinking a different Google account[.]')")"
+  need_sent "$r" 'Relinking a different Google account' '^- When it finds confirmed events of a calendar the owner left and none of the calendar in use, that earlier calendar is the one linked again, and the link is used without the choice below: its records are tracked again, each removal recorded as not carried out for it is taken up again\b' "\\beach of its confirmed events not found is read directly by its identifier\\b" || return 1
+  need_sent "$r" 'Relinking a different Google account' "^A planned visit whose confirmed event that calendar holds keeps that event\\b" '\bonly a planned visit with no confirmed event there is created in it, with a new event identifier\.$' || return 1
+  need_sent "$(flat <<< "$(bullet "$S_LOST" '^- When the owner confirms another account')")" 'Lost access' '^The records of the earlier calendar are kept, tied to it, together with every removal recorded as not carried out for it, and are taken up again if that calendar is linked again\b' || return 1
+  forbid "$DECISION_SENTS" '\b(earlier|left|previous) calendar\b[^.]*\brecords?\b[^.]*\b(are|is) (deleted|dropped|discarded|forgotten|cleared)\b|\b(every|each|all) planned visits?\b[^.]*\b(is|are) created (again|anew)\b' || return 1
+}
+check 'a calendar the owner left is taken back with no choice when relinked, its records tracked again, and no planned visit gets a second event there' k04_earlier_calendar
+
 WORKER_ADDED=""
 has "$(flat <<< "$S_BG")" '\bruns in one worker service\b' && WORKER_ADDED=1
 k04_mechanism() {
@@ -951,6 +1047,41 @@ k06_account_switch() {
   forbid "$b" '\b(accept(s|ed)?|tolerat(e|es|ed)|acceptable|settled by this decision:? (it|they) (is|are) accepted)\b' || return 1
 }
 check 'a confirmed other account records the removals due there as not carried out and names the data left there for the GDPR impact assessment, not accepted' k06_account_switch
+
+# Fix round 2 (R-12): a removal (an erasure's and the sweep's included) that a refusal ends is
+# recorded as not carried out, kept with its record and calendar, shown with no customer value to
+# the owner and the manager, and taken up again at each link or relink and at least every 24 hours.
+k06_removals_not_done() {
+  local a; a="$(flat <<< "$(bullet "$S_RETRY" '^- Answers that end a job[.]')")"
+  need_sent "$a" 'Answers that end a job' '^A removal ended this way \(a deletion for a cancellation, an archiving, a reassignment or an erasure, the erasure sweep included\) is recorded as not carried out\b' || return 1
+  local b; b="$(flat <<< "$(bullet "$S_RETRY" '^- Removals not carried out[.]')")"
+  [ -n "$b" ] || { WHY="no 'Removals not carried out' item in Retry"; return 1; }
+  need_sent "$b" 'Removals not carried out' '^A removal recorded as not carried out keeps its event record and the calendar it is due in\.$' || return 1
+  need_sent "$b" 'Removals not carried out' '^Until it is carried out, it is shown to the owner of that calendar and to the manager, as the date and time of the event and the owner.s name, with no customer value\b' || return 1
+  need_sent "$b" 'Removals not carried out' '^It is taken up again, as a new deletion job of that event, at each link or relink of that calendar and at least every 24 hours while its link works, and is carried out once Google confirms the deletion or answers that the event is deleted or absent\.$' || return 1
+  need_sent "$b" 'Removals not carried out' '^A removal recorded as not carried out for a calendar the owner left\b' '\bis taken up again only when that calendar is linked again\b' '\bis never sent to another calendar\.$' || return 1
+  figs_all_eq "$(grep -Ei '^It is taken up again\b' <<< "$b")" '\bat least every' 1440 'the take-up cadence of a removal not carried out' || return 1
+  forbid "$DECISION_SENTS" '\b(removal|deletion)s?\b[^.]*\bends? (with no|without( a)?) record\b|\b(removal|deletion)s?\b[^.]*\b(refus(al|ed)|ended)\b[^.]*\b(is|are) (dropped|forgotten|not recorded|never retried|never taken up)\b|\bnot carried out\b[^.]*\b(is|are) never (retried|taken up)\b' || return 1
+}
+check 'a removal a refusal ends is recorded as not carried out, shown with no customer value, and taken up again at each link or relink and at least every 24 hours' k06_removals_not_done
+
+# Fix round 2 (B-04): erasure and the re-apply also sweep, in the calendar of every linked staff
+# member, the erased visit's marked events whose identifier has the form the application chooses,
+# recorded or not; the sweep deletes nothing else, so a copy made in Google stays (PRH-2, K-03).
+k06_sweep() {
+  local b; b="$(flat <<< "$(bullet "$S_ERASE" '^- Sweep by marker[.]')")"
+  [ -n "$b" ] || { WHY="no 'Sweep by marker' item in Erasure and calendar events"; return 1; }
+  need_sent "$b" 'Sweep by marker' "^The erasure transaction also queues, for each visit of the erased customer and in the calendar of each staff member who has a link, one deletion job that lists the live events carrying this environment.s marker for that visit \\(A-9\\) and deletes every one whose identifier has the form the application chooses, whether or not the database records that identifier\\b" || return 1
+  need_sent "$b" 'Sweep by marker' '^Every event identifier the application chooses begins with a part derived from the environment identifier and the visit identifier alone\b' '\ban identifier Google gives to an event copied or made in Google has no such part \(A-21\)\.$' || return 1
+  need_sent "$b" 'Sweep by marker' '^This sweep is the one exception to \*?Twins\*? and to \*?Ownership\*?: it deletes such an event in whichever calendar holds it, and nothing else\.$' || return 1
+  need_sent "$b" 'Sweep by marker' '\bit counts as a job of its visit for the order of\b' '\bwhile that staff member.s access is lost it waits, suspended\b' || return 1
+  need_sent "$(flat <<< "$(bullet "$S_ERASE" 'The re-apply at restore')")" 'Re-apply' '^The re-apply queues the same deletion jobs\b' '\band the same sweep by marker for each of those visits\b' || return 1
+  need_sent "$(flat <<< "$(bullet "$S_ERASE" 'What erasure cannot reach')")" 'What erasure cannot reach' '\bso the sweep by marker does not reach it either\b' || return 1
+  need_sent "$(flat <<< "$(bullet "$S_RECOG" 'Twins')")" 'Twins' '^The one exception is the erasure sweep\b' '\bwhose identifier has the form the application chooses was created by the application, and the sweep deletes it\.$' || return 1
+  trows <<< "$ADR6_TEXT" | grep -Eq '^\| *A-21 *\|' || { WHY="no A-21 row (the identifier form the sweep relies on)"; return 1; }
+  forbid "$DECISION_SENTS" '\bdelet(e|es|ed|ing)\b[^.]*\bevery (marked event|event carrying (the|this environment.s) marker)\b|\bwhatever its identifier\b|\bsweep\b[^.]*\bdelet(e|es)\b[^.]*\b(every|all|any) (marked )?events?\b[^.]*\bmarker\b' || return 1
+}
+check "erasure and the re-apply sweep every linked calendar for the erased visit's marked events with an application-form identifier, recorded or not, and delete nothing else" k06_sweep
 
 k06_reapply() {
   local b; b="$(flat <<< "$(bullet "$S_ERASE" 'The re-apply at restore')")"
