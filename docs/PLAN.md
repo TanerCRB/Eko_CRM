@@ -79,7 +79,12 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   *Done when:* ADR-0006 is "Accepted <date>" and fixes the OAuth flow and scope, token storage
   and encryption, how app-created events are recognised, change detection able to meet VIS-6
   (`docs/product/project-brief.md`), the conflict rule VIS-5, retry of unsynchronised visits, and
-  the testing-mode limits with the path to Google verification.
+  the testing-mode limits with the path to Google verification. Within ADR-0005's rule that only
+  the VIS-3 customer name, address and phone, the visit times and sync identifiers go to Google,
+  ADR-0006 also lists each field sent to Google, decides how Google tokens are stored, what a
+  customer's erasure and the re-apply of erasures at a restore do to app-created calendar events,
+  past ones included, and what happens to those events when the owner's Google access is lost
+  (entry conditions from EKO-1-04, #17).
   **Out of scope (explicit):** implementation; the Google verification itself — later.
 
 - [ ] **EKO-1-06** — Build a walking skeleton that runs in containers.
@@ -104,6 +109,16 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   and a restore from an off-server backup of both the application and the Keycloak database onto
   a host like production, following ADR-0004's restore procedure with nothing taken from the
   source server, is carried out and recorded in a dated restore record — both before go-live.
+  From ADR-0005 (entry conditions from EKO-1-04, #17): the restore includes ADR-0005's re-apply
+  duty — every entry of the IT department's off-server erasure record not marked failed or
+  cancelled is carried out again on the restored application database after `migrate` (restore
+  step 12) and before `backend` and any worker start (step 13), with no backup set written from
+  the restored database before the re-apply has run; the re-apply itself is proven once erasure
+  exists (ADR-0005-C15). The restore record names re-applied erasures by count and entry
+  reference only. The decrypted set on a restore host is deleted once the restore is recorded or
+  abandoned, and a restore host that does not become the server, the test restore's host
+  included, keeps no restored database or volume (ADR-0005-C18). The Keycloak event settings,
+  the 14-day log bound and the off-server event copy are proven on production.
   **Out of scope (explicit):** anything ADR-0004 does not decide — a restore-time target (none set
   by the business; a new task when one is); retention and personal data in backups — EKO-1-04;
   the Google secrets — EKO-1-05; zero-downtime deployment (G-3 A); later restore tests.
