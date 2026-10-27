@@ -86,18 +86,32 @@ happens if it turns out false.
 - **Relinking a different Google account.** The application stores no identifier of the Google
   account (see *Token storage*). At every link and relink, before any change is sent or read, the
   backend lists, in the newly linked primary calendar, the live events carrying this environment's
-  marker, and compares them with every event the application records in that owner's calendar,
-  past and planned alike. Until the outcome below is settled, the link is held unused, no event
-  counts as deleted, no visit state changes and no prompt is raised.
+  marker, and compares them with every confirmed event the application records for that owner
+  (*Background work*, *A record counts once Google confirms it*), past and planned alike, in the
+  calendar in use and in each calendar the owner left by confirming another account. Until the
+  outcome below is settled, the link is held unused, no event counts as deleted, no visit state
+  changes and no prompt is raised. A record whose create Google has not confirmed is neither
+  compared nor read directly here; its create runs once the link is used.
   - When the list holds an event the application records in another owner's calendar, the link
     stays held unused whatever else is found, and no choice of the owner lifts the hold
     (*Ownership*).
-  - When it finds every recorded event, or the owner has no recorded event, the link is used.
-  - When it finds some recorded events and not others, the link is used, and each recorded event
-    not found is read directly by its identifier, as polling does (*Change detection*).
+  - When it finds confirmed events of a calendar the owner left and none of the calendar in use,
+    that earlier calendar is the one linked again, and the link is used without the choice below:
+    its records are tracked again, each removal recorded as not carried out for it is taken up
+    again (*Removals not carried out*), each of its confirmed events not found is read directly by
+    its identifier, as polling does, and the calendar just left is handled as under *Lost access*
+    (*When the owner confirms another account*). A planned visit whose confirmed event that
+    calendar holds keeps that event, brought up to date with the visit's latest data (*Read before
+    write*); only a planned visit with no confirmed event there is created in it, with a new event
+    identifier.
+  - When it finds every confirmed event of the calendar in use, or the owner has no confirmed
+    event at all (a first link included), the link is used, without the choice below.
+  - When it finds some confirmed events of the calendar in use and not others, the link is used,
+    and each confirmed event not found is read directly by its identifier, as polling does
+    (*Change detection*).
   - When it finds none of them while the owner has some, the owner chooses one of three: relink
     the account they used before; confirm that this is the same calendar, after which each
-    recorded event not found is read directly by its identifier, as polling does, and a deletion
+    confirmed event not found is read directly by its identifier, as polling does, and a deletion
     found so counts under VIS-11; or confirm a new calendar, which is handled under *Lost access*
     (*When the owner confirms another account*).
 
@@ -154,7 +168,7 @@ happens if it turns out false.
   - at unlink by the owner; the backend also revokes the token at Google, and deletes it once
     Google confirms the revocation or answers that the grant is no longer valid; from the unlink
     on the link is never used, and a revocation request that fails is retried on the cadence of
-    *Retry* until Google gives one of those answers;
+    *Retry* until Google gives one of those answers, except as the bullet after this list says;
   - when Google refuses a refresh (the grant expired or was revoked) — the link state becomes
     "access lost";
   - when a refused or failed grant check makes a link unusable (*OAuth flow and scope*);
@@ -163,7 +177,16 @@ happens if it turns out false.
   restore from a set taken before the last key replacement, or with a wrong key value) is not
   deleted: the link state becomes "access lost" and the owner relinks, which replaces the token.
   When the key value is corrected and the token decrypts again, the link works again, so a wrong
-  key value loses no link for good.
+  key value loses no link for good. At unlink by the owner, a token that cannot be decrypted with
+  the key in use is deleted at once and no revocation is sent, because none can be sent without
+  the token in clear; the owner is told that the application could not withdraw its access and
+  how to remove it in their Google account, with no customer value. This is safe: the ciphertext
+  is of no use without a key value no longer in use; after a replacement on suspected compromise
+  its grant was revoked first (*Secrets*); after any other replacement, a refresh of that grant
+  also needs the client secret, which is rotated with the key and its old value deleted (A-18);
+  with a wrong key value, the grant left at Google is the exposure option G-10 A already names
+  for restored data, until the owner's own removal ends it; and in testing mode the grant expires
+  7 days after it was given. Deleting the ciphertext only shortens the time it is kept.
 - **Deactivated staff.** The application does not learn of a deactivation in Keycloak (ADR-0005,
   *Options considered*, G-8 B), so a deactivated staff member's link is not deleted on
   deactivation. It stays until it is unlinked, Google refuses it, or (in testing mode) it expires
@@ -224,6 +247,14 @@ until the owner relinks. This adds no step to ADR-0004's restore procedure.
   calendar it is created) is written in the same transaction that queues its create, before the
   first attempt, so an event whose create was sent and never answered is still recorded, and
   erasure finds it.
+- **A record counts once Google confirms it.** An event record counts as an event in its calendar
+  only once Google has confirmed its create: answered it as created, or, after an "already exists"
+  answer, shown it live with this environment's marker for that visit (*Retry*, *No second
+  event*). Until then the record is pending, whether its create was never sent, is suspended, is
+  waiting for its next retry step or was never answered: the link check (*Relinking a different
+  Google account*) and polling neither compare it with the calendar nor read it directly, and it
+  never counts as a deletion in Google. Its create runs under *Retry*, and erasure still deletes
+  it (*Erasure and calendar events*, *How*).
 
 ### Event content: each field sent to Google
 
@@ -273,7 +304,10 @@ and no other field is set:
 - **Twins.** An event carrying the marker of a known visit whose identifier is not the one stored
   for that visit (a copy made in Google) is not that visit's event: it is never imported, changed
   or deleted, creates no visit and counts nowhere. A create retried after a lost response produces
-  no twin, because the event identifier is fixed before the first attempt.
+  no twin, because the event identifier is fixed before the first attempt. The one exception is
+  the erasure sweep (*Erasure and calendar events*, *Sweep by marker*): an erased visit's marked
+  event whose identifier has the form the application chooses was created by the application, and
+  the sweep deletes it.
 - **Ownership.** An event is matched only to a visit whose event record names the same owner as
   the link whose calendar holds it. An event of another owner's visit found in a calendar (two staff
   members linking one Google account) is never changed or deleted through that calendar's link and
@@ -281,8 +315,12 @@ and no other field is set:
   different Google account*) and at every poll, a link whose calendar holds a live event carrying
   this environment's marker that the application records in another owner's calendar is no longer
   used, its owner's jobs are suspended (*Retry*), and its owner is told, with no customer value and
-  no staff member named, until they unlink or relink another account. The hold sends nothing more
-  into that calendar; events written there before it was found stay there.
+  no staff member named, until they unlink or relink another account. When a link is held so,
+  every other link whose owner's recorded events were found in that calendar is held unused in the
+  same way, and its owner is told in the same way, so the link that wrote them is held too. The
+  hold sends nothing more into that calendar; events written there before it was found stay there.
+  The erasure sweep is the one exception to the rule that another owner's visit's event is never
+  deleted through that calendar's link (*Erasure and calendar events*, *Sweep by marker*).
 - **An application event moved by the rep to another calendar** is absent from the primary
   calendar; it is handled as a deletion in Google (VIS-11).
 - **Visit identifiers are never reused**, also after a restore from an earlier backup set, so an
@@ -301,10 +339,10 @@ and no other field is set:
   - **Polling.** For every owner with a working link, the worker reads the primary calendar at
     least every 2 minutes: it lists the live events carrying this environment's marker with the
     field selection above, compares them with the visits the application holds as synchronised in
-    that calendar, and applies changed date, time and duration (VIS-4, VIS-9). A tracked event
-    missing from the list is read directly by its identifier, and only a read that Google answered
-    under a working link, stating the event deleted or absent, counts as a deletion in Google
-    (VIS-11). A Google change is therefore visible in the application no later than 5 minutes
+    that calendar (their confirmed events, *A record counts once Google confirms it*), and applies
+    changed date, time and duration (VIS-4, VIS-9). A confirmed event missing from the list is
+    read directly by its identifier, and only a read that Google answered under a working link,
+    stating the event deleted or absent, counts as a deletion in Google (VIS-11). A Google change is therefore visible in the application no later than 5 minutes
     after it was made.
   - **When a page is opened.** Opening a page of the application asks the backend to read the
     owner's own calendar at once, through the same job, at most once every 30 seconds per owner;
@@ -324,9 +362,11 @@ and no other field is set:
   sent again.
 - **Reassignment (CUS-10).** A future event moved to a new owner is deleted from the old owner's
   calendar and created in the new owner's with a new event identifier (*Retry*, *A new create
-  uses a new identifier*); until the deletion is
-  carried out, the old event is another owner's event (*Ownership*) and counts nowhere. The move
-  itself is built by EKO-5-06.
+  uses a new identifier*). Until the deletion is carried out, the old event keeps its record,
+  which names the old owner, and counts nowhere: it is no longer the visit's event, its changes in
+  Google do not flow back, and it does not hold the old owner's link under *Ownership*, which
+  concerns only an event the application records in another owner's calendar. The move itself is
+  built by EKO-5-06.
 
 ### Conflict rule (VIS-5)
 
@@ -345,11 +385,13 @@ and no other field is set:
   change: the event is deleted in Google when the job runs.
 - **Read before write.** Every update job first reads the visit's event by its identifier, with
   the field selection of *What is read back*, and applies this rule to what it reads before it
-  writes. When the event carries a Google change (an `updated` instant that is not the
-  application's own write) later than the application's change, the Google date, time and
-  duration win and are applied to the visit (VIS-4, VIS-9), and the job writes only the values
-  Google does not own. Otherwise the job writes, conditional on the event version it read (the
-  event's `etag`); a write Google refuses because the event changed since that read goes back to
+  writes. When the event carries a Google change (its start or end differs from the values the
+  application last wrote to it, and its `updated` instant is not the application's own write)
+  later than the application's change, the Google date, time and duration win and are applied to
+  the visit (VIS-4, VIS-9), and the job writes only the values Google does not own. A change in
+  Google to any other field (the title, a reminder, the colour) moves `updated` but is not a Google
+  change for this rule, as it is not for polling (*What does not flow back*). Otherwise the job
+  writes, conditional on the event version it read (the event's `etag`); a write Google refuses because the event changed since that read goes back to
   the read. Jobs suspended while access was lost run only after a first read of the owner's
   calendar at the link or relink (*Retry*).
 
@@ -387,8 +429,19 @@ and no other field is set:
   except as *Erasure and calendar events* says for an unanswered create. Any other refusal of the
   request itself (Google rejecting a value, or refusing that one event) ends the job; the visit
   stays flagged Unsynchronised until a later job of the visit is confirmed, and Google's error
-  reason code is logged (*Logging*). A rate-limit answer is retried as above, and a refused refresh
+  reason code is logged (*Logging*). A removal ended this way (a deletion for a cancellation, an
+  archiving, a reassignment or an erasure, the erasure sweep included) is recorded as not carried
+  out (*Removals not carried out*). A rate-limit answer is retried as above, and a refused refresh
   is lost access (*Token storage*). An ended job never holds back the later jobs of its visit.
+- **Removals not carried out.** A removal recorded as not carried out keeps its event record and
+  the calendar it is due in. Until it is carried out, it is shown to the owner of that calendar
+  and to the manager, as the date and time of the event and the owner's name, with no customer
+  value, so that the event can also be deleted by hand. It is taken up again, as a new deletion job
+  of that event, at each link or relink of that calendar and at least every 24 hours while its
+  link works, and is carried out once Google confirms the deletion or answers that the event is
+  deleted or absent. A removal recorded as not carried out for a calendar the owner left (*When
+  the owner confirms another account*) is taken up again only when that calendar is linked again
+  (*Relinking a different Google account*), and is never sent to another calendar.
 
 ### Erasure and calendar events
 
@@ -406,6 +459,19 @@ and no other field is set:
   identifier that Google never answered: then the job reads the event again at its next retry
   step (*Retry*), deletes it if it is there, and counts as done only when that read also finds it
   deleted or absent.
+- **Sweep by marker.** The erasure transaction also queues, for each visit of the erased customer
+  and in the calendar of each staff member who has a link, one deletion job that lists the live
+  events carrying this environment's marker for that visit (A-9) and deletes every one whose
+  identifier has the form the application chooses, whether or not the database records that
+  identifier, so an event the application created after the backup set a restore used is reached
+  too. Every event identifier the application chooses begins with a part derived from the
+  environment identifier and the visit identifier alone, so the application can tell, for a given
+  visit, whether an identifier is one it chose for it; an identifier Google gives to an event
+  copied or made in Google has no such part (A-21). This sweep is the one exception to *Twins* and
+  to *Ownership*: it deletes such an event in whichever calendar holds it, and nothing else. Like
+  every deletion job queued by an erasure, it counts as a job of its visit for the order of
+  *Background work*, and while that staff member's access is lost it waits, suspended, as *The
+  owner's access lost* says.
 - **In-flight sync.** A job of the erased customer's visit that is queued or running when the
   erasure commits sends none of the customer's data afterwards: it reads the stripped visit when it
   runs and sends nothing for it, and a request already sent when the erasure commits is followed by
@@ -416,7 +482,8 @@ and no other field is set:
 - **The re-apply at restore.** ADR-0005's re-apply carries out each erasure again on the restored
   application database, after `migrate` at ADR-0004 restore step 12 and before `backend` and the
   worker start at step 13 (ADR-0005, *Re-apply at restore*). The re-apply queues the same deletion
-  jobs for every event the restored database records for the erased customers' visits. No sync of
+  jobs for every event the restored database records for the erased customers' visits, and the
+  same sweep by marker for each of those visits (*Sweep by marker*). No sync of
   restored data runs before the re-apply: the worker starts only after it. A deletion of an event
   the original erasure already removed counts as done.
 - **Events a restored database does not know.** An event carrying this environment's marker whose
@@ -426,7 +493,8 @@ and no other field is set:
   those visits again. An orphan is the application's own event, so PRH-2 does not protect it; a twin
   of an orphan is never touched.
 - **What erasure cannot reach.** A copy of an event made in Google (a twin) is not the
-  application's event and is never deleted (PRH-2); a customer's name in it stays in the rep's
+  application's event and is never deleted (PRH-2); its identifier is the one Google gave it, so
+  the sweep by marker does not reach it either, and a customer's name in it stays in the rep's
   calendar.
 
 ### Lost access
@@ -450,7 +518,10 @@ no event counts as deleted in Google, and the owner sees the reconnect notice un
   event the application records in that owner's earlier calendar is left there, out of reach: it
   is no longer tracked and never counts as deleted, and every removal due for it (a cancellation,
   an archiving, a reassignment or an erasure, due before the confirmation or after it) is recorded
-  as not carried out and is never sent to the new calendar. The events of the owner's planned
+  as not carried out and is never sent to the new calendar. The records of the earlier calendar
+  are kept, tied to it, together with every removal recorded as not carried out for it, and are
+  taken up again if that calendar is linked again (*Relinking a different Google account*,
+  *Removals not carried out*). The events of the owner's planned
   visits are then created in the new calendar, each with a new event identifier (*Retry*). As
   with a calendar never relinked, the customers' names, addresses and phones left in the earlier
   account are not settled by this decision: they are a question for the GDPR impact assessment
@@ -516,7 +587,7 @@ rule returns to the human as an addendum to this decision.
 | A-6 | The web server flow supports PKCE, offline access with a refresh token, a refresh token issued again when consent is requested, a token response naming the granted scopes, a revocation endpoint, and `invalid_grant` on a refused refresh; granular consent may grant fewer scopes than asked | Google's OAuth 2.0 documentation for web server applications | *OAuth flow and scope*, *Token storage* |
 | A-7 | Without `openid`, `email` or `profile`, Google returns no ID token and no e-mail address | Google's OpenID Connect documentation | *OAuth flow and scope* |
 | A-8 | An event can be inserted with an identifier the client chooses, within the characters and length Google allows for one; inserting an existing identifier is refused as a conflict; a deleted event's identifier cannot be used again, and reading it shows the event cancelled | Calendar API `events.insert` reference | *Event content*, *Retry*, *Conflict rule* |
-| A-9 | Private extended properties are set through the API, cannot be set in Google Calendar's own interface, and can be filtered on in `events.list`; whether Google's "duplicate" copies them is unknown | Calendar API extended-properties guide | *Recognising the application's events* |
+| A-9 | Private extended properties are set through the API, cannot be set in Google Calendar's own interface, and can be filtered on in `events.list`; whether Google's "duplicate" copies them is unknown | Calendar API extended-properties guide | *Recognising the application's events*; *Erasure and calendar events* (*Sweep by marker*) |
 | A-10 | Partial-response field selection limits the fields Google returns, the creator's and organiser's e-mail address included | Google APIs' standard `fields` parameter | *What is read back* |
 | A-11 | With no attendee and `sendUpdates` `none`, Google sends no invitation or notification to anyone | Calendar API `events.insert`/`update`/`delete` reference | *Event content* |
 | A-12 | An event's `updated` is the instant of its last change, returned also in the response to the application's own write | Calendar API event resource | *Change detection*, *Conflict rule* |
@@ -528,6 +599,7 @@ rule returns to the human as an addendum to this decision.
 | A-18 | Rotating the client secret in the Google Cloud project allows the new and old secret for a short overlap, or else costs a short loss of sync; an old secret deleted in the project no longer refreshes any grant | Google Cloud console documentation | *Secrets* |
 | A-19 | An event update can be made conditional on the event's `etag`, and Google refuses it when the event changed since that version | Calendar API reference; Google APIs' ETag support | *Conflict rule* (*Read before write*) |
 | A-20 | A create request Google did not answer has taken effect, if it ever does, by the time of the next retry step (at least 30 seconds later) | none beyond general experience of HTTP APIs; not documented by Google | *Erasure and calendar events* (*How*) |
+| A-21 | An event identifier the client chooses is stored and returned unchanged; an event copied or made in Google's own interface gets an identifier Google chooses, which in practice never begins with the part the application derives for a visit | Calendar API `events.insert` reference on client-chosen identifiers | *Erasure and calendar events* (*Sweep by marker*) |
 
 ## Options considered
 
@@ -650,7 +722,7 @@ Identifier and acceptance criterion only.
 | ADR-0006-C1 | A test of linking: the authorization request names exactly the decided scope and no `openid`, `email` or `profile`; a completion from a session other than the one that started the transaction, or with another `state`, is refused and stores nothing; a second completion of one transaction is refused; a grant holding any other scope or lacking the scope is refused and its token revoked; a link transaction older than 10 minutes is refused. |
 | ADR-0006-C2 | A test: a staff member with no link logs in and uses the application; their visits are saved and flagged Unsynchronised. |
 | ADR-0006-C3 | A test of storage: the link table holds the refresh token only as ciphertext, no access token, no Google account identifier or e-mail address; the Google token encryption key is read only from the environment and appears in no table and in no backup set; with the key replaced, every link becomes "access lost" and its token is kept; with the original key value back, every such link works again; a relink replaces the kept token. |
-| ADR-0006-C4 | A test: at unlink the link is never used again, a revocation request reaches the test double, and the token is deleted only once the double confirms the revocation or answers the grant invalid; a revocation the double fails is retried; a stored token is deleted at a refused refresh. |
+| ADR-0006-C4 | A test: at unlink the link is never used again, a revocation request reaches the test double, and the token is deleted only once the double confirms the revocation or answers the grant invalid; a revocation the double fails is retried; a stored token is deleted at a refused refresh; at unlink, a token the key in use cannot decrypt is deleted, no revocation request reaches the double, and the owner's notice holds no customer value. |
 | ADR-0006-C5 | Against the Google test double, every insert and update body holds only the fields of *Event content*, no attendee, and `sendUpdates` `none`; the description holds only the primary phone, or nothing when none is primary or the primary contact is an e-mail; no request URL or query string holds a customer field value; every request names a field selection without `summary`, `location`, `description`, attendees, creator or organiser. |
 | ADR-0006-C6 | Against the test double: an event without the marker, an event with another environment's marker, a twin carrying a known visit's marker, and another owner's event are never changed, deleted or imported, and count nowhere; an event carrying the marker and the stored identifier is synchronised; a hand-made event with an application event's title, location and description is not recognised. |
 | ADR-0006-C7 | With the clock fixed, against the test double: an application change reaches the double no later than 60 seconds after its commit; a change in the double is applied no later than 5 minutes after it, and at once when a page is opened; a failed or refused read changes no visit; the application's own write does not set Moved. |
@@ -658,18 +730,21 @@ Identifier and acceptance criterion only.
 | ADR-0006-C9 | A test of retry: a failed create is retried with the stated cadence and produces one event when the first attempt succeeded at Google with a lost response; jobs of an owner whose access is lost are kept and run in order at relink; no visit state changes and no prompt is raised while access is lost. |
 | ADR-0006-C10 | Once erasure exists: erasing a customer queues the deletion of every event of its visits, past and future, in every owner's calendar it lives in; a job of that customer's visit queued before the commit sends no customer value; the re-apply at restore queues the same deletions; a deletion answered "already deleted" counts as done. |
 | ADR-0006-C11 | A test of a restore from an earlier database: an event carrying this environment's marker and an unknown visit identifier is deleted at the owner's first read, and the owner's notice lists its date and time and no customer value. |
-| ADR-0006-C12 | A test of relink to another account: when the new calendar holds none of the owner's recorded events, past and planned, the link is held unused, no visit state changes and no prompt is raised until the owner chooses; an owner whose recorded events are all past is checked too; choosing "same calendar" makes each recorded event the double reports deleted count under VIS-11; when some recorded events are found, the ones not found are read directly. |
+| ADR-0006-C12 | A test of relink to another account: when the new calendar holds none of the owner's recorded events, past and planned, the link is held unused, no visit state changes and no prompt is raised until the owner chooses; an owner whose recorded events are all past is checked too; choosing "same calendar" makes each recorded event the double reports deleted count under VIS-11; when some recorded events are found, the ones not found are read directly; only confirmed events are compared; relinking a calendar the owner left by confirming another account is used with no choice offered, takes its records up again and creates no second event for a planned visit whose event it holds. |
 | ADR-0006-C13 | In the rendered composition (once the ADR-0004 addendum adds it), the `worker` service uses the backend image, its command and entrypoint contain no `alembic upgrade`, it depends on `migrate` with condition `service_completed_successfully`, and it publishes no port; a test starts the worker against a database at an older revision than its code's head and it exits non-zero without working and without changing the schema. |
 | ADR-0006-C14 | A test makes the test double answer errors whose messages carry a marker value; the marker, the authorization code, the `state` and every token appear in no log line of `backend` or the worker. |
 | ADR-0006-C15 | Manual `<YYYY-MM-DD>`: against a real Google test account in testing mode, linking with the decided scope works, an application event appears with the decided content, no notification reaches any address, a deletion in Google becomes Awaiting decision within 5 minutes, and the grant's expiry after 7 days shows the reconnect notice with no visit state change. |
 | ADR-0006-C16 | Against the test double: rescheduling after a deletion in the double, a reassignment from A to B and back to A, and a confirmed relink each create a live event under an identifier not used before for that visit; a create answered "already exists" for a cancelled event gives Awaiting decision, not "created"; two environments create events for one visit identifier under different identifiers. |
 | ADR-0006-C17 | Against the test double: the event record exists before the first create attempt; an erasure committed while that visit's create is unanswered or running queues a deletion that runs only after that job has ended; a deletion answered "absent" after an unanswered create reads the event again at the next retry step and deletes it when it appears. |
-| ADR-0006-C18 | With the clock fixed, against the test double: an update job reads the event first; a Google change later than the application's change wins and is not overwritten, also for a change made while access was lost and replayed at relink; a conditional write the double refuses for a changed `etag` goes back to the read. |
+| ADR-0006-C18 | With the clock fixed, against the test double: an update job reads the event first; a Google change later than the application's change wins and is not overwritten, also for a change made while access was lost and replayed at relink; a conditional write the double refuses for a changed `etag` goes back to the read; an event whose title or reminder alone changed in the double, with start and end as the application last wrote them, does not win over the application's change, also when its `updated` instant is later. |
 | ADR-0006-C19 | Against the test double: an update answered "not found" or "gone" is not retried, the event is read directly and the deletion counts under VIS-11, and a later create of that visit runs; an update answered with another non-rate-limit refusal ends, the visit stays Unsynchronised, and the next job of that visit runs. |
-| ADR-0006-C20 | Against the test double: a link or relink whose calendar holds a marked event recorded in another owner's calendar is held unused, no choice lifts the hold, and the owner's notice holds no customer value and names no staff member; the same holds when such an event first appears at a poll. |
-| ADR-0006-C21 | A test of a confirmed relink to another account: no event of the earlier calendar counts as deleted, no removal due for one is sent to the new calendar, each such removal is recorded as not carried out, and the planned visits' events are created in the new calendar. |
+| ADR-0006-C20 | Against the test double: a link or relink whose calendar holds a marked event recorded in another owner's calendar is held unused, no choice lifts the hold, and the owner's notice holds no customer value and names no staff member; the same holds when such an event first appears at a poll; when the hold falls on one link, every other link whose owner's recorded events were found in that calendar is held too, the link that linked it first included; a reassignment from A to B leaves A's link working, and the old event in A's calendar is deleted through it and never applied to the visit. |
+| ADR-0006-C21 | A test of a confirmed relink to another account: no event of the earlier calendar counts as deleted, no removal due for one is sent to the new calendar, each such removal is recorded as not carried out, and the planned visits' events are created in the new calendar; when the earlier account is then linked again, each removal recorded as not carried out for it is carried out there, and no planned visit gets a second event in it. |
 | ADR-0006-C22 | A test of key replacement on suspected compromise: every grant on record is revoked at the test double before the key value changes. |
 | ADR-0006-C23 | Manual `<YYYY-MM-DD>`: in the Google Cloud project, after a client-secret rotation that deleted the old secret, a refresh with the old secret is refused (A-18). |
+| ADR-0006-C24 | Against the test double: a staff member whose only records are creates not yet confirmed (never sent, suspended, or never answered) links for the first time and the link is used with no choice offered; at a relink after lost access, a visit whose create was suspended is neither read directly nor counted as deleted, and its create then runs; a create waiting for its next retry step is not read directly by a poll and gives no Awaiting decision. |
+| ADR-0006-C25 | Against the test double: a deletion for an erasure, a cancellation, an archiving and a reassignment, each answered with a refusal that is not a rate limit, is recorded as not carried out, shown to the calendar's owner and the manager with no customer value, taken up again at the next relink and after 24 hours, and no longer shown once the double accepts it. |
+| ADR-0006-C26 | Against the test double: after a restore from a set taken before an event was created for a visit the restored database holds, erasing that visit's customer deletes that event in the calendar of each linked staff member, the re-apply at restore does the same, and an event carrying the same marker under an identifier the double chose is not deleted. |
 
 ## Addenda
 
