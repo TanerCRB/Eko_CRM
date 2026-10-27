@@ -727,8 +727,10 @@ above. -->
   Calendar integration, on a job queue in the application database. It never runs
   `alembic upgrade head`, depends on `migrate` with condition `service_completed_successfully`,
   refuses at start a revision that is not its code's head or a descendant of it, publishes no
-  port, reads the `backend` environment file (application database role password, Google OAuth
-  client secret, Google token encryption key), and counts in the application role's connection
+  port, reads the whole `backend` environment file (it uses the application database role
+  password, the Google OAuth client secret and the Google token encryption key, and also holds the
+  file's session-token encryption key and OIDC client secret, which it does not use), and counts
+  in the application role's connection
   budget. It is started and replaced with `backend` at every deployment and rollback, and at a
   restore it starts at step 13 with `backend`, after ADR-0005's re-apply. ADR-0004-C1 therefore
   lists eight services in shared environments. No other rule of this decision changes. Reason:
