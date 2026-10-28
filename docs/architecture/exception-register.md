@@ -57,3 +57,14 @@ an ADR-0005 addendum tracked in #43:
 - Exception EKO-1-04/B-09 — owner: @TanerCRB — reason: the live-database check guarding a failed or cancelled mark is not required to come after the erasure can no longer commit; fixed in #43 — blocks again: 2027-03-31
 - Exception EKO-1-04/F-01 — owner: @TanerCRB — reason: row ADR-0005-C19 does not carry D-10's condition on a cancelled mark, which C15 carries; fixed in #43 — blocks again: 2027-03-31
 - Exception EKO-1-04/F-02 — owner: @TanerCRB — reason: the channel that carries a report to the human and any copy the human keeps are not listed holders bound by the deletion rule (security auditor U-07); fixed in #43 — blocks again: 2027-03-31
+
+Accepted at gate 2 of EKO-1-05 in [PR #49](https://github.com/TanerCRB/Eko_CRM/pull/49); fixed by
+an ADR-0006 addendum tracked in #46:
+
+- Exception EKO-1-05/R-16 — owner: @TanerCRB — reason: the Ownership hold of every link on a shared calendar also suspends deletion jobs through those links with no exit and nothing shown, so an erased customer's data can stay in another rep's calendar (security auditor B-05); fixed by an ADR-0006 addendum tracked in #46 before the EKO-5 synchronisation code — blocks again: 2027-03-31
+- Exception EKO-1-05/R-15 — owner: @TanerCRB — reason: a sweep suspended for one staff member's lost access never ends and, under the per-visit order, holds back every later job of the visit; fixed in #46 — blocks again: 2027-03-31
+- Exception EKO-1-05/R-11 — owner: @TanerCRB — reason: the conflict rule compares with the values the application last wrote, so a Google time move already applied by polling followed by any later Google edit reverts the rep's rescheduling; fixed in #46 — blocks again: 2027-03-31
+- Exception EKO-1-05/R-17 — owner: @TanerCRB — reason: a pending record at a confirmed switch to a new calendar has no defined calendar, giving two events for one visit or an untracked twin in the earlier calendar; fixed in #46 — blocks again: 2027-03-31
+- Exception EKO-1-05/R-18 — owner: @TanerCRB — reason: a sweep recorded as not carried out has no event record, so its take-up and its notice are undefined; fixed in #46 — blocks again: 2027-03-31
+- Exception EKO-1-05/B-06 — owner: @TanerCRB — reason: a rep with edit rights on a colleague's calendar can hold the colleague's link by moving one application event into their own calendar (availability only); fixed in #46 — blocks again: 2027-03-31
+- Exception EKO-1-05/Q-01 — owner: @TanerCRB — reason: the id row of the closed field table does not state the identifier prefix that the sweep by marker relies on (A-21); fixed in #46 — blocks again: 2027-03-31
