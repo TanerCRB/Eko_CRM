@@ -737,3 +737,132 @@ above. -->
   this decision's *Background work* rule requires ADR-0006 to record an added worker service as an
   addendum here, and ADR-0006 chose a worker service from the backend image with a queue in
   PostgreSQL.
+
+### 2026-10-28 — Forwards to EKO-1-06 reassigned after its split
+
+**What it restates.** EKO-1-06 (#19) was split into EKO-1-06 and EKO-1-10..EKO-1-15 (#51..#56).
+This addendum changes only which task receives a duty this decision names. No rule, consequence or
+control changes. From this date:
+
+- **Kept by EKO-1-06 (#19):**
+  - the composition file, the Dockerfiles and the entry-point configuration;
+  - the values of ADR-0003-C19 and the backup role's limit (*Composition and placement*,
+    *Connection limits*);
+  - the image versions first used.
+  That the backup role's limit covers the sessions a backup holds, and that a nightly run under it
+  completes (ADR-0004-C19), is shown by **EKO-1-14 (#55)**, which builds the backup.
+- **To EKO-1-11 (#52):** the values of the lock and statement timeouts of `migrate`, and how the
+  revision check of `backend` and the same check in `migrate` establish that a newer revision
+  descends from their code's head (*Forwarded on from this decision*, *Forward references*).
+- **To EKO-1-12 (#53):**
+  - the reset-response timing measurement (*HTTPS exposure*, "The walking skeleton, EKO-1-06
+    (#19), measures …"; *Items forwarded to this decision*; *Forward references*). Its
+    consequence is unchanged: if the two response times are distinguishable, the reset e-mail is
+    not turned on in any shared environment, and the finding returns to the human.
+  - the correction of the bootstrap order found as exception EKO-1-03/R-22 (*Bootstrap of the
+    first administrator*). Because it changes the order of that section's steps, EKO-1-12 records
+    it as its own addendum to this decision.
+- **To EKO-1-10 (#51):** the half of "keeping single-page applications already open on reps'
+  phones working" that concerns the previous build calling the new release's API, as a check
+  that compares the OpenAPI document with the previous release's (*Forwarded on from this
+  decision*; *Forward references*, "with EKO-1-07 (#20)"). EKO-1-07 (#20) keeps the lazy-chunk
+  half, together with EKO-1-10 (#51) where the *Forward references* say "together with EKO-1-06
+  (#19)".
+- **Newly named:** building the backend and frontend images from a release tag, pushing them to the
+  registry, and referencing them by digest in a release's composition (*Composition and
+  placement*, *Images*) is carried out by **EKO-1-15 (#56)**, before EKO-1-08's (#36) first
+  deployment.
+
+**Why.** These passages name EKO-1-06 as the task receiving duties it no longer carries after the
+split. Left unchanged, the reset-timing consequence would bind a task that no longer measures, and
+the tasks that do carry these duties would find nothing in this decision naming them. Approved by
+the human at gate 1 of EKO-1-06 on 2026-10-28 (G-5 B, Issue #19). This is not a deviation: no rule
+changes.
+
+### 2026-10-28 — Initialising PostgreSQL: roles, limits, privileges and the two databases
+
+**What it adds.** This decision lists the PostgreSQL roles, their connection limits and the two
+databases, but it does not say what creates them on an empty data volume. It also forbids a host
+path mounted into `postgres` (ADR-0004-C4), and its secret inventory does not deliver the three
+role passwords to `postgres`. From this date:
+
+- **The pinned image initialises itself.** `postgres` stays the pinned PostgreSQL 18 image itself:
+  an `image:` reference under ADR-0004-C2 and ADR-0002-C12, with no `build:`. It creates the roles
+  and databases from **init content** that the official image runs from
+  `/docker-entrypoint-initdb.d/`. The image runs that content only when the data directory is
+  empty, so it runs once per `pgdata` volume.
+- **The init content is inline in the one composition file.** It is a top-level `configs` entry of
+  the composition file, with inline `content` and no `file` source, attached to `postgres` with a
+  target under `/docker-entrypoint-initdb.d/`. It is therefore neither a host path nor a second
+  file. The content holds no secret value and no Compose interpolation (`${…}` would be replaced
+  at render time and put the value into `docker compose config` output; a literal `$` is written
+  `$$`). It reads the three role passwords from the container's environment while it runs, never
+  from a command line. If the Compose release in use delivers inline config content as a bind
+  mount of a host file, ADR-0004-C4 fails. In that case the mechanism returns to the human as an
+  addendum, before any other mechanism is used.
+- **What it creates.** All of this runs in one database session, which keeps statement text out of
+  the server log for its own errors (ADR-0005), so a failing statement cannot log a password:
+  - three login roles, the application role, Keycloak's role and the backup role. None is a
+    superuser, and none may create roles or databases. Each has its password from the environment
+    and its own `CONNECTION LIMIT` (ADR-0003-C19 and its 2026-10-24 addendum).
+  - the application database, owned by the application role, with encoding `UTF8` and default
+    collation from the ICU provider with locale `pl-PL` (ADR-0002, ADR-0002-C5).
+  - Keycloak's database, owned by Keycloak's role, with encoding `UTF8`.
+  - on both databases, `REVOKE CONNECT … FROM PUBLIC`. `CONNECT` is held only by the owning role and
+    by the backup role (ADR-0003, *Identity server storage*; ADR-0003-C11). The backup role's read
+    privileges are set by the task that builds the backup (EKO-1-14, #55).
+  The limit values and `max_connections` are configuration that is the same in every environment.
+  They are part of the release: the limits are written in the init content, and `max_connections`
+  is set in the `postgres` command of the composition.
+- **Missing or empty passwords.** An unset or empty role password stops the first initialisation
+  with a non-zero exit naming the variable, as ADR-0004-C10 requires. A volume whose first
+  initialisation failed is removed before the next start, never started again: the official image
+  would treat its data directory as initialised and skip the init content.
+- **Existing volumes.** Because the content runs only on an empty data directory, a release that
+  changes a role, a limit or a privilege the content sets also carries that change for existing
+  volumes, as an operator step announced with the release.
+- **Secret inventory.** The rows *Application database role password*, *Keycloak database role
+  password* and *Backup database role password* each read, in addition to what they say:
+  - Used by: `postgres` (first initialisation).
+  - Kept on the server: also the `postgres` environment file.
+  - Delivered: also as an environment variable of `postgres`.
+  - The composition declares each of them, in `postgres` as in the other services, as required
+    with no default (ADR-0004-C9).
+- **After first initialisation.** After the first initialisation PostgreSQL does not read these
+  copies again. They stay in the `postgres` environment file, because the composition requires
+  them. They are kept in step with the other copies at every rotation (*Secret handling*: every
+  environment file that holds a secret). Because initialisation does not run again, a rotation
+  also sets the new value in PostgreSQL (`ALTER ROLE … PASSWORD`), carried out by the operator.
+  The extra copy has the same readers as the others: the IT department, through a file of mode
+  `0600` owned by the account that runs `docker compose`. Anyone who can inspect the running
+  `postgres` container can already read every container's environment (*Secret handling*).
+- **Restore.** At restore step 4, `postgres` starts on an empty volume, so the init content creates
+  the three roles with the passwords in effect (taken from the master copies at step 2), their
+  limits and privileges, and the two empty databases. Step 4 then creates only those roles of the
+  backup set that the init content does not create. Step 5 restores each dump into the database
+  the init content created, which keeps the application database's ICU `pl-PL` collation.
+- **Development and CI.** The development profile and CI use the same mechanism. Their untracked
+  environment file holds synthetic values for the same variables.
+- **New control ADR-0004-C28:**
+  - In the rendered composition, `postgres` has an `image:` and no `build:`, and its init content
+    is a top-level `configs` entry with inline `content`, no `file` source and no `${`.
+  - On a running composition started from no volumes, `docker inspect` of `postgres` lists the
+    named volume `pgdata` as its only mount.
+  - The application, Keycloak and backup roles exist, each with `rolsuper`, `rolcreaterole` and
+    `rolcreatedb` false and a connection limit greater than zero.
+  - Neither database grants `CONNECT` to `PUBLIC`.
+  - Started from no volumes with one role password empty, `postgres` exits non-zero and creates
+    neither database.
+
+Every other rule and control of this decision is unchanged. ADR-0004-C1 is unchanged: no service
+is added.
+
+**Why.** The walking skeleton (EKO-1-06, #19) has to create the ICU application database, the
+three roles and their limits and privileges within this composition. Several routes would each
+change a rule of this decision: a host-path init directory breaks ADR-0004-C4, a `postgres` built
+from the pinned image breaks the image named in *Composition and placement*, and a further
+one-shot service breaks ADR-0004-C1. Roles created without passwords would make development and
+shared initialisation differ. Inline init content in the pinned image keeps the service list, the
+image and C4, and it changes only the secret inventory. Approved by the human at gate 1 of
+EKO-1-06 on 2026-10-28 (G-6 A, Issue #19). This is a declared deviation, because it changes the
+secret inventory of *Secret handling*.

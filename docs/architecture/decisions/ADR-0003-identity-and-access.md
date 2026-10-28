@@ -459,3 +459,78 @@ clause of ADR-0003-C19 is unchanged. ADR-0004-C19 checks the three-role sum.
 letter while its guarantee — that no role can use up the shared server's connections — is gone.
 ADR-0004 (deployment and backup) cannot meet the two-role sum as written, so the restatement is a
 declared deviation, approved by the human at gate 1 of EKO-1-03 on 2026-10-24 (G-10 A, Issue #16).
+
+### 2026-10-28 — Forwards to EKO-1-06 reassigned after its split
+
+**What it restates.** EKO-1-06 (#19) was split into EKO-1-06 and EKO-1-10..EKO-1-15 (#51..#56).
+This addendum changes only which task receives a duty this decision names. No rule, stop rule or
+control changes. From this date:
+
+- *Identity server product*: the walking skeleton, EKO-1-06 (#19), still chooses the Keycloak
+  version first used, and it still stops when no release lists PostgreSQL 18. This is unchanged.
+- *Identity server storage*: EKO-1-06 (#19) still sets the connection-limit values. This is
+  unchanged.
+- *Administrator permissions in Keycloak*, the console-role stop rule ("If EKO-1-06 finds that
+  Keycloak's console cannot assign the application's client roles with this set, that task
+  stops"): the task that makes this finding, and that stops, is **EKO-1-12 (#53)**. The rule is
+  otherwise unchanged: any additional role returns to the human as an addendum to this decision,
+  and `realm-admin`, `impersonation`, `manage-realm` and `manage-clients` are never added. The
+  same applies to "gate in EKO-1-06" in the *Administrator's permissions in Keycloak* options
+  table.
+- *Network exposure* and *Forward references*, "EKO-1-06 / EKO-2-01 — password policy, MFA,
+  brute-force thresholds": the receiving task is **EKO-2-01 (#21)**. Until EKO-2-01 sets the
+  thresholds, EKO-1-12 (#53) keeps brute-force detection on (`bruteForceProtected` true) with
+  provisional values. The precondition that detection is on before any login page of a shared
+  environment is reachable from the internet is unchanged.
+
+**Why.** Each of these passages names EKO-1-06. Left unchanged, the stop rule of *Administrator
+permissions in Keycloak* would bind a task that no longer runs the console check, and the task
+that does run it would find no rule naming it. Approved by the human at gate 1 of EKO-1-06 on
+2026-10-28 (G-5 B, Issue #19). This is not a deviation: no rule changes.
+
+### 2026-10-28 — Routes served without a session; the OpenAPI document in shared environments
+
+**What it adds.** *How a request is verified* says that a request without a session, or whose
+session cannot be resolved or verified, gets HTTP 401. ADR-0003-C4 tests that on every API route.
+The decision implies two exceptions, the start of a login and its callback, but it names none, and
+the walking skeleton (EKO-1-06, #19) adds a health route. From this date:
+
+- **Exactly three routes are served without a session:** the route that starts a login, the login
+  callback (still protected by the login transaction under *Browser flow*), and the health route.
+  The access dependency exempts these three and no other route. Adding a route to this list is a
+  change to this decision, recorded as an addendum.
+- **The health route answers status only.** It is a readiness check: it answers success only when
+  the backend can reach the application database, and failure otherwise. Its response holds the
+  status and nothing else: no version, Alembic revision, host name, dependency name, error text,
+  configuration value, personal data or secret. It accepts only `GET` and `HEAD`.
+- **The OpenAPI document is not served through `proxy` in shared environments.** In the
+  shared-environment profile, neither listener of `proxy` forwards a request for the backend's
+  OpenAPI document or for FastAPI's documentation pages. They are reachable only inside the
+  composition's network. ADR-0001-C7's test fetches the document from the backend directly,
+  never through `proxy`, and so does any check that compares it between releases. The
+  development profile may serve it through `proxy`.
+- **ADR-0003-C4 reads:** a test walking every API route other than the start of a login, the login
+  callback and the health route — this exemption list is held in the test explicitly — makes the
+  checks below, and the test fails when a route outside that list answers a request without a
+  session cookie with anything other than 401:
+  - with no session cookie, or with a session whose token has a wrong signature, issuer or
+    audience, or whose expired token Keycloak refuses to renew, each route answers 401, and a
+    session whose renewal was refused is deleted;
+  - with an expired token and Keycloak unreachable, each route answers 503 and the session is
+    kept.
+- **New control ADR-0003-C23:** without a session cookie, the health route answers success with a
+  body holding only its status while the application database is reachable, and a failure status
+  from `backend` while it is not. Through either listener of `proxy` in the shared-environment
+  profile, a request for the backend's OpenAPI document or its documentation pages gets no
+  OpenAPI content. The access dependency's exemption list holds exactly the start of a login, the
+  login callback and the health route.
+
+Every other rule and control of this decision is unchanged.
+
+**Why.** The single-entry-point composition (ADR-0004) routes the health check through `proxy`,
+and in shared environments `proxy` is reachable from the internet. Without a closed exemption
+list, ADR-0003-C4 would fail on the health route the moment the access dependency exists, and each
+later exemption would be decided in code instead of here. A health response that names versions
+or errors, or an OpenAPI document served to the internet, would describe the system to anyone who
+asks, with no login. Restating ADR-0003-C4 is a declared deviation, approved by the human at gate
+1 of EKO-1-06 on 2026-10-28 (G-7 A, Issue #19).

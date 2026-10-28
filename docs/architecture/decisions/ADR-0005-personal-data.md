@@ -634,3 +634,33 @@ Identifier and acceptance criterion only.
 
 <!-- A change to an accepted decision is a dated addendum with a reason, never an edit of the text
 above. -->
+
+### 2026-10-28 — Forwards to EKO-1-06 reassigned after its split
+
+**What it restates.** EKO-1-06 (#19) was split into EKO-1-06 and EKO-1-10..EKO-1-15 (#51..#56).
+This addendum changes only which task receives a duty this decision names. No rule, stop rule or
+control changes. From this date:
+
+- *What may appear in logs*, "If the official image cannot keep the typed username out": the
+  implementing task named there is **EKO-1-12 (#53)** or EKO-1-09 (#41), in place of EKO-1-06 (#19)
+  or EKO-1-09 (#41). The stop rule is otherwise unchanged: the task stops, and the change returns to
+  the human as an addendum to this decision before any provider or image is added and before the
+  stored event types of *Retention* are changed.
+- *Forward references*, "EKO-1-06 (#19) receives":
+  - The following go to **EKO-1-12 (#53)**, which also carries the typed-username stop rule above:
+    - the application realm's event settings in the export under `identity/`;
+    - the master realm's event settings at bootstrap;
+    - Keycloak's log settings, including the typed username of a failed login naming no existing
+      account.
+  - The following go to **EKO-1-13 (#54)**:
+    - the log settings of every other service, PostgreSQL's error logging and the log of `proxy`
+      included;
+    - the time-bound deletion of logs in the composition;
+    - the backend's log and error-handling rules, with its correlation identifier;
+    - `Cache-Control: no-store`.
+
+**Why.** These passages name EKO-1-06 as the task receiving duties it no longer carries after the
+split. Left unchanged, the typed-username stop rule would bind a task that no longer configures
+Keycloak, and the tasks that do would find nothing in this decision naming them. Approved by the
+human at gate 1 of EKO-1-06 on 2026-10-28 (G-5 B, Issue #19). This is not a deviation: no rule
+changes.
