@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-27",
+  "task": "EKO-1-05",
+  "phase": "fix-1",
+  "role": "reviewer",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a568645d0dabca6e7",
+  "tokens": 829595,
+  "tokenSplit": {
+    "input": 26,
+    "output": 33291,
+    "cacheWrite": 95786,
+    "cacheRead": 700492
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 13,
+  "seconds": 398,
+  "fixRound": 1,
+  "reworkCause": "Re-verification of fix round 1 (Reviewer R-01..R-09, Security Auditor B-01/B-02)",
+  "notes": "STOP at 86ca2ee; R-01..R-07, R-09 resolved; R-08 Low open (gate 2); new R-10..R-12 Medium, R-13, R-14 Low from mechanisms the fix added; boundary-check: clean (--none)"
+}

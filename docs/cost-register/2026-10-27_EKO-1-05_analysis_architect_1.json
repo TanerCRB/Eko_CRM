@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-27",
+  "task": "EKO-1-05",
+  "phase": "analysis",
+  "role": "architect",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "acf517c40464e86f8",
+  "tokens": 1296558,
+  "tokenSplit": {
+    "input": 26,
+    "output": 61099,
+    "cacheWrite": 173894,
+    "cacheRead": 1061539
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 25,
+  "seconds": 633,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "REQUIRES A HUMAN DECISION; new decision ADR-0006 drafted (ADR-0006-google-calendar.md, Draft — pending approval, GATE-1 markers); fits ADR-0001..0005 under recommended options, plus ADR-0004 worker addendum it provides for; agrees with G-1 A, Q-1 A (plus worker-module register row), Q-2..Q-4 A; own G-2..G-12; assumptions A-1..A-18; boundary-check: clean (docs/architecture/decisions/)"
+}

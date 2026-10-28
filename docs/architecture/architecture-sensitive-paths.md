@@ -24,7 +24,8 @@ that task edits its own rows.
 | `frontend/src/**` | personal-data | ADR-0001, ADR-0003, ADR-0005 | renders contacts; holds no token (ADR-0003: HttpOnly session cookie, one origin) |
 | `backend/app/core/settings.py` | secrets | ADR-0001, ADR-0004 | the one place configuration and secrets are read |
 | `backend/app/core/**` | secrets | ADR-0001, ADR-0004 | configuration code beside settings.py |
-| `backend/app/integrations/**` | external, personal-data | ADR-0001, ADR-0005; pending ADR-0006 | adapters to external systems receive personal data |
+| `backend/app/integrations/**` | external, personal-data | ADR-0001, ADR-0005, ADR-0006 | adapters to external systems receive personal data |
+| `backend/app/worker.py` | schema, external, personal-data, secrets | ADR-0001, ADR-0004, ADR-0005, ADR-0006 | the worker's entry point: refuses an older schema and never migrates, drives the Google sync jobs carrying customer data, reads the Google secrets through settings |
 | `backend/pyproject.toml` | dependencies | ADR-0001 | backend package manifest |
 | `backend/*.lock` | dependencies | ADR-0001 | backend lock file (`uv.lock`) |
 | `frontend/package.json` | dependencies | ADR-0001 | frontend package manifest |

@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-27",
+  "task": "EKO-1-05",
+  "phase": "implementation",
+  "role": "architect",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a716dba124cac2f74",
+  "tokens": 1937158,
+  "tokenSplit": {
+    "input": 46,
+    "output": 21674,
+    "cacheWrite": 105220,
+    "cacheRead": 1810218
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 54,
+  "seconds": 234,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "ADR-0006 finalized with gate-1 answers, status Accepted 2026-10-27; ADR-0004 addendum 2026-10-27 (worker service); registers: integrations row cites ADR-0006, new row backend/app/worker.py (schema, external, personal-data, secrets), layer table Why cell; flags: K-05 'e-mail' wording hazard, one Google account linked by two staff; no shell (check-links run by driver: clean); boundary-check: clean (4 files)"
+}

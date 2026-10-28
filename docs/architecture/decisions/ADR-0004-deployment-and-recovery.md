@@ -721,3 +721,19 @@ Identifier and acceptance criterion only.
 
 <!-- A change to an accepted decision is a dated addendum with a reason, never an edit of the text
 above. -->
+
+- **2026-10-27:** ADR-0006 (EKO-1-05, #18) adds the `worker` service under *Composition and
+  placement* (*Background work*). Image: the backend image. Role: background work of the Google
+  Calendar integration, on a job queue in the application database. It never runs
+  `alembic upgrade head`, depends on `migrate` with condition `service_completed_successfully`,
+  refuses at start a revision that is not its code's head or a descendant of it, publishes no
+  port, reads the whole `backend` environment file (it uses the application database role
+  password, the Google OAuth client secret and the Google token encryption key, and also holds the
+  file's session-token encryption key and OIDC client secret, which it does not use), and counts
+  in the application role's connection
+  budget. It is started and replaced with `backend` at every deployment and rollback, and at a
+  restore it starts at step 13 with `backend`, after ADR-0005's re-apply. ADR-0004-C1 therefore
+  lists eight services in shared environments. No other rule of this decision changes. Reason:
+  this decision's *Background work* rule requires ADR-0006 to record an added worker service as an
+  addendum here, and ADR-0006 chose a worker service from the backend image with a queue in
+  PostgreSQL.
