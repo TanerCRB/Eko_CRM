@@ -33,9 +33,11 @@ that task edits its own rows.
 | `frontend/vite.config.*` | secrets | ADR-0001 | `VITE_*` values end up in the public bundle |
 | `**/.env*` | secrets | ADR-0004 | environment configuration |
 | `.env*` | secrets | ADR-0004 | environment files at the repository root (`**/.env*` needs a slash) |
+| `.gitignore` | secrets | ADR-0004 | keeps `.env*` files out of the repository; a dropped line lets a secret be committed |
+| `**/.gitignore` | secrets | ADR-0004 | a nested `.gitignore` can re-include a `.env*` file below it |
 | `**/Dockerfile*` | dependencies | ADR-0001, ADR-0004 | container images |
 | `Dockerfile*` | dependencies | ADR-0001, ADR-0004 | container images at the repository root (`**/Dockerfile*` needs a slash) |
-| `*compose*.y*ml` | dependencies, secrets | ADR-0004 | container composition |
+| `*compose*.y*ml` | dependencies, schema, auth, secrets | ADR-0002, ADR-0003, ADR-0004 | container composition; holds the PostgreSQL init content (roles, limits, privileges, the ICU application database) and the services' required secrets |
 | `.dockerignore` | secrets | ADR-0001, ADR-0004 | what enters the image build context at the root (`**/.dockerignore` needs a slash) |
 | `**/.dockerignore` | secrets | ADR-0001, ADR-0004 | what enters the image build context; a dropped `.env` line bakes secrets into an image |
 | `Caddyfile*` | auth, secrets | ADR-0004 | entry-point routing at the repository root (`**/Caddyfile*` needs a slash): HTTPS, the public/admin split of Keycloak's pages, which paths the internet reaches |

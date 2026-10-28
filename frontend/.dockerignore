@@ -1,0 +1,9 @@
+# Never in an image (ADR-0004-C9).
+.env*
+**/.env*
+
+node_modules
+**/node_modules
+dist
+.vite
+*.tsbuildinfo

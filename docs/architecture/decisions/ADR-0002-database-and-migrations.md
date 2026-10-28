@@ -175,3 +175,41 @@ Identifier and acceptance criterion only.
 
 <!-- A change to an accepted decision is a dated addendum with a reason, never an edit of the text
 above. -->
+
+### 2026-10-28 — ADR-0002-C12 restated to match *Image pinning and ICU*
+
+**What it restates.** *Image pinning and ICU* requires every reference to the PostgreSQL image to
+name "a full version and base OS release — a tag of the form `18.<minor>-<OS release>` — or an
+image digest", never a floating tag, so that a re-pull cannot change the ICU library silently.
+ADR-0002-C12 as written accepts tags matching `^postgres:18\.[0-9]+-[a-z]+$`. That pattern passes
+`postgres:18.1-alpine`, whose Alpine release moves with each re-pull, and fails
+`postgres:18.1-alpine3.22`, which names the Alpine release. Its `grep` also reads files Git does not
+track (`.venv`, `node_modules`), reads a `postgres://` connection string as an image reference,
+never sees a reference with no tag (`image: postgres`), and does not check the form of a digest.
+From this date:
+
+- An **OS release** in `18.<minor>-<OS release>` is either `alpine` followed by its release number
+  (for example `alpine3.22`) or a Debian release codename (lower-case letters only, for example
+  `bookworm` or `trixie`). `alpine` with no release number is not an OS release; a tag ending in it
+  is a floating tag. ADR-0004 (*Composition and placement*, *Images*, and ADR-0004-C2), which
+  requires "the base OS release for PostgreSQL as ADR-0002 requires", reads the term with this
+  meaning.
+- ADR-0002-C12 reads: every reference to the PostgreSQL image (`postgres`, also written
+  `library/postgres` or `docker.io/library/postgres`) in a file tracked by Git — an `image:` of the
+  composition as `docker compose config` renders it, a `FROM` of a Dockerfile, a CI workflow, a
+  test fixture — either has a tag matching `^18\.[0-9]+-(alpine[0-9]+\.[0-9]+|[a-z]+)$` other than
+  `18.<minor>-alpine`, optionally followed by `@sha256:` and 64 lower-case hexadecimal digits, or
+  has no tag and carries `@sha256:` followed by 64 lower-case hexadecimal digits. Each of these
+  fails: a reference with neither a tag nor a digest; the tags `latest`, `18`, `18-<OS release>`,
+  `18.<minor>` and `18.<minor>-alpine`; a digest that is not 64 lower-case hexadecimal digits; a
+  tag given by a variable anywhere other than in the rendered composition. A file Git does not
+  track is not read, and a connection string (`postgres://…`, `postgresql://…`) is not an image
+  reference.
+
+Every other rule and control of this decision is unchanged.
+
+**Why.** A control must fail where its decision's rule is broken and pass where it holds. For
+Alpine-based tags ADR-0002-C12 does the reverse of *Image pinning and ICU*, and it misses an
+untagged reference entirely, so a check built to its letter would pass the floating tag the rule
+forbids. Restating an accepted control is a declared deviation, approved by the human at gate 1 of
+EKO-1-06 on 2026-10-28 (AQ-1 A, Issue #19).

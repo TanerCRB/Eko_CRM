@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-28",
+  "task": "EKO-1-06",
+  "phase": "analysis",
+  "role": "architect",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "ab85b3820e9a6c127",
+  "tokens": 1417661,
+  "tokenSplit": {
+    "input": 32,
+    "output": 36334,
+    "cacheWrite": 117573,
+    "cacheRead": 1263722
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 27,
+  "seconds": 579,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "REQUIRES A HUMAN DECISION: AQ-1 deviation (ADR-0002-C12 addendum drafted), G-5, G-6 PostgreSQL init, G-7 unauthenticated routes; boundary-check: clean (docs/architecture/decisions/)"
+}

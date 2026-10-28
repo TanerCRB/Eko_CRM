@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-28",
+  "task": "EKO-1-06",
+  "phase": "verification",
+  "role": "security-auditor",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "a5f8171bf6cbd1654",
+  "tokens": 397708,
+  "tokenSplit": {
+    "input": 10,
+    "output": 7034,
+    "cacheWrite": 103513,
+    "cacheRead": 287151
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 4,
+  "seconds": 82,
+  "fixRound": 1,
+  "reworkCause": "Re-verification of fix round 1 on the fix diff 89971f8..c94ebdb",
+  "notes": "PASS WITH RESERVATIONS at c94ebdb: fix opens no threat; B-01 and U-01 unchanged; resumed agent, cumulative record minus row 1, seconds from the task notification; boundary-check: clean (--none)"
+}

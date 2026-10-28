@@ -1,0 +1,74 @@
+# K-04 contrasts: each case is compose.yaml with exactly one violation (`old` must occur once).
+# Excluded from the repository scans by its exact name (they hold rejected values on purpose).
+- id: c1-mail-catcher-in-shared-profile
+  old: "    profiles: [\"dev\"]\n"
+  new: ""
+- id: c2-postgres-bare-major
+  old: "image: postgres:18.6-trixie"
+  new: "image: postgres:18"
+- id: c2-postgres-floating-alpine
+  old: "image: postgres:18.6-trixie"
+  new: "image: postgres:18.1-alpine"
+- id: c2-mail-catcher-floating
+  old: "image: axllent/mailpit:v1.32.0"
+  new: "image: axllent/mailpit:latest"
+- id: adr0003-c3-keycloak-minor-only
+  old: "image: quay.io/keycloak/keycloak:26.8.1"
+  new: "image: quay.io/keycloak/keycloak:26.4"
+- id: c3-ports-on-postgres
+  old: "    image: postgres:18.6-trixie\n"
+  new: "    image: postgres:18.6-trixie\n    ports: [\"5432:5432\"]\n"
+- id: c3-host-network-on-backend
+  old: "      WEB_CONCURRENCY: \"2\"\n"
+  new: "      WEB_CONCURRENCY: \"2\"\n    network_mode: host\n"
+- id: c3-admin-listener-on-every-address
+  old: "        host_ip: ${PROXY_ADMIN_BIND:?PROXY_ADMIN_BIND is required}"
+  new: "        host_ip: 0.0.0.0"
+- id: c3-admin-bind-with-default
+  old: "        host_ip: ${PROXY_ADMIN_BIND:?PROXY_ADMIN_BIND is required}"
+  new: "        host_ip: ${PROXY_ADMIN_BIND:-127.0.0.1}"
+- id: c4-host-path-into-postgres
+  old: "      - pgdata:/var/lib/postgresql\n"
+  new: "      - pgdata:/var/lib/postgresql\n      - ./init:/docker-entrypoint-initdb.d\n"
+- id: c11-upgrade-in-backend-command
+  old: "      WEB_CONCURRENCY: \"2\"\n"
+  new: "      WEB_CONCURRENCY: \"2\"\n    command: [\"sh\", \"-c\", \"alembic upgrade head && uvicorn app.main:create_app --factory\"]\n"
+- id: c11-upgrade-in-worker-command
+  old: "    command: [\"python\", \"-m\", \"app.worker\"]"
+  new: "    command: [\"sh\", \"-c\", \"alembic upgrade head && python -m app.worker\"]"
+- id: c11-worker-service-started
+  old: "    command: [\"python\", \"-m\", \"app.worker\"]\n    depends_on:\n      migrate:\n        condition: service_completed_successfully"
+  new: "    command: [\"python\", \"-m\", \"app.worker\"]\n    depends_on:\n      migrate:\n        condition: service_started"
+- id: c13-worker-on-another-image
+  old: "    image: localhost/eko-crm/backend:${BACKEND_IMAGE_TAG:?BACKEND_IMAGE_TAG is required}\n    pull_policy: never\n    command: [\"python\", \"-m\", \"app.worker\"]"
+  new: "    image: python:3.12.16-slim-trixie\n    pull_policy: never\n    command: [\"python\", \"-m\", \"app.worker\"]"
+- id: c13-worker-built-separately
+  old: "    image: localhost/eko-crm/backend:${BACKEND_IMAGE_TAG:?BACKEND_IMAGE_TAG is required}\n    pull_policy: never\n    command: [\"python\", \"-m\", \"app.worker\"]"
+  new: "    build:\n      context: ./backend\n    command: [\"python\", \"-m\", \"app.worker\"]"
+- id: c28-build-on-postgres
+  old: "    image: postgres:18.6-trixie\n"
+  new: "    image: postgres:18.6-trixie\n    build: ./postgres\n"
+- id: c28-file-source
+  old: "  postgres-init:\n    content: |\n"
+  new: "  postgres-init:\n    file: ./init.sql\n  unused-inline-content:\n    content: |\n"
+- id: c28-braced-interpolation
+  old: "--username \"$$POSTGRES_USER\""
+  new: "--username \"${POSTGRES_USER}\""
+- id: c28-bare-interpolation
+  old: "eko_missing=\"$$eko_missing $$eko_name\""
+  new: "eko_missing=\"$eko_missing $$eko_name\""
+- id: c9-secret-with-default
+  old: "      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+  new: "      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpass}"
+- id: c9-secret-with-value
+  old: "      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+  new: "      POSTGRES_PASSWORD: devpass"
+- id: c10-secret-not-required
+  old: "      BACKUP_DB_PASSWORD: ${BACKUP_DB_PASSWORD:?BACKUP_DB_PASSWORD is required}\n    restart"
+  new: "      BACKUP_DB_PASSWORD: ${BACKUP_DB_PASSWORD}\n    restart"
+- id: c11-upgrade-with-config-option
+  old: "      WEB_CONCURRENCY: \"2\"\n"
+  new: "      WEB_CONCURRENCY: \"2\"\n    command: [\"sh\", \"-c\", \"alembic -c alembic.ini upgrade head && python -m app.serve\"]\n"
+- id: c11-upgrade-split-across-entrypoint-and-command
+  old: "      WEB_CONCURRENCY: \"2\"\n"
+  new: "      WEB_CONCURRENCY: \"2\"\n    entrypoint: [\"alembic\"]\n    command: [\"upgrade\", \"head\"]\n"

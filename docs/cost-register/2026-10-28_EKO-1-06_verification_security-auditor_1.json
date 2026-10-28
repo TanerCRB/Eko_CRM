@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-28",
+  "task": "EKO-1-06",
+  "phase": "verification",
+  "role": "security-auditor",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a5f8171bf6cbd1654",
+  "tokens": 1270624,
+  "tokenSplit": {
+    "input": 44,
+    "output": 29108,
+    "cacheWrite": 87160,
+    "cacheRead": 1154312
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 22,
+  "seconds": 371,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "PASS WITH RESERVATIONS at 89971f8 (K-06, U-01; B-01 Medium: proxy base, keycloak and postgres pinned by mutable tag, EKO-1-15 digest scope covers only project-built images). Includes one send-back (markers.sh: a note after the verdict block); record cumulative, seconds are the sum of both task notifications; boundary-check: clean (--none)"
+}

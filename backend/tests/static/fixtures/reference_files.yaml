@@ -1,0 +1,12 @@
+# Files holding one image reference each that the repository scans must flag (K-04 edges).
+# Excluded from the repository scans by its exact name.
+- {path: x/Dockerfile, check: postgres, text: "FROM postgres\n"}
+- {path: y/Dockerfile.db, check: postgres, text: "FROM --platform=linux/amd64 postgres:18.1-alpine AS db\n"}
+- {path: .github/workflows/x.yml, check: postgres, text: "    image: postgres:${{ matrix.pg }}\n"}
+- {path: backend/tests/x_fixture.py, check: postgres, text: "IMAGE = \"docker.io/library/postgres:latest\"\n"}
+- {path: z/Dockerfile, check: postgres, text: "FROM postgres:${V}\n"}
+- {path: w/compose.ci.yml, check: postgres-rendered, text: "postgres:18.1-alpine"}
+- {path: w/compose.ci.yml, check: postgres-rendered, text: "postgres"}
+- {path: k/x.yml, check: keycloak, text: "image: quay.io/keycloak/keycloak:26.4\n"}
+- {path: k/Dockerfile, check: keycloak, text: "FROM quay.io/keycloak/keycloak\n"}
+- {path: k/compose.ci.yml, check: keycloak-rendered, text: "quay.io/keycloak/keycloak:26.4"}

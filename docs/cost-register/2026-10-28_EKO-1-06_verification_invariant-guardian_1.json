@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-28",
+  "task": "EKO-1-06",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a3a7289be632fa81c",
+  "tokens": 4531973,
+  "tokenSplit": {
+    "input": 90,
+    "output": 38176,
+    "cacheWrite": 166279,
+    "cacheRead": 4327428
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 44,
+  "seconds": 726,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "STOP at 89971f8 (U-01..U-03; S-01 Medium .gitignore misses .env-* names, S-02 Low global ruff S-rule ignores without reason, S-03 Low unasserted checklist rules). Includes one send-back (markers.sh: K-ids in the Undecidable section); record cumulative, seconds the sum of both task notifications; boundary-check: clean (--none, snapshot retaken after the driving session's own commit)"
+}

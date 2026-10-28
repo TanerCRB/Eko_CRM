@@ -154,6 +154,54 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   and destination provisioning — EKO-1-08. A new service or image stops the task as an ADR-0004
   addendum (G-9 A).
 
+- [ ] **EKO-1-10** — Build the code-level architecture controls in CI (#51).
+  *Done when:* ADR-0001-C6, C8..C11, C13, C14 (greps), ADR-0002-C4, C13, ADR-0003-C9, C12 and the
+  ADR-0005-C12 grep run on every PR, each shown failing on a fixture, with the holes of R-09,
+  R-11, R-12 and R-13 closed (word-bounded C10, `starlette.config`, C13 on `datetime.time(` and the
+  PostgreSQL time functions and `backend/migrations/`, a ruff config other than the expected ones
+  fails, `toISOString` serialisation not flagged); the layer check covers `backend/app/worker.py`
+  (#47).
+  **Out of scope (explicit):** the Warsaw-time helpers themselves (first task with dates). After
+  EKO-1-06; before EKO-1-07 and EKO-2-01.
+
+- [ ] **EKO-1-11** — Make migrations safe against concurrent runs, older and newer schemas and
+  stalls (#52).
+  *Done when:* ADR-0004-C12, C13, C14 and C26's migrate half pass; the lock and statement timeout
+  values are set; the revision descent check of `backend`, `migrate` and `worker` passes;
+  ADR-0006-C13's runtime half (the worker refuses an older revision) passes.
+  **Out of scope (explicit):** expand → contract of a real product migration (first product task
+  that alters a table). After EKO-1-06; before EKO-3-01.
+
+- [ ] **EKO-1-12** — Configure Keycloak in the composition as ADR-0003..ADR-0005 require (#53).
+  *Done when:* the realm export meets ADR-0003-C1, C14, C15, C17 and ADR-0005-C7; bootstrap opens
+  the public listener only after the realm import and the C8 check (exception EKO-1-03/R-22
+  lifted); ADR-0003-C10, C16, ADR-0004-C23, C24 and ADR-0005-C5 pass against the running
+  composition; the reset-timing measurement is recorded. The console-role and typed-username stop
+  rules apply.
+  **Out of scope (explicit):** login to the application (EKO-2-01); event shipping (EKO-1-09).
+  After EKO-1-06; before EKO-2-01.
+
+- [ ] **EKO-1-13** — Set the log settings and log bounds of every service (#54).
+  *Done when:* ADR-0005-C3 (with a marker statement), C4 and C6's composition half pass; backend
+  log lines and error responses carry one backend-generated correlation identifier; responses carry
+  `Cache-Control: no-store`; ADR-0005-C2 is built and shown failing on a fixture endpoint.
+  **Out of scope (explicit):** Keycloak's log (EKO-1-12); C6 on a shared host (EKO-1-08). After
+  EKO-1-06; before EKO-2-01.
+
+- [ ] **EKO-1-14** — Build the backup service against a destination test double (#55).
+  *Done when:* a nightly run under the backup role's connection limit completes (ADR-0004-C19);
+  backup and migrate exclude each other (C26's backup half); C15 and C16 pass against a local
+  append-only destination double.
+  **Out of scope (explicit):** the real destination and the C17 off-server alert (EKO-1-08). After
+  EKO-1-11; before EKO-1-08.
+
+- [ ] **EKO-1-15** — Build the release pipeline that publishes images by digest (#56).
+  *Done when:* a release tag makes CI build the backend, frontend and backup images and push them
+  to the registry by digest as ADR-0004 *Images* decides; the composition used for a deployment
+  references those digests; the capability register lists the release pipeline as proven.
+  **Out of scope (explicit):** the deployment itself and production setup (EKO-1-08). After
+  EKO-1-06; before EKO-1-08's first deployment.
+
 ## EKO-2 — Access
 
 - [ ] **EKO-2-01** — Require login for the whole application.

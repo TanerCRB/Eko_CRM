@@ -1,0 +1,29 @@
+# The frontend's static file server (ADR-0004 *Composition and placement*): plain HTTP on the
+# internal network only; TLS and routing belong to `proxy`.
+{
+	# No admin API and no saved config: nothing can change what this server serves at run time.
+	admin off
+	persist_config off
+	auto_https off
+}
+
+:8080 {
+	root * /srv
+	route {
+		# A missing hashed asset is a 404, never the index page with 200 (a stale bundle must fail loudly).
+		handle /assets/* {
+			# A hashed name changes with its content, so an existing asset is cached for good; a
+			# missing one is revalidated, so a later release that ships it is seen.
+			@existing file
+			@missing not file
+			header @existing Cache-Control "public, max-age=31536000, immutable"
+			header @missing Cache-Control "no-cache"
+			file_server
+		}
+		# SPA fallback: any other path is a client-side route. The document is revalidated on every
+		# use, so a browser never keeps a stale page pointing at hashed assets a new release removed.
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
