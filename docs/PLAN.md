@@ -75,7 +75,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   log and event settings (EKO-1-06, #19); recording an erased identifier with a time taken after
   the commit (the task that builds the permanent-erasure feature, carried in #43 until planned).
 
-- [ ] **EKO-1-05** — Record the Google Calendar integration decision (ADR-0006).
+- [x] **EKO-1-05** — Record the Google Calendar integration decision (ADR-0006).
   *Done when:* ADR-0006 is "Accepted <date>" and fixes the OAuth flow and scope, token storage
   and encryption, how app-created events are recognised, change detection able to meet VIS-6
   (`docs/product/project-brief.md`), the conflict rule VIS-5, retry of unsynchronised visits, and
@@ -84,8 +84,24 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   ADR-0006 also lists each field sent to Google, decides how Google tokens are stored, what a
   customer's erasure and the re-apply of erasures at a restore do to app-created calendar events,
   past ones included, and what happens to those events when the owner's Google access is lost
-  (entry conditions from EKO-1-04, #17).
-  **Out of scope (explicit):** implementation; the Google verification itself — later.
+  (entry conditions from EKO-1-04, #17). It also decides the background-work mechanism and any
+  worker service, the Google OAuth client secret and token encryption key and the Google callback
+  path (forwarded by ADR-0004), and Google account linking outside Keycloak (forwarded by
+  ADR-0003).
+  **Out of scope (explicit):** implementation (EKO-5); the Google verification itself, until the
+  task for brief §3 item 10 is planned before go-live; runtime proof of Google behaviour (EKO-5).
+  **Done 2026-10-28:**
+  [`ADR-0006-google-calendar.md`](architecture/decisions/ADR-0006-google-calendar.md) (status
+  "Accepted 2026-10-27", revised in place in two fix rounds), the ADR-0004 addendum adding the
+  `worker` service, and both registers citing ADR-0006, merged in
+  [PR #49](https://github.com/TanerCRB/Eko_CRM/pull/49) — QA's document checks
+  (`tests/doc-checks/EKO-1-05.sh`, 84 checks) verified at `3cab315`, all 159 named kill
+  mutations killed; seven recorded exceptions (`architecture/exception-register.md`), fixed by an
+  ADR-0006 addendum in #46 before the EKO-5 synchronisation code. Forwarded: the layer check for
+  `backend/app/worker.py` (#47); the sensitive-paths preamble (#48); the IT rule admitting one
+  Gmail account per rep as a Google test user (gate-2 decision on B-02, for the EKO-5 linking
+  task and the pilot); manual control ADR-0006-C23 before the pilot; the "removals not carried
+  out" display for the owner and the manager (EKO-5).
 
 - [ ] **EKO-1-06** — Build a walking skeleton that runs in containers.
   *Done when:* one compose command starts backend, frontend, database and identity server
