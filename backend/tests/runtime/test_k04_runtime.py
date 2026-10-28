@@ -2,6 +2,8 @@
 
 import json
 import subprocess
+import time
+from typing import Any
 
 import pytest
 
@@ -36,6 +38,7 @@ OPENAPI_PATHS = [
 ]
 LISTENERS = ["app", "auth", "admin", "http"]
 EMPTIED = "KEYCLOAK_DB_PASSWORD"
+INIT_STOP_SECONDS = 120
 
 
 def holds_openapi_content(body: str) -> bool:
@@ -138,15 +141,40 @@ def test_k04_c10_image_alone_refuses_to_start_without_its_secret(
 # ADR-0004-C28: an empty role password stops the first initialisation ---------------------------
 
 
+def wait_for_exit(container: str, seconds: int) -> dict[str, Any]:
+    deadline = time.monotonic() + seconds
+    state: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        out = subprocess.run(
+            ["docker", "inspect", "-f", "{{json .State}}", container],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        state = json.loads(out)
+        if state["Status"] == "exited":
+            break
+        time.sleep(2)
+    return state
+
+
 def test_k04_c28_empty_role_password_stops_first_init_and_creates_neither_database(
     fresh: Composition,
 ) -> None:
-    failed = fresh.compose(
-        "run", "--rm", "--no-deps", "-T", "-e", f"{EMPTIED}=", "postgres",
-        check=False, timeout=300,
-    )  # fmt: skip
-    assert failed.returncode != 0
-    assert EMPTIED in failed.stdout + failed.stderr
+    # Detached and polled (QA): run in the foreground, an init that does not stop never returns,
+    # and the test hung instead of failing on its assertion.
+    started = fresh.compose("run", "-d", "--no-deps", "-e", f"{EMPTIED}=", "postgres", timeout=300)
+    container = started.stdout.strip().splitlines()[-1]
+    try:
+        state = wait_for_exit(container, INIT_STOP_SECONDS)
+        logs = subprocess.run(
+            ["docker", "logs", container], capture_output=True, text=True, encoding="utf-8"
+        )
+    finally:
+        subprocess.run(["docker", "rm", "-f", container], capture_output=True)
+    assert state["Status"] == "exited", "the first initialisation did not stop"
+    assert state["ExitCode"] != 0
+    assert EMPTIED in logs.stdout + logs.stderr
     # The same volume started again skips the init content: the databases were never created.
     fresh.compose("up", "--wait", "postgres", timeout=300)
     databases = {row[0] for row in fresh.sql("SELECT datname FROM pg_database", "postgres")}
