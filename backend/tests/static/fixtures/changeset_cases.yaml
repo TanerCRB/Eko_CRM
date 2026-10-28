@@ -1,0 +1,16 @@
+# K-07 contrasts holding values the repository scans must flag. Excluded from those scans by its
+# exact name (repo_checks.CHECK_FIXTURES). Every value is invented; none belongs to anyone.
+secret_assignments:
+  - {path: .env.example, text: "APP_DB_PASSWORD=change-me\n"}
+  - {path: deploy/x.sh, text: "export POSTGRES_PASSWORD=synthetic\n"}
+  - {path: x/compose.yaml, text: "      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-devpass}\n"}
+  - {path: x/settings.json, text: "{\"KC_DB_PASSWORD\": \"abc\"}\n"}
+  - {path: .github/workflows/x.yml, text: "    env:\n      APP_DB_PASSWORD: ${{ secrets.APP }}\n"}
+personal_data:
+  - "contact: jan.kowalski@gmail.com"
+  - "NIP 526-104-08-28"
+  - "nip = 5261040828"
+  - "tel. +48 601 234 567"
+  - "phone: 601-234-567"
+allowed_references:
+  - {path: x.yml, text: "      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?KEYCLOAK_DB_PASSWORD is required}\n"}

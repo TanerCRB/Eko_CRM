@@ -30,10 +30,9 @@ dist/
 reports/
 .stryker-tmp/
 
-# Env / secrets
+# Env / secrets: every .env* file, examples included (ADR-0004-C9); none is ever tracked.
 .env
 .env.*
-!.env.example
 
 # OS
 .DS_Store

@@ -1,0 +1,56 @@
+# The single entry point (ADR-0004 *HTTPS exposure*), used unchanged by both profiles.
+# Hostnames and the company network come from the environment; routing is part of the release.
+{
+	# No Caddy admin API: the routing cannot be changed at run time from inside the network.
+	admin off
+}
+
+# ADR-0003-C23: the OpenAPI document and FastAPI's documentation pages are never forwarded, under
+# any case or prefix. Paths are matched after Caddy has decoded and cleaned them.
+(no_api_description) {
+	@api_description path_regexp api_description (?i)(^|/)(openapi[^/]*|docs|redoc)(/|$)
+	respond @api_description 404
+}
+
+# ADR-0003 *Names*: the account console is refused by both listeners.
+(no_account_console) {
+	@account_console path_regexp account_console (?i)^/realms/[^/]+/account(/|$)
+	respond @account_console 403
+}
+
+# Each site is one `route`, so its rules run in the order written (Caddy otherwise sorts
+# directives, and `handle` would run before `respond`).
+{$APP_HOST} {
+	header Strict-Transport-Security "max-age=31536000"
+	route {
+		import no_api_description
+		reverse_proxy /api/* backend:8000
+		reverse_proxy frontend:8080
+	}
+}
+
+# Public listener for Keycloak: only the application realm's login, reset and required-action
+# pages, its OIDC endpoints and discovery document, and static resources (ADR-0004).
+{$AUTH_HOST} {
+	route {
+		import no_api_description
+		import no_account_console
+		@public path /realms/eko /realms/eko/protocol/openid-connect/* /realms/eko/.well-known/* /realms/eko/login-actions/* /resources/*
+		reverse_proxy @public keycloak:8080
+		respond 403
+	}
+}
+
+# Admin listener: published only on the company-network address, and refusing any other source.
+# The certificate for this name is provided by the IT department (EKO-1-08); until then the
+# internal issuer stands in.
+https://{$AUTH_ADMIN_HOST}:8443 {
+	tls internal
+	route {
+		import no_api_description
+		import no_account_console
+		@outside_company_network not remote_ip {$COMPANY_NETWORK_CIDRS}
+		respond @outside_company_network 403
+		reverse_proxy keycloak:8080
+	}
+}

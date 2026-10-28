@@ -1,0 +1,142 @@
+# Product CI (K-05, Issue #19). Unit tests and static checks run on every PR; the runtime tests on
+# the composition and the image builds run on PRs touching an architecture-sensitive path or the
+# runtime tests' own files, and on main. The condition is a job `if:` fed by the `changes` job,
+# never a workflow `paths` filter: a workflow skipped by a filter reports no status at all
+# (process/ci-and-branch-protection.md, section 1).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      runtime: ${{ steps.decide.outputs.runtime }}
+    steps:
+      # Actions pinned to full commit SHAs; the comment names the tag the SHA was taken from.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Decide whether the runtime tests and image builds run
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/ci-runtime-trigger.sh decide "$EVENT" "${BASE:-HEAD}" "${HEAD:-HEAD}" >> "$GITHUB_OUTPUT"
+
+  backend:
+    name: backend unit tests and static checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.21"
+          python-version: "3.12"
+      - name: Lock file is current (ADR-0001-C1)
+        working-directory: backend
+        run: uv lock --locked
+      - name: Install
+        working-directory: backend
+        run: uv sync --locked
+      - name: Lint and types
+        working-directory: backend
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy .
+      - name: Unit tests and static checks (K-04, K-05, K-07)
+        working-directory: backend
+        env:
+          CHANGESET_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: uv run pytest -v
+
+  frontend:
+    name: frontend unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Install (ADR-0001-C2)
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Unit tests
+        working-directory: frontend
+        run: pnpm test
+      - name: Type check and build
+        working-directory: frontend
+        run: pnpm run build
+
+  # ADR-0001-C4: built with Docker only; this job installs no Python or Node.js on the runner.
+  images:
+    name: image builds and image checks
+    needs: changes
+    if: needs.changes.outputs.runtime == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # A decoy .env in every build context: an image listing that finds none proves .dockerignore
+      # kept it out (ADR-0004-C9), not that there was nothing to keep out.
+      - name: Plant decoy .env files
+        run: |
+          for context in backend frontend proxy backup; do
+            printf 'DECOY_ONLY=1\n' > "$context/.env"
+          done
+      - name: Build images
+        run: |
+          docker build -t eko-backend:ci backend
+          docker build -t eko-frontend:ci frontend
+          docker build -t eko-proxy:ci proxy
+          docker build -t eko-backup:ci backup
+      - name: Image checks (ADR-0001-C5, ADR-0004-C9)
+        run: bash scripts/image-check.sh --frontend eko-frontend:ci eko-backend:ci eko-frontend:ci eko-proxy:ci eko-backup:ci
+
+  runtime:
+    name: runtime tests on the composition
+    needs: changes
+    if: needs.changes.outputs.runtime == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.21"
+          python-version: "3.12"
+      - name: Install
+        working-directory: backend
+        run: uv sync --locked
+      - name: Runtime tests (K-01, K-02, K-03, K-04)
+        working-directory: backend
+        run: uv run pytest -m runtime tests/runtime -v

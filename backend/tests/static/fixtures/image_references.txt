@@ -1,0 +1,39 @@
+# Image references for the ADR-0002-C12 (restated 2026-10-28), ADR-0003-C3 and ADR-0004-C2 cases.
+# "accept <ref>" must pass, "reject <ref>" must fail. This file is excluded from the repository
+# scans by its exact name (repo_checks.C12_FIXTURES); no other file is.
+accept postgres:18.1-alpine3.22
+accept postgres:18.1-bookworm
+accept postgres:18.1-trixie
+accept postgres:18.6-trixie
+accept library/postgres:18.1-trixie
+accept docker.io/library/postgres:18.1-bookworm
+accept postgres:18.1-trixie@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+accept postgres:18.1-alpine3.22@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+accept postgres@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+reject postgres
+reject library/postgres
+reject postgres:latest
+reject postgres:18
+reject postgres:18-trixie
+reject postgres:18.1
+reject postgres:18.1-alpine
+reject postgres:17.6-trixie
+reject postgres:18.1-Trixie
+reject postgres@sha256:0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef
+reject postgres@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde
+reject postgres:18.1-trixie@sha256:0123456789abcdef
+reject postgres:${V}
+reject postgres:${{ matrix.pg }}
+accept quay.io/keycloak/keycloak:26.8.1
+accept keycloak/keycloak:26.8.1
+accept quay.io/keycloak/keycloak@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+reject quay.io/keycloak/keycloak:26.4
+reject quay.io/keycloak/keycloak:26
+reject quay.io/keycloak/keycloak:latest
+reject quay.io/keycloak/keycloak
+accept caddy:2.11.7
+accept axllent/mailpit:v1.32.0
+reject caddy:2
+reject caddy:2.11
+reject caddy:latest
+reject axllent/mailpit

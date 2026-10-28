@@ -1,0 +1,12 @@
+/* Shell colours taken from prototype P2 styles/app.css; tokens.css is kept a verbatim copy of P2. */
+:root {
+  --color-on-forest: #e0e9e1;
+  --color-on-forest-strong: #fff;
+  --color-on-forest-muted: #b4c9ba;
+  --color-on-forest-panel: #d1e0d4;
+  --color-on-forest-line: #ffffff26;
+  --color-on-forest-hover: #ffffff0c;
+  --color-topbar: #ffffffa6;
+  --color-focus: #729650;
+  --shadow-sidebar: 20px 0 80px #19352926;
+}

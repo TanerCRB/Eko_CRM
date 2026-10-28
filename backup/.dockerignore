@@ -1,0 +1,4 @@
+# Secrets never enter the build context (ADR-0004-C9).
+.env
+.env*
+**/.env*

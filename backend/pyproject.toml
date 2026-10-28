@@ -1,0 +1,64 @@
+[project]
+name = "eko-crm-backend"
+version = "0.1.0"
+description = "Eko_CRM backend"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "alembic>=1.16",
+    "fastapi>=0.120",
+    "psycopg[binary]>=3.2",
+    "pydantic>=2.11,<3",
+    "pydantic-settings>=2.10",
+    "sqlalchemy>=2.0.40,<2.1",
+    "tzdata>=2025.2",
+    "uvicorn>=0.37",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28",
+    "mypy>=1.18",
+    "openapi-spec-validator>=0.7",
+    "packaging>=25.0",
+    "pytest>=8.4",
+    "pyyaml>=6.0.2",
+    "ruff>=0.14",
+    "types-pyyaml>=6.0.12",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Runtime tests start the whole composition; CI runs them in their own job with `-m runtime`.
+addopts = "-m 'not runtime' --strict-markers"
+markers = ["runtime: starts containers with docker compose"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "TID", "S", "BLE", "T20"]
+ignore = ["S101", "S603", "S607"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests hold synthetic credentials (ADR-0005 synthetic-data rule), name unspecified addresses as
+# values to detect, never to bind, and reach proxy's internal-CA certificates without verifying.
+"tests/**" = ["S104", "S105", "S106", "S501"]
+# The web process listens on every address of its container; only proxy publishes a port.
+"app/serve.py" = ["S104"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ['^\.venv/']
+
+[[tool.mypy.overrides]]
+module = ["openapi_spec_validator.*"]
+ignore_missing_imports = true

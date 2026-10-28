@@ -1,0 +1,234 @@
+# Eko_CRM composition (ADR-0004): one file, two profiles.
+#
+#   development: docker compose --env-file <untracked env file> --profile dev up --build --wait
+#   shared:      the same file without `--profile dev` (eight services, no mail catcher)
+#
+# Every secret is required with no default (ADR-0004-C9, C10); `:?` also refuses an empty value.
+# Values that are the same in every environment (pool sizes, connection limits, max_connections)
+# are part of the release and written here or in the init content, not in the environment file.
+
+name: eko-crm
+
+services:
+  proxy:
+    build:
+      context: ./proxy
+    depends_on:
+      backend:
+        condition: service_started
+      frontend:
+        condition: service_started
+    environment:
+      APP_HOST: ${APP_HOST:?APP_HOST is required}
+      AUTH_HOST: ${AUTH_HOST:?AUTH_HOST is required}
+      AUTH_ADMIN_HOST: ${AUTH_ADMIN_HOST:?AUTH_ADMIN_HOST is required}
+      COMPANY_NETWORK_CIDRS: ${COMPANY_NETWORK_CIDRS:?COMPANY_NETWORK_CIDRS is required}
+    ports:
+      - name: http
+        target: 80
+        published: "${PROXY_HTTP_PORT:?PROXY_HTTP_PORT is required}"
+        host_ip: ${PROXY_PUBLIC_BIND:?PROXY_PUBLIC_BIND is required}
+      - name: https
+        target: 443
+        published: "${PROXY_HTTPS_PORT:?PROXY_HTTPS_PORT is required}"
+        host_ip: ${PROXY_PUBLIC_BIND:?PROXY_PUBLIC_BIND is required}
+      # The admin listener is published only on the company-network address (ADR-0004-C3).
+      - name: admin
+        target: 8443
+        published: "${PROXY_ADMIN_PORT:?PROXY_ADMIN_PORT is required}"
+        host_ip: ${PROXY_ADMIN_BIND:?PROXY_ADMIN_BIND is required}
+    volumes:
+      - proxy-data:/data
+    restart: unless-stopped
+
+  # Contract with frontend/Dockerfile: static SPA build served over plain HTTP on port 8080 by a
+  # non-Node runtime image that ships busybox `wget` (used by the healthcheck below).
+  frontend:
+    build:
+      context: ./frontend
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  # backend, migrate and worker run one image, built once (ADR-0004, ADR-0006-C13). The tag is
+  # local (`localhost/` never resolves to a public registry) and never pulled; a release references
+  # the registry digest instead (EKO-1-15).
+  backend:
+    image: localhost/eko-crm/backend:0.1.0
+    build:
+      context: ./backend
+    pull_policy: build
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
+      APP_DB_POOL_SIZE: "5"
+      APP_DB_MAX_OVERFLOW: "5"
+      WEB_CONCURRENCY: "2"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  # The only process that runs `alembic upgrade head` (ADR-0004 *Migrations*).
+  migrate:
+    image: localhost/eko-crm/backend:0.1.0
+    pull_policy: never
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
+      APP_DB_POOL_SIZE: "1"
+      APP_DB_MAX_OVERFLOW: "0"
+    restart: "no"
+
+  worker:
+    image: localhost/eko-crm/backend:0.1.0
+    pull_policy: never
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
+      APP_DB_POOL_SIZE: "2"
+      APP_DB_MAX_OVERFLOW: "0"
+    restart: unless-stopped
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Refuses an empty password before Keycloak starts; Compose's `:?` refuses an unset one.
+    entrypoint:
+      - /bin/bash
+      - -c
+      - >-
+        if [ -z "$${KC_DB_PASSWORD//[[:space:]]/}" ]; then
+        echo "configuration error: missing or empty environment variable: KEYCLOAK_DB_PASSWORD" >&2;
+        exit 1; fi;
+        exec /opt/keycloak/bin/kc.sh "$$@"
+      - kc
+    command: ["start"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: eko_keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?KEYCLOAK_DB_PASSWORD is required}
+      # At most the eko_keycloak role's CONNECTION LIMIT (ADR-0003-C19).
+      KC_DB_POOL_MAX_SIZE: "20"
+      KC_HOSTNAME: https://${AUTH_HOST:?AUTH_HOST is required}:${PROXY_HTTPS_PORT:?PROXY_HTTPS_PORT is required}
+      KC_HOSTNAME_ADMIN: https://${AUTH_ADMIN_HOST:?AUTH_ADMIN_HOST is required}:${PROXY_ADMIN_PORT:?PROXY_ADMIN_PORT is required}
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_FEATURES_DISABLED: impersonation
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:18.6-trixie
+    # max_connections is part of the release (ADR-0004-C28): the three role limits below sum to
+    # 30 + 25 + 5 = 60 < 100 - 3 (ADR-0003-C19, ADR-0004-C19).
+    command: ["postgres", "-c", "max_connections=100", "-c", "superuser_reserved_connections=3"]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?KEYCLOAK_DB_PASSWORD is required}
+      BACKUP_DB_PASSWORD: ${BACKUP_DB_PASSWORD:?BACKUP_DB_PASSWORD is required}
+    configs:
+      - source: postgres-init
+        target: /docker-entrypoint-initdb.d/10-eko-init.sh
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      # TCP, not the socket: during first initialisation the image's temporary server listens on
+      # the socket only, so this turns healthy only after the init content has finished.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+    restart: unless-stopped
+
+  backup:
+    build:
+      context: ./backup
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      BACKUP_DB_PASSWORD: ${BACKUP_DB_PASSWORD:?BACKUP_DB_PASSWORD is required}
+    restart: unless-stopped
+
+  # Developer and test environments only (ADR-0003 *Password reset*); never in a shared one.
+  mailcatcher:
+    image: axllent/mailpit:v1.32.0
+    profiles: ["dev"]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  proxy-data:
+
+configs:
+  # ADR-0004-C28: inline init content, run by the image only on an empty data directory. No
+  # Compose interpolation: every literal dollar sign is written `$$`. Passwords are read from the
+  # container's environment, never from a command line; one session with statement logging off
+  # keeps a failing statement's text, and so a password, out of the server log.
+  postgres-init:
+    content: |
+      # Sourced by the image's entrypoint (config modes are ignored outside Swarm): no `set -u`,
+      # prefixed names, and `exit 1` stops the first initialisation with a non-zero exit.
+      eko_missing=""
+      for eko_name in APP_DB_PASSWORD KEYCLOAK_DB_PASSWORD BACKUP_DB_PASSWORD; do
+        eko_value="$${!eko_name:-}"
+        if [ -z "$${eko_value//[[:space:]]/}" ]; then eko_missing="$$eko_missing $$eko_name"; fi
+      done
+      if [ -n "$$eko_missing" ]; then
+        echo "eko-init: configuration error: missing or empty environment variable(s):$$eko_missing" >&2
+        exit 1
+      fi
+      unset eko_missing eko_name eko_value
+      psql -v ON_ERROR_STOP=1 --no-psqlrc --username "$$POSTGRES_USER" --dbname postgres <<'SQL'
+      SET log_statement = 'none';
+      SET log_min_error_statement = 'panic';
+      \getenv app_password APP_DB_PASSWORD
+      \getenv keycloak_password KEYCLOAK_DB_PASSWORD
+      \getenv backup_password BACKUP_DB_PASSWORD
+      CREATE ROLE eko_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS
+        CONNECTION LIMIT 30 PASSWORD :'app_password';
+      CREATE ROLE eko_keycloak LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS
+        CONNECTION LIMIT 25 PASSWORD :'keycloak_password';
+      CREATE ROLE eko_backup LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS
+        CONNECTION LIMIT 5 PASSWORD :'backup_password';
+      CREATE DATABASE eko OWNER eko_app ENCODING 'UTF8'
+        LOCALE_PROVIDER icu ICU_LOCALE 'pl-PL' TEMPLATE template0;
+      CREATE DATABASE keycloak OWNER eko_keycloak ENCODING 'UTF8' TEMPLATE template0;
+      REVOKE CONNECT, TEMPORARY ON DATABASE eko FROM PUBLIC;
+      REVOKE CONNECT, TEMPORARY ON DATABASE keycloak FROM PUBLIC;
+      GRANT CONNECT ON DATABASE eko TO eko_backup;
+      GRANT CONNECT ON DATABASE keycloak TO eko_backup;
+      SQL
