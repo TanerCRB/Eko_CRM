@@ -68,3 +68,9 @@ an ADR-0006 addendum tracked in #46:
 - Exception EKO-1-05/R-18 — owner: @TanerCRB — reason: a sweep recorded as not carried out has no event record, so its take-up and its notice are undefined; fixed in #46 — blocks again: 2027-03-31
 - Exception EKO-1-05/B-06 — owner: @TanerCRB — reason: a rep with edit rights on a colleague's calendar can hold the colleague's link by moving one application event into their own calendar (availability only); fixed in #46 — blocks again: 2027-03-31
 - Exception EKO-1-05/Q-01 — owner: @TanerCRB — reason: the id row of the closed field table does not state the identifier prefix that the sweep by marker relies on (A-21); fixed in #46 — blocks again: 2027-03-31
+
+Accepted at gate 2 of EKO-1-06 in [PR #57](https://github.com/TanerCRB/Eko_CRM/pull/57); B-01 is fixed by EKO-1-15 (#56), R23 and R18 record surviving mutations whose mechanism stays covered as the PR describes:
+
+- Exception EKO-1-06/B-01 — owner: @TanerCRB — reason: third-party images run by full-version tag, not digest, until EKO-1-15 pins them by digest — blocks again: 2027-03-31
+- Exception EKO-1-06/R23 — owner: @TanerCRB — reason: the proxy's OpenAPI refusal on the app site is a deliberate second layer (A-08) over backend serving its docs outside /api/, so removing it alone fails no test — blocks again: 2027-03-31
+- Exception EKO-1-06/R18 — owner: @TanerCRB — reason: the root-decoy mutation could not reach any image; the mechanism is covered by QA's decoy test (R18c) and the vacuous CI step was removed — blocks again: 2027-03-31

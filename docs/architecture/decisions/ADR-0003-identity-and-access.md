@@ -534,3 +534,68 @@ later exemption would be decided in code instead of here. A health response that
 or errors, or an OpenAPI document served to the internet, would describe the system to anyone who
 asks, with no login. Restating ADR-0003-C4 is a declared deviation, approved by the human at gate
 1 of EKO-1-06 on 2026-10-28 (G-7 A, Issue #19).
+
+### 2026-10-28 — Keycloak version first used
+
+**What it records.** *Identity server product* has the walking skeleton (EKO-1-06, #19) choose the
+Keycloak version first used, among releases whose documentation lists PostgreSQL 18 as a supported
+database, and record it here. EKO-1-06 first uses **`quay.io/keycloak/keycloak:26.8.1`**, the
+`image:` of the `keycloak` service in `compose.yaml`, a full `<major>.<minor>.<patch>` tag as
+ADR-0003-C3 requires.
+
+- **Source.** Keycloak's database guide, https://www.keycloak.org/server/db, read 2026-10-28 with
+  26.8.1 shown as the current release. Its table of supported databases lists PostgreSQL with
+  tested version 18 and supported versions 18.x, 17.x, 16.x, 15.x and 14.x.
+- **The page is not version-pinned.** It tracks the latest release, and no version-pinned URL of it
+  was found. The human keeps a capture of the page as read on 2026-10-28; that capture, not the
+  live page, is the evidence for this choice.
+- The stop rule of *Identity server product* ("If no such release exists when EKO-1-06 runs, that
+  task stops") did not apply.
+
+From this version on, every image change that crosses a major version is recorded as an addendum to
+this decision (*Identity server product*). How a release references this image by digest is
+recorded in ADR-0004's addendum of 2026-10-28 on *Images*.
+
+No rule or control of this decision changes.
+
+**Why.** *Identity server product* requires the version first used, and the documentation that
+shows it supports PostgreSQL 18, to be recorded here. Approved by the human at gate 2 of EKO-1-06
+on 2026-10-28 (Issue #19, PR #57). This is not a deviation.
+
+### 2026-10-28 — Connection-limit values of ADR-0003-C19
+
+**What it records.** *Identity server storage* has the walking skeleton (EKO-1-06, #19) set the
+connection-limit values within the composition decided by ADR-0004, under the three-role budget of
+this decision's addendum of 2026-10-24. EKO-1-06 sets these values. They are the same in every
+environment and part of the release (ADR-0004's addendum of 2026-10-28 on initialising PostgreSQL):
+
+| Value | Set to | Where |
+|---|---|---|
+| `max_connections` | 100 | the `postgres` command in `compose.yaml` |
+| `superuser_reserved_connections` | 3 | the `postgres` command in `compose.yaml` |
+| Application role `eko_app`, `CONNECTION LIMIT` | 30 | the init content in `compose.yaml` |
+| Keycloak's role `eko_keycloak`, `CONNECTION LIMIT` | 25 | the init content in `compose.yaml` |
+| Backup role `eko_backup`, `CONNECTION LIMIT` | 5 | the init content in `compose.yaml` |
+| Keycloak `db-pool-max-size` | 20 | `KC_DB_POOL_MAX_SIZE` of `keycloak` in `compose.yaml` |
+| `backend` | 2 workers (`WEB_CONCURRENCY`), each pool size 5 and max overflow 5 | `compose.yaml` |
+| `worker` | pool size 2, max overflow 0 | `compose.yaml` |
+| `migrate` | pool size 1, max overflow 0 | `compose.yaml` |
+
+The budget these values meet:
+
+- Keycloak's pool maximum, 20, does not exceed its role's limit, 25.
+- The application's connections at their most are 2 × (5 + 5) for `backend`, plus 2 for `worker`,
+  plus 1 for `migrate`, which is 23. This does not exceed the application role's limit, 30.
+- The three role limits together, 30 + 25 + 5 = 60, are below `max_connections` minus
+  `superuser_reserved_connections`, 100 − 3 = 97.
+
+That the backup role's limit of 5 covers the sessions a backup holds, and that a nightly run under
+it completes (ADR-0004-C19), is shown by EKO-1-14 (#55), as ADR-0004's addendum of 2026-10-28 on
+the split of EKO-1-06 says.
+
+No rule or control of this decision changes. A later change to any of these values keeps the
+budget of ADR-0003-C19 and of the addendum of 2026-10-24.
+
+**Why.** *Identity server storage* forwards the values to EKO-1-06, and ADR-0003-C19 can be checked
+only against values recorded somewhere. Approved by the human at gate 2 of EKO-1-06 on 2026-10-28
+(Issue #19, PR #57). This is not a deviation.
