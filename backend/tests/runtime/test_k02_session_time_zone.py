@@ -36,6 +36,7 @@ engine.dispose()
 with psycopg.connect(host=s.app_db_host, port=s.app_db_port, dbname=s.app_db_name,
                      user=s.app_db_user, password=s.app_db_password.get_secret_value()) as conn:
     plain = conn.execute("SHOW timezone").fetchone()[0]
+# leftovers-allow: the probe runs inside the backend container and reports its result over stdout
 print(json.dumps({"application": application, "plain": plain}))
 """
 
