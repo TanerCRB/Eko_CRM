@@ -6,9 +6,12 @@
 # Every secret is required with no default (ADR-0004-C9, C10); `:?` also refuses an empty value.
 # Values that are the same in every environment (pool sizes, connection limits, max_connections)
 # are part of the release and written here or in the init content, not in the environment file.
-# No fixed project name: COMPOSE_PROJECT_NAME and BACKEND_IMAGE_TAG come from the environment file
-# (scripts/dev-env.sh derives both from the checkout's path), so two checkouts on one Docker host
-# never share containers, volumes or the backend image.
+# The project name is required, never fixed and never the directory name: the database volume is
+# `<project>_pgdata`, so a shared environment names its project once in its environment file and
+# keeps its data wherever a release is unpacked. scripts/dev-env.sh derives COMPOSE_PROJECT_NAME and
+# BACKEND_IMAGE_TAG from the checkout's path, so two checkouts on one Docker host never share
+# containers, volumes or the backend image.
+name: ${COMPOSE_PROJECT_NAME:?COMPOSE_PROJECT_NAME is required}
 
 services:
   proxy:

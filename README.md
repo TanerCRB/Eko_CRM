@@ -28,8 +28,11 @@ Without `--profile dev` the same file is the shared-environment composition (no 
 
 The environment file also names this checkout's Compose project and backend image tag, so each
 worktree needs its own file (for example `../eko-dev-<identifier>.env`) and two worktrees run side
-by side without sharing containers, volumes or images. If `postgres` reports that a volume's first
-initialisation did not complete, run `down -v` and start again.
+by side without sharing containers, volumes or images. `COMPOSE_PROJECT_NAME` is required: without
+it the composition refuses to start, so a shared environment sets it once in its own environment
+file, and its database volume (`<project>_pgdata`) does not change with the directory a release is
+unpacked in. If `postgres` reports that a volume's first initialisation did not complete, run
+`down -v` and start again.
 
 Licensing of the process material (`FrameworkDoc.md`, `agents/`, `process/`, `scripts/`,
 `tools/`, `calibration/`): Apache License 2.0, see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).

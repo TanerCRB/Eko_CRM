@@ -1,13 +1,16 @@
 """R-03: two checkouts on one Docker host never share a Compose project or a backend image tag.
 
 Each checkout's generated environment file names its own project and its own image tag, both
-derived from the checkout's path; the composition fixes neither.
+derived from the checkout's path; the composition requires the project name and fixes neither.
 """
 
 import re
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from tests.static.conftest import COMPOSE
 from tests.support.repo import render, write_synthetic_env
@@ -27,8 +30,22 @@ def other_checkout(tmp_path: Path) -> Path:
     return copy
 
 
-def test_k01_composition_fixes_no_project_name(compose_source: dict[str, Any]) -> None:
-    assert "name" not in compose_source
+def test_k01_project_name_is_a_required_variable(compose_source: dict[str, Any]) -> None:
+    # R-06: neither fixed (R-03) nor left to the directory name; required, with no default.
+    assert re.fullmatch(r"\$\{COMPOSE_PROJECT_NAME:\?[^}]*\}", str(compose_source.get("name")))
+
+
+def test_k01_start_without_a_project_name_is_refused(tmp_path: Path) -> None:
+    """A hand-written env file (a shared environment's) lacking the name: refused, naming it,
+    instead of a project named after the deployment directory with a new, empty pgdata."""
+    env_file = write_synthetic_env(tmp_path / "shared.env")
+    values = env_values(env_file)
+    del values["COMPOSE_PROJECT_NAME"]
+    env_file.write_text("".join(f"{k}={v}\n" for k, v in values.items()), encoding="utf-8")
+    for dev_profile in (False, True):
+        with pytest.raises(subprocess.CalledProcessError) as refused:
+            render(env_file, dev_profile=dev_profile)
+        assert "COMPOSE_PROJECT_NAME" in refused.value.stderr
 
 
 def test_k01_backend_image_tag_comes_from_a_required_variable(

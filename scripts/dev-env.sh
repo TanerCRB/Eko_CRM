@@ -54,6 +54,8 @@ write_env() {
   CHECKOUT_ID="$(checkout_id "$compose")"
   local out="COMPOSE_PROJECT_NAME=eko-crm-$CHECKOUT_ID"$'\n'
   while IFS= read -r name; do
+    # Written above for every file; compose.yaml requires it as `name:`.
+    [ "$name" != COMPOSE_PROJECT_NAME ] || continue
     if [[ "$name" =~ $SECRET_NAME_RE ]]; then
       value="synthetic-$(random_value)"
     elif ! value="$(dev_value "$name")"; then
