@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-28",
+  "task": "EKO-1-06",
+  "phase": "code",
+  "role": "developer-frontend",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Low",
+  "agentId": "a5eb141b97ff88d44",
+  "tokens": 1221308,
+  "tokenSplit": {
+    "input": 18,
+    "output": 5586,
+    "cacheWrite": 154884,
+    "cacheRead": 1060820
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 10,
+  "seconds": 170,
+  "fixRound": 1,
+  "reworkCause": "Reviewer R-02 (index.html without Cache-Control); the developer deferred it to EKO-1-13 on a misreading of ADR-0005's no-store rule; the developer self-check could have caught it",
+  "notes": "Resumed agent: cumulative record minus row 1, seconds from the task notification. R-02 FIXED with new runtime test, 5 red then green; boundary-check: clean (fix1.state, union with developer-backend)"
+}
