@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-28",
+  "task": "EKO-1-06",
+  "phase": "verification",
+  "role": "qa",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "aeee9e1cfc5891874",
+  "tokens": 9534139,
+  "tokenSplit": {
+    "input": 60,
+    "output": 27776,
+    "cacheWrite": 342846,
+    "cacheRead": 9163457
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 34,
+  "seconds": 999,
+  "fixRound": 1,
+  "reworkCause": "Re-verification of fix round 1 (Reviewer R-01..R-05, Guardian S-01/S-02, QA F-01/F-02); the mechanisms changed, so the old mutation results no longer described the code",
+  "notes": "PROOF HOLDS at 506597e, no findings; 17 new mutations plus 9 re-runs killed, R22b equivalent and not counted; changed C28 test judged not weaker; one contrast test added; resumed agent, cumulative record minus rows 1 and 2, seconds from the task notification; boundary-check: clean (backend/tests/)"
+}
