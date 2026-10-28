@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from tests.runtime.conftest import Composition, Started, read_env, write_env
+from tests.runtime.test_k04_c28_failed_first_init import databases_on_volume
 from tests.support.openapi import openapi_3_errors
 
 pytestmark = pytest.mark.runtime
@@ -175,9 +176,9 @@ def test_k04_c28_empty_role_password_stops_first_init_and_creates_neither_databa
     assert state["Status"] == "exited", "the first initialisation did not stop"
     assert state["ExitCode"] != 0
     assert EMPTIED in logs.stdout + logs.stderr
-    # The same volume started again skips the init content: the databases were never created.
-    fresh.compose("up", "--wait", "postgres", timeout=300)
-    databases = {row[0] for row in fresh.sql("SELECT datname FROM pg_database", "postgres")}
+    # The composition never starts this volume again (ADR-0004-C28 addendum; test in
+    # test_k04_c28_failed_first_init.py), so its catalog is read with the plain image.
+    databases = databases_on_volume(f"{fresh.project}_pgdata", fresh.env["POSTGRES_PASSWORD"])
     assert {"eko", "keycloak"} & databases == set()
 
 

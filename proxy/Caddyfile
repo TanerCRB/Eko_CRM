@@ -3,6 +3,14 @@
 {
 	# No Caddy admin API: the routing cannot be changed at run time from inside the network.
 	admin off
+	# Caddy's own redirect targets its internal port 443 and drops the published one; the
+	# explicit redirect below names the port HTTPS is published on. ACME challenges still pass.
+	auto_https disable_redirects
+}
+
+# Plain HTTP serves only a redirect to the same URL over HTTPS (ADR-0004 *HTTPS exposure*).
+http://{$APP_HOST}, http://{$AUTH_HOST} {
+	redir https://{host}:{$PROXY_HTTPS_PORT}{uri} 308
 }
 
 # ADR-0003-C23: the OpenAPI document and FastAPI's documentation pages are never forwarded, under

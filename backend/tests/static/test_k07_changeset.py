@@ -177,7 +177,19 @@ def test_k07_c9_allows_only_the_required_reference(
 
 
 @pytest.mark.parametrize(
-    "path", [".env", ".env.example", ".env.local", "backend/.env", "proxy/.env.production"]
+    "path",
+    [
+        ".env",
+        ".env.example",
+        ".env.local",
+        "backend/.env",
+        "proxy/.env.production",
+        # S-01: names without a dot after `.env` are `.env*` files too.
+        ".env-dev",
+        ".env_pilot",
+        ".envrc",
+        "backend/.env-prod",
+    ],
 )
 def test_k07_c9_gitignore_excludes_every_env_file(path: str) -> None:
     ignored = subprocess.run(["git", "check-ignore", "-q", "--no-index", path], cwd=REPO_ROOT)

@@ -12,9 +12,17 @@
 	route {
 		# A missing hashed asset is a 404, never the index page with 200 (a stale bundle must fail loudly).
 		handle /assets/* {
+			# A hashed name changes with its content, so an existing asset is cached for good; a
+			# missing one is revalidated, so a later release that ships it is seen.
+			@existing file
+			@missing not file
+			header @existing Cache-Control "public, max-age=31536000, immutable"
+			header @missing Cache-Control "no-cache"
 			file_server
 		}
-		# SPA fallback: any other path is a client-side route.
+		# SPA fallback: any other path is a client-side route. The document is revalidated on every
+		# use, so a browser never keeps a stale page pointing at hashed assets a new release removed.
+		header Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
 	}

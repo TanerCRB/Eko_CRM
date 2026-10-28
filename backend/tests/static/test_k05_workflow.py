@@ -200,3 +200,14 @@ def test_k05_check_fails_on_a_one_change_fixture(case_id: str) -> None:
 def test_k07_secret_in_workflow_env_fails() -> None:
     flow = _step("backend", -1, "env", {"TOKEN_X": "${{ secrets.X }}"})(workflow())
     assert wc.no_secrets(flow, {"APP_DB_PASSWORD"}) != []
+
+
+# F-02: a decoy at a build-context root never reaches an image, since every Dockerfile copies
+# chosen paths only; the proof that .dockerignore keeps planted files out is
+# tests/runtime/test_k07_image_env_decoys.py, which plants them where the Dockerfiles copy.
+ROOT_DECOY = re.compile(r">\s*\"?(\$context|\$\{context\}|backend|frontend|proxy|backup)/\.env")
+
+
+def test_k07_ci_images_job_plants_no_decoy_that_cannot_reach_an_image() -> None:
+    runs = [str(step.get("run", "")) for step in workflow()["jobs"]["images"]["steps"]]
+    assert [run for run in runs if ROOT_DECOY.search(run)] == []

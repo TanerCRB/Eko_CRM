@@ -133,6 +133,8 @@ def test_k04_c11_only_migrate_upgrades_and_others_wait_for_it(
         "c11-upgrade-in-backend-command",
         "c11-upgrade-in-worker-command",
         "c11-worker-service-started",
+        "c11-upgrade-with-config-option",
+        "c11-upgrade-split-across-entrypoint-and-command",
     ],
 )
 def test_k04_c11_fails_on_a_second_migrating_process(case_id: str, render_case: RenderCase) -> None:
@@ -209,3 +211,53 @@ def test_k04_c10_fails_on_a_secret_with_a_default_or_value(
     case_id: str, source_case: SourceCase, secret_inventory: set[str]
 ) -> None:
     assert cc.secret_declaration_violations(source_case(case_id), secret_inventory) != []
+
+
+# R-04: a second migrating process written in another form than the literal "alembic upgrade".
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        'ENTRYPOINT ["alembic", "upgrade", "head"]',
+        'CMD ["alembic", "-c", "alembic.ini", "upgrade", "head"]',
+        "RUN alembic upgrade head",
+        'CMD ["python", "-m", "alembic", "upgrade", "head"]',
+    ],
+)
+def test_k04_c11_fails_on_an_image_that_migrates_in_any_form(
+    line: str, rendered_shared: Rendered
+) -> None:
+    dockerfile = BACKEND_DOCKERFILE + line + "\n"
+    assert cc.c11_migrations(rendered_shared, dockerfile) != []
+
+
+def test_k04_c11_backend_sources_never_migrate() -> None:
+    assert cc.backend_source_migration_violations(backend_sources()) == []
+
+
+@pytest.mark.parametrize(
+    ("path", "text"),
+    [
+        ("backend/entrypoint.sh", '#!/bin/sh\nalembic -c alembic.ini upgrade head\nexec "$@"\n'),
+        ("backend/app/core/startup.py", "from alembic import command\n"),
+        ("backend/app/main.py", "import alembic.command\n"),
+        ("backend/app/serve.py", "command.upgrade(config, 'head')\n"),
+    ],
+)
+def test_k04_c11_fails_on_backend_code_or_a_script_that_migrates(path: str, text: str) -> None:
+    sources = {**backend_sources(), path: text}
+    assert cc.backend_source_migration_violations(sources) != []
+
+
+def backend_sources() -> dict[str, str]:
+    """The files of the backend build context outside migrations/ and tests/."""
+    root = REPO_ROOT / "backend"
+    sources = {}
+    for path in root.rglob("*"):
+        relative = path.relative_to(root).as_posix()
+        if not path.is_file() or relative.split("/")[0] in {"migrations", "tests", ".venv"}:
+            continue
+        if path.suffix in {".py", ".sh"} or path.name.startswith("Dockerfile"):
+            sources[f"backend/{relative}"] = path.read_text(encoding="utf-8")
+    return sources

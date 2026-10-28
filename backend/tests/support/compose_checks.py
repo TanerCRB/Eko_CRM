@@ -122,19 +122,32 @@ def c4_state(rendered: Rendered) -> list[str]:
     return problems
 
 
+_WORD = re.compile(r"[A-Za-z0-9_.-]+")
+_SEGMENT = re.compile(r"&&|\|\||[;|\n]")
+
+
+def runs_alembic_upgrade(text: str) -> bool:
+    """`alembic` followed by `upgrade` in one shell segment, in any form (R-04): with options,
+    in exec-form JSON, by path or as `python -m alembic`."""
+    for segment in _SEGMENT.split(text):
+        words = _WORD.findall(segment.replace("/", " "))
+        if "alembic" in words and "upgrade" in words[words.index("alembic") + 1 :]:
+            return True
+    return False
+
+
 def c11_migrations(rendered: Rendered, backend_dockerfile: str) -> list[str]:
     """ADR-0004-C11 and the composition half of ADR-0006-C13."""
     problems = []
     services = _services(rendered)
     for name, service in services.items():
-        runs_upgrade = "alembic upgrade" in " ".join(
-            [_words(service.get("command")), _words(service.get("entrypoint"))]
-        )
-        if runs_upgrade and name != "migrate":
+        # Entrypoint first: Compose runs `entrypoint + command` as one argument list.
+        launched = " ".join([_words(service.get("entrypoint")), _words(service.get("command"))])
+        if runs_alembic_upgrade(launched) and name != "migrate":
             problems.append(f"{name}: command or entrypoint runs alembic upgrade")
-    if "alembic upgrade" not in _words(services.get("migrate", {}).get("command")):
+    if not runs_alembic_upgrade(_words(services.get("migrate", {}).get("command"))):
         problems.append("migrate: command does not run alembic upgrade")
-    if "alembic upgrade" in backend_dockerfile:
+    if runs_alembic_upgrade(backend_dockerfile):
         problems.append("backend image: Dockerfile runs alembic upgrade")
     for name in ("backend", "worker"):
         condition = (services.get(name, {}).get("depends_on") or {}).get("migrate", {})
@@ -147,6 +160,28 @@ def c11_migrations(rendered: Rendered, backend_dockerfile: str) -> list[str]:
                 and spec.get("condition") != "service_completed_successfully"
             ):
                 problems.append(f"{name}: depends on migrate with {spec.get('condition')}")
+    return problems
+
+
+_ALEMBIC_IMPORT = re.compile(r"^\s*(from|import)\s+alembic\b", re.MULTILINE)
+_ALEMBIC_API_UPGRADE = re.compile(r"\bcommand\.upgrade\s*\(")
+
+
+def backend_source_migration_violations(sources: dict[str, str]) -> list[str]:
+    """ADR-0004 *Migrations*: no script or application module in the backend image migrates.
+
+    `sources`: path -> text for the backend build context outside `migrations/` and `tests/`.
+    """
+    problems = []
+    for path, text in sources.items():
+        name = path.rsplit("/", 1)[-1]
+        if (path.endswith(".sh") or name.startswith("Dockerfile")) and runs_alembic_upgrade(text):
+            problems.append(f"{path}: runs alembic upgrade")
+        if path.startswith("backend/app/") and path.endswith(".py"):
+            if _ALEMBIC_IMPORT.search(text) or _ALEMBIC_API_UPGRADE.search(text):
+                problems.append(f"{path}: application code imports or calls Alembic")
+            elif runs_alembic_upgrade(text):
+                problems.append(f"{path}: application code runs alembic upgrade")
     return problems
 
 

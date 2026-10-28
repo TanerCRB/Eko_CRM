@@ -41,12 +41,12 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "TID", "S", "BLE", "T20"]
-ignore = ["S101", "S603", "S607"]
-
 [tool.ruff.lint.per-file-ignores]
-# Tests hold synthetic credentials (ADR-0005 synthetic-data rule), name unspecified addresses as
-# values to detect, never to bind, and reach proxy's internal-CA certificates without verifying.
-"tests/**" = ["S104", "S105", "S106", "S501"]
+# Tests assert with `assert` (S101), run docker, git and bash by name with fixed arguments
+# (S603, S607), hold synthetic credentials (ADR-0005 synthetic-data rule), name unspecified
+# addresses as values to detect, never to bind, and reach proxy's internal-CA certificates
+# without verifying them.
+"tests/**" = ["S101", "S104", "S105", "S106", "S501", "S603", "S607"]
 # The web process listens on every address of its container; only proxy publishes a port.
 "app/serve.py" = ["S104"]
 

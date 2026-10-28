@@ -41,11 +41,14 @@ def write_env(path: Path, values: dict[str, str]) -> None:
     path.write_text("".join(f"{k}={v}\n" for k, v in values.items()), encoding="utf-8")
 
 
-def make_env_file(directory: Path) -> Path:
+def make_env_file(directory: Path, project: str) -> Path:
     path = write_synthetic_env(directory / "synthetic.env")
     values = read_env(path)
     for name in PORT_VARIABLES:
         values[name] = str(free_port())
+    # One backend image per test composition: a rebuild in one never swaps another's image.
+    values["COMPOSE_PROJECT_NAME"] = project
+    values["BACKEND_IMAGE_TAG"] = f"0.1.0-{project}"
     write_env(path, values)
     return path
 
@@ -155,7 +158,7 @@ class Composition:
 def new_composition(tmp_path_factory: pytest.TempPathFactory, label: str) -> Composition:
     directory = tmp_path_factory.mktemp(label)
     project = f"ekort-{label}-{uuid.uuid4().hex[:8]}"
-    return Composition(project=project, env_file=make_env_file(directory))
+    return Composition(project=project, env_file=make_env_file(directory, project))
 
 
 @dataclass

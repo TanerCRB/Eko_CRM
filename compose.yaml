@@ -6,8 +6,9 @@
 # Every secret is required with no default (ADR-0004-C9, C10); `:?` also refuses an empty value.
 # Values that are the same in every environment (pool sizes, connection limits, max_connections)
 # are part of the release and written here or in the init content, not in the environment file.
-
-name: eko-crm
+# No fixed project name: COMPOSE_PROJECT_NAME and BACKEND_IMAGE_TAG come from the environment file
+# (scripts/dev-env.sh derives both from the checkout's path), so two checkouts on one Docker host
+# never share containers, volumes or the backend image.
 
 services:
   proxy:
@@ -23,6 +24,8 @@ services:
       AUTH_HOST: ${AUTH_HOST:?AUTH_HOST is required}
       AUTH_ADMIN_HOST: ${AUTH_ADMIN_HOST:?AUTH_ADMIN_HOST is required}
       COMPANY_NETWORK_CIDRS: ${COMPANY_NETWORK_CIDRS:?COMPANY_NETWORK_CIDRS is required}
+      # The host port of the HTTPS listener, named in the HTTP-to-HTTPS redirect.
+      PROXY_HTTPS_PORT: ${PROXY_HTTPS_PORT:?PROXY_HTTPS_PORT is required}
     ports:
       - name: http
         target: 80
@@ -57,7 +60,7 @@ services:
   # local (`localhost/` never resolves to a public registry) and never pulled; a release references
   # the registry digest instead (EKO-1-15).
   backend:
-    image: localhost/eko-crm/backend:0.1.0
+    image: localhost/eko-crm/backend:${BACKEND_IMAGE_TAG:?BACKEND_IMAGE_TAG is required}
     build:
       context: ./backend
     pull_policy: build
@@ -82,7 +85,7 @@ services:
 
   # The only process that runs `alembic upgrade head` (ADR-0004 *Migrations*).
   migrate:
-    image: localhost/eko-crm/backend:0.1.0
+    image: localhost/eko-crm/backend:${BACKEND_IMAGE_TAG:?BACKEND_IMAGE_TAG is required}
     pull_policy: never
     command: ["alembic", "upgrade", "head"]
     depends_on:
@@ -95,7 +98,7 @@ services:
     restart: "no"
 
   worker:
-    image: localhost/eko-crm/backend:0.1.0
+    image: localhost/eko-crm/backend:${BACKEND_IMAGE_TAG:?BACKEND_IMAGE_TAG is required}
     pull_policy: never
     command: ["python", "-m", "app.worker"]
     depends_on:
@@ -136,13 +139,14 @@ services:
       KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: "true"
       KC_FEATURES_DISABLED: impersonation
+    # Healthy only on readiness 200: the DOWN body (503) also holds nested "UP" checks.
     healthcheck:
       test:
         - CMD-SHELL
         - >-
           exec 3<>/dev/tcp/127.0.0.1/9000 &&
           printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
-          grep -q '"UP"' <&3
+          head -n 1 <&3 | grep -q '^HTTP/1\.[01] 200 '
       interval: 10s
       timeout: 5s
       retries: 30
@@ -154,6 +158,20 @@ services:
     # max_connections is part of the release (ADR-0004-C28): the three role limits below sum to
     # 30 + 25 + 5 = 60 < 100 - 3 (ADR-0003-C19, ADR-0004-C19).
     command: ["postgres", "-c", "max_connections=100", "-c", "superuser_reserved_connections=3"]
+    # ADR-0004-C28 addendum: a volume whose first initialisation failed is never started again.
+    # The image would skip the init content on it and serve without roles, databases or REVOKEs,
+    # so a data directory without the marker the init content writes last is refused, on every
+    # start, the restart policy's included.
+    entrypoint:
+      - /bin/bash
+      - -c
+      - >-
+        if [ -s "$$PGDATA/PG_VERSION" ] && [ ! -f "$$PGDATA/eko-init-complete" ]; then
+        echo "eko-init: this volume's first initialisation did not complete; remove the volume
+        (docker compose down -v) and start again" >&2;
+        exit 1; fi;
+        exec docker-entrypoint.sh "$$@"
+      - docker-entrypoint.sh
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
@@ -232,3 +250,5 @@ configs:
       GRANT CONNECT ON DATABASE eko TO eko_backup;
       GRANT CONNECT ON DATABASE keycloak TO eko_backup;
       SQL
+      # Written last: its absence marks a volume whose first initialisation did not complete.
+      touch "$$PGDATA/eko-init-complete"

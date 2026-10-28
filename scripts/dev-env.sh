@@ -28,8 +28,15 @@ dev_value() {
     PROXY_HTTP_PORT) echo "8080" ;;
     PROXY_HTTPS_PORT) echo "8443" ;;
     PROXY_ADMIN_PORT) echo "9443" ;;
+    BACKEND_IMAGE_TAG) echo "0.1.0-$CHECKOUT_ID" ;;
     *) return 1 ;;
   esac
+}
+
+# The same for one checkout on every run, different for two checkouts: the project name and the
+# backend image tag derive from it, so two worktrees on one Docker host never share either.
+checkout_id() {
+  (cd "$(dirname "$1")" && pwd -P) | tr -d '\r\n' | sha256sum | cut -c1-12
 }
 
 required_names() {
@@ -44,7 +51,8 @@ write_env() {
   [ ! -e "$target" ] || { echo "dev-env: $target exists; remove it first" >&2; return 1; }
   local names; names="$(required_names "$compose")"
   [ -n "$names" ] || { echo "dev-env: no required variable found in $compose" >&2; return 2; }
-  local out=""
+  CHECKOUT_ID="$(checkout_id "$compose")"
+  local out="COMPOSE_PROJECT_NAME=eko-crm-$CHECKOUT_ID"$'\n'
   while IFS= read -r name; do
     if [[ "$name" =~ $SECRET_NAME_RE ]]; then
       value="synthetic-$(random_value)"
@@ -71,6 +79,11 @@ self_test() {
   write_env "$dir/c.yaml" "$dir/two.env"
   check "two runs give different secrets" "[ \"\$(grep DB_PASSWORD '$dir/one.env')\" != \"\$(grep DB_PASSWORD '$dir/two.env')\" ]"
   check "an existing file is not overwritten" "! write_env '$dir/c.yaml' '$dir/one.env' 2>/dev/null"
+  check "one checkout gets one project name on every run" "[ \"\$(grep COMPOSE_PROJECT_NAME '$dir/one.env')\" = \"\$(grep COMPOSE_PROJECT_NAME '$dir/two.env')\" ]"
+  mkdir -p "$dir/other" && cp "$dir/c.yaml" "$dir/other/c.yaml"
+  write_env "$dir/other/c.yaml" "$dir/other.env"
+  check "another checkout gets another project name" "[ \"\$(grep COMPOSE_PROJECT_NAME '$dir/one.env')\" != \"\$(grep COMPOSE_PROJECT_NAME '$dir/other.env')\" ]"
+  check "the project name is a valid Compose name" "grep -qxE 'COMPOSE_PROJECT_NAME=eko-crm-[0-9a-f]{12}' '$dir/one.env'"
   printf 'a: ${SOMETHING_NEW:?x}\n' > "$dir/u.yaml"
   check "an unknown non-secret variable stops the script" "! write_env '$dir/u.yaml' '$dir/u.env' 2>/dev/null && [ ! -e '$dir/u.env' ]"
   check "the repository's compose.yaml is covered" "write_env '$COMPOSE_FILE' '$dir/repo.env' && [ -s '$dir/repo.env' ]"

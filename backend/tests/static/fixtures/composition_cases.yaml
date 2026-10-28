@@ -40,10 +40,10 @@
   old: "    command: [\"python\", \"-m\", \"app.worker\"]\n    depends_on:\n      migrate:\n        condition: service_completed_successfully"
   new: "    command: [\"python\", \"-m\", \"app.worker\"]\n    depends_on:\n      migrate:\n        condition: service_started"
 - id: c13-worker-on-another-image
-  old: "    image: localhost/eko-crm/backend:0.1.0\n    pull_policy: never\n    command: [\"python\", \"-m\", \"app.worker\"]"
+  old: "    image: localhost/eko-crm/backend:${BACKEND_IMAGE_TAG:?BACKEND_IMAGE_TAG is required}\n    pull_policy: never\n    command: [\"python\", \"-m\", \"app.worker\"]"
   new: "    image: python:3.12.16-slim-trixie\n    pull_policy: never\n    command: [\"python\", \"-m\", \"app.worker\"]"
 - id: c13-worker-built-separately
-  old: "    image: localhost/eko-crm/backend:0.1.0\n    pull_policy: never\n    command: [\"python\", \"-m\", \"app.worker\"]"
+  old: "    image: localhost/eko-crm/backend:${BACKEND_IMAGE_TAG:?BACKEND_IMAGE_TAG is required}\n    pull_policy: never\n    command: [\"python\", \"-m\", \"app.worker\"]"
   new: "    build:\n      context: ./backend\n    command: [\"python\", \"-m\", \"app.worker\"]"
 - id: c28-build-on-postgres
   old: "    image: postgres:18.6-trixie\n"
@@ -66,3 +66,9 @@
 - id: c10-secret-not-required
   old: "      BACKUP_DB_PASSWORD: ${BACKUP_DB_PASSWORD:?BACKUP_DB_PASSWORD is required}\n    restart"
   new: "      BACKUP_DB_PASSWORD: ${BACKUP_DB_PASSWORD}\n    restart"
+- id: c11-upgrade-with-config-option
+  old: "      WEB_CONCURRENCY: \"2\"\n"
+  new: "      WEB_CONCURRENCY: \"2\"\n    command: [\"sh\", \"-c\", \"alembic -c alembic.ini upgrade head && python -m app.serve\"]\n"
+- id: c11-upgrade-split-across-entrypoint-and-command
+  old: "      WEB_CONCURRENCY: \"2\"\n"
+  new: "      WEB_CONCURRENCY: \"2\"\n    entrypoint: [\"alembic\"]\n    command: [\"upgrade\", \"head\"]\n"
