@@ -195,6 +195,13 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** the real destination and the C17 off-server alert (EKO-1-08). After
   EKO-1-11; before EKO-1-08.
 
+- [ ] **EKO-1-15** — Build the release pipeline that publishes images by digest (#56).
+  *Done when:* a release tag makes CI build the backend, frontend and backup images and push them
+  to the registry by digest as ADR-0004 *Images* decides; the composition used for a deployment
+  references those digests; the capability register lists the release pipeline as proven.
+  **Out of scope (explicit):** the deployment itself and production setup (EKO-1-08). After
+  EKO-1-06; before EKO-1-08's first deployment.
+
 ## EKO-2 — Access
 
 - [ ] **EKO-2-01** — Require login for the whole application.
