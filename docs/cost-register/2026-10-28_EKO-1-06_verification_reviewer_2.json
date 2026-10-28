@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-28",
+  "task": "EKO-1-06",
+  "phase": "verification",
+  "role": "reviewer",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "ab5a170c6872c0283",
+  "tokens": 958801,
+  "tokenSplit": {
+    "input": 12,
+    "output": 14342,
+    "cacheWrite": 205511,
+    "cacheRead": 738936
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 5,
+  "seconds": 162,
+  "fixRound": 1,
+  "reworkCause": "Re-verification of fix round 1 on the fix diff 89971f8..c94ebdb",
+  "notes": "STOP at c94ebdb: R-01..R-05 resolved; new R-06 Medium (removing name: eko-crm ties the shared environment's volume to the deployment directory), introduced by the R-03 fix; resumed agent, cumulative record minus row 1, seconds from the task notification; boundary-check: clean (--none)"
+}

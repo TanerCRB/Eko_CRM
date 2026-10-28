@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-28",
+  "task": "EKO-1-06",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "a3a7289be632fa81c",
+  "tokens": 1119245,
+  "tokenSplit": {
+    "input": 14,
+    "output": 8136,
+    "cacheWrite": 196921,
+    "cacheRead": 914174
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 6,
+  "seconds": 105,
+  "fixRound": 1,
+  "reworkCause": "Re-verification of fix round 1 on the fix diff 89971f8..c94ebdb",
+  "notes": "PASS at c94ebdb: S-01, S-02 resolved; S-03 Low still open (rules 4/7/9, a human plan decision); resumed agent, cumulative record minus row 1, seconds from the task notification; boundary-check: clean (--none)"
+}
