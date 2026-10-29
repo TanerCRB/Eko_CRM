@@ -226,3 +226,117 @@ above. -->
   identity enters the inner layers as a value defined in `domain`, so no inner layer reads a
   token, a claim or the session; without this rule an import of `auth` from `domain` would pass
   the layer check.
+
+### 2026-10-29 — ADR-0001-C6, C8, C10, C13 and C14 restated; the scope of C11 stated
+
+**Status:** Accepted 2026-10-29, as a declared deviation (gate 1 of EKO-1-10, Issue #51).
+
+**What it restates.** EKO-1-10 (#51) builds the code-level controls of this decision as checks
+that CI runs on every pull request. Read to the letter, five of them fail where their rule holds or
+pass where it is broken (holes R-09, R-12 and R-13, forwarded from #19):
+
+- ADR-0001-C10's pattern `environ` also matches the word `environment` in a field name, a string
+  or a docstring, which reads nothing. Its list misses `starlette.config`, a route to the process
+  environment that *Constraint 1* forbids ("'Read' covers every route to the process
+  environment").
+- ADR-0001-C13's list misses reads of the device's zone that *Constraint 3* forbids: the
+  local-zone setters, `toDateString`, `toTimeString`, and a `Date` turned into text by
+  interpolation.
+- Neither list names `toJSON`, which gives the same UTC text as `toISOString`. ADR-0001-C14's
+  list also misses the UTC setters, and it does not name the browser's clock (`Date.now()`,
+  `new Date()`), from which *Constraint 3* has the helper take the current instant.
+- ADR-0001-C8 still holds while a second ruff configuration replaces `backend/pyproject.toml` for
+  some files. Ruff applies the configuration nearest to a file, so a root `pyproject.toml` with
+  `[tool.ruff]`, or a nested `ruff.toml` without `extend`, drops `TID252`, `TID251` and the `S`
+  rules for the files below it, and `ruff check backend` still exits 0.
+- ADR-0001-C6 names neither the case of `password` nor the media type of the body. The password
+  form a client would send is `application/x-www-form-urlencoded`, and FastAPI places a body's
+  schema behind a `$ref`.
+
+From this date:
+
+- **ADR-0001-C10 reads:** No file under `backend/app/` other than `backend/app/core/settings.py`
+  reads the process environment. In every other file under `backend/app/`, comments and
+  docstrings included, each of these is a finding, matched as a whole name and never as part of a
+  longer word:
+  - `os.environ`, and `environ` imported from `os` in any form, `from os import environ as env`
+    included;
+  - `os.getenv`, and `getenv` imported from `os`;
+  - `os.putenv`;
+  - an import of `pydantic_settings`, and a class deriving from `BaseSettings`;
+  - an import of `dotenv` or of any of its loaders;
+  - an import of `starlette.config`, or of its `Config` or `environ`;
+  - `os.environb` and `os.getenvb`, and either name imported from `os`.
+
+  The word `environment` in an identifier, a string or a docstring is not a finding, and neither
+  is `ConfigDict`. The exemption is that one file. Neither `backend/app/core/` nor a file such as
+  `backend/app/core/settings_extra.py` shares it.
+- **ADR-0001-C13 reads:** the Vitest half is unchanged. Grep half: none of these appears in any
+  file under `frontend/src/`, `frontend/src/time/warsaw.ts` included. Each is judged by name,
+  comments included:
+  - the local-zone getters `.getFullYear(`, `.getMonth(`, `.getDate(`, `.getDay(`, `.getHours(`
+    and `.getMinutes(`, and `getTimezoneOffset`;
+  - the local-zone setters `.setDate(`, `.setHours(`, `.setFullYear(`, `.setMonth(`,
+    `.setMinutes(`, `.setSeconds(` and `.setMilliseconds(`;
+  - `toDateString` and `toTimeString`, and `Date(` called without `new`;
+  - a value of type `Date` in a template literal or in string concatenation. It is judged by its
+    TypeScript type, a value reached through a variable included;
+  - `.toJSON(`, on any value.
+- **ADR-0001-C14 reads:** the Vitest half is unchanged. Grep half: none of these appears in any
+  file under `frontend/src/` other than `frontend/src/time/warsaw.ts`. The exemption is that one
+  file, not its directory and not a file whose name begins with `warsaw`. Each is judged by name,
+  comments included:
+  - the existing list: `toISOString`, `getUTC`, `Date.UTC`, `toLocale`, `Intl.DateTimeFormat`,
+    `Temporal.`, `date-fns`, `dayjs`, `luxon`, `'moment` and `"moment`, with no exemption for
+    `frontend/src/api/`;
+  - `new Date(` with two or more arguments, as before;
+  - the UTC setters `.setUTC…(` (`.setUTCFullYear(`, `.setUTCHours(` and the others);
+  - `Date.now(`, `new Date()` with no argument, and `new Date` with no parentheses.
+
+  `new Date(` with one argument (an instant from a number or from an RFC 3339 string) and
+  `performance.now()` are not findings.
+- **ADR-0001-C8 gains a second sentence:** The ruff configuration in effect for every file under
+  `backend/` is `backend/pyproject.toml`. For the directories ADR-0001-C11 scopes, it is extended
+  by one `ruff.toml` in each of `backend/app/domain/`, `backend/app/services/`,
+  `backend/app/data/`, `backend/app/integrations/`, `backend/app/core/` and `backend/app/auth/`,
+  each with `extend = "../../pyproject.toml"`. Every other tracked ruff configuration fails:
+  - a `[tool.ruff]` table in any `pyproject.toml` other than `backend/pyproject.toml`, the
+    repository root's included;
+  - any other `ruff.toml` or `.ruff.toml`, including `backend/ruff.toml`, `backend/.ruff.toml`
+    and one in `backend/app/api/`;
+  - one of the six whose `extend` names any other file.
+
+  Each of the six holds only its `extend` and the `banned-api` entries of its layer's row, so
+  none can switch off a rule that `backend/pyproject.toml` selects.
+- **ADR-0001-C6 reads:** the migrations half is unchanged. OpenAPI half: the OpenAPI document of
+  the backend contains no request-body property whose name contains `password`, compared without
+  regard to case. This covers any media type of the body (JSON, form, multipart), any depth, and a
+  property reached through a `$ref`. It also contains no query, header, cookie or path
+  parameter whose name contains `password`.
+
+**What it states about ADR-0001-C11.** "The layer table" of ADR-0001-C11 is the table of
+*Repository layout and layers*, with this decision's addendum of 2026-10-23. Its rows are
+`domain`, `services`, `data`, `integrations`, `core`, `auth` and `api`, each scoped to its
+directory. `layer-dependencies.md` may also hold a row for one file outside the layer
+directories, such as `backend/app/worker.py` (ADR-0006, *Background work*). Such a row is not a
+layer directory and gets no `TID251` scope. Ruff applies a configuration to a directory, and
+`backend/app/` also holds `main.py`, which may depend on every layer. That file's rule is enforced
+by ADR-0001-C9's layer check. A static test also reads every import of that file, so the form
+`from app import api` is caught as well. The text of ADR-0001-C11 is unchanged.
+
+Every other rule and control of this decision is unchanged.
+
+**Why.** A control must fail where its decision's rule is broken and pass where it holds. A check
+built to the letter of these five would do neither reliably. Two items do more than restate a
+control: they widen a rule of *Constraint 3*.
+- Outside the helper, the frontend does not read the browser's clock (`Date.now()`,
+  `new Date()`). So "now" has one source in the frontend, as it has `clock.py` in the backend
+  (ADR-0002).
+- `toJSON` is banned everywhere in `frontend/src/`, `warsaw.ts` included. It gives the same UTC
+  text as `toISOString`, and the helper has no need for it.
+
+The parameter half of ADR-0001-C6 follows *Constraint 2* ("no backend endpoint accepts a
+user's password"), which names no channel. A password sent as a query parameter also ends up in
+logs. Restating accepted controls is a declared deviation. It follows the precedent of ADR-0002's
+addendum of 2026-10-28 on ADR-0002-C12. Approved by the human at gate 1 of EKO-1-10 on 2026-10-29 (G-4 A,
+Issue #51).
