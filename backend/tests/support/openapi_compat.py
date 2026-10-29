@@ -274,6 +274,11 @@ def load(path: str) -> Document:
 PREFIX = "openapi-compat:"
 
 
+def report(out: TextIO, line: str) -> None:
+    """The command's result, one line each: the CLI's output, not logging."""
+    out.write(line + "\n")
+
+
 def main(argv: list[str], out: TextIO = sys.stdout) -> int:
     parser = argparse.ArgumentParser(prog="python -m tests.support.openapi_compat")
     parser.add_argument("--previous", help="the previous release's OpenAPI document (JSON)")
@@ -282,22 +287,22 @@ def main(argv: list[str], out: TextIO = sys.stdout) -> int:
     try:
         current = load(args.current) if args.current else real_app().openapi()
         if args.previous is None:
-            print(
+            report(
+                out,
                 f"{PREFIX} no previous release document was supplied, so it compared nothing. "
                 "Which release is previous, and how CI obtains its document, is EKO-1-15's (#56).",
-                file=out,
             )
             return 0
         previous = load(args.previous)
     except CheckFailed as exc:
-        print(f"{PREFIX} the check itself failed: {exc}", file=out)
+        report(out, f"{PREFIX} the check itself failed: {exc}")
         return 2
     problems = breaking_changes(previous, current)
     for problem in problems:
-        print(f"BREAKING: {problem}", file=out)
+        report(out, f"BREAKING: {problem}")
     count = len(operations(previous))
     verdict = f"{len(problems)} breaking change(s)" if problems else "no breaking change"
-    print(f"{PREFIX} compared {count} operation(s) of the previous release: {verdict}", file=out)
+    report(out, f"{PREFIX} compared {count} operation(s) of the previous release: {verdict}")
     return 1 if problems else 0
 
 
