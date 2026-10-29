@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-29",
+  "task": "EKO-1-10",
+  "phase": "verification",
+  "role": "qa",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Low",
+  "agentId": "a931327fdaebeed54",
+  "tokens": 1222640,
+  "tokenSplit": {
+    "input": 54,
+    "output": 24903,
+    "cacheWrite": 61602,
+    "cacheRead": 1136081
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 31,
+  "seconds": 796,
+  "fixRound": 0,
+  "reworkCause": "Post-merge defect in the register fixture cases (see developer-backend 4)",
+  "notes": "PROOF HOLDS at 7d390a8; nine mutations F01..F09 under both bases, F03 equivalent, F08 survives only on the pre-merge base (the defect), F09 killed after QA added a duplicated-row case. boundary-check: clean (backend/tests/, frontend/tests/)"
+}
