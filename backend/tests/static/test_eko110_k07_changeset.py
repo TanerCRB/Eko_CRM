@@ -110,12 +110,41 @@ REGISTER_EDITS: dict[str, Callable[[str], str]] = {
         "| `scripts/**` |", "| `tools/**` | pipeline | — | x |\n| `scripts/**` |"
     ),
     "class-table-edited": lambda t: t.replace("| yes | no — it is fixed |", "| no | no |"),
+    # The approved row added twice, the second time with another class: only the count sees it.
+    "layer-table-row-duplicated": lambda t: "\n".join(
+        f"{line}\n{line.replace('| pipeline |', '| model |')}"
+        if line.startswith("| `docs/architecture/layer-dependencies.md` |")
+        else line
+        for line in t.split("\n")
+    ),
 }
+
+
+def pre_eko110_register() -> tuple[str, str]:
+    """The register before EKO-1-10's two rows, and with them, wherever the PR base is.
+
+    Once EKO-1-10 is in the PR base the check is inert (A-12), so the cases below judge their
+    edits against this change set's own base, rebuilt from the worktree.
+    """
+    head = in_worktree(REGISTER)
+    assert head is not None
+    base = "\n".join(
+        line
+        for line in head.split("\n")
+        if not any(line.startswith(f"| {path} |") for path in cc.REGISTER_ROWS)
+    )
+    assert base.count("\n") == head.count("\n") - len(cc.REGISTER_ROWS)
+    return base, head
+
+
+def test_eko110_k07_register_check_passes_the_two_rows_on_a_pre_eko110_base() -> None:
+    base, head = pre_eko110_register()
+    assert cc.register_problems(base, head) == []
 
 
 @pytest.mark.parametrize("case_id", sorted(REGISTER_EDITS))
 def test_eko110_k07_register_check_fails_on_any_other_edit(case_id: str) -> None:
-    base, head = register_texts()
+    base, head = pre_eko110_register()
     edited = REGISTER_EDITS[case_id](head)
     assert edited != head, case_id
     assert cc.register_problems(base, edited) != [], case_id
