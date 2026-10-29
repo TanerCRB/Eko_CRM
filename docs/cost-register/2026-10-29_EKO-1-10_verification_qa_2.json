@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-29",
+  "task": "EKO-1-10",
+  "phase": "verification",
+  "role": "qa",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "aa12820a8c46392b0",
+  "tokens": 7213608,
+  "tokenSplit": {
+    "input": 46,
+    "output": 48076,
+    "cacheWrite": 361466,
+    "cacheRead": 6804020
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 24,
+  "seconds": 1039,
+  "fixRound": 1,
+  "reworkCause": "Re-verification of fix round 1 (Reviewer R-01..R-06, Auditor L-01)",
+  "notes": "Resumed run; numbers are the record cumulative values minus run 1; seconds from the task notification. PROOF HOLDS at c02a5dc; six new mechanisms (M-112, M-113, M-117, M-120, M-129, M-136) survived the developer tests and were killed by QA contrast tests; backend 1017 -> 1023. boundary-check: clean (backend/tests/, frontend/tests/, tests/doc-checks/)"
+}
