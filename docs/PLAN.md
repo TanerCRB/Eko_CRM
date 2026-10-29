@@ -167,7 +167,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   and destination provisioning — EKO-1-08. A new service or image stops the task as an ADR-0004
   addendum (G-9 A).
 
-- [ ] **EKO-1-10** — Build the code-level architecture controls in CI (#51).
+- [x] **EKO-1-10** — Build the code-level architecture controls in CI (#51).
   *Done when:* ADR-0001-C6, C8..C11, C13, C14 (greps), ADR-0002-C4, C13, ADR-0003-C9, C12 and the
   ADR-0005-C12 grep run on every PR, each shown failing on a fixture, with the holes of R-09,
   R-11, R-12 and R-13 closed (word-bounded C10, `starlette.config`, C13 on `datetime.time(` and the
@@ -176,6 +176,20 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   (#47).
   **Out of scope (explicit):** the Warsaw-time helpers themselves (first task with dates). After
   EKO-1-06; before EKO-1-07 and EKO-2-01.
+  **Done 2026-10-29:** widened at gate 1 by checklist rules 4, 7, 9 and 19 (PR #57 S-03) and an
+  OpenAPI comparison with the previous release (#19 G-1 A); every gate-1 recommendation G-1..G-14
+  accepted, with the restated controls written as accepted 2026-10-29 addenda to ADR-0001..ADR-0004
+  (ADR-0001-C6, C8, C10, C13, C14 and the scope of C11; ADR-0002-C13 and C4; ADR-0003-C9; the
+  ADR-0004 forwards). Merged in [PR #65](https://github.com/TanerCRB/Eko_CRM/pull/65), verified at
+  `2cec564` after one fix round: the CI job `layers` against the PR base (red on a planted import in
+  throwaway [PR #66](https://github.com/TanerCRB/Eko_CRM/pull/66)), six nested
+  `backend/app/*/ruff.toml` holding only the layer bans, the frontend `pnpm lint` step and the
+  backend API-compatibility step, proven by `backend/tests/static/test_eko110_k01..k07_*.py`,
+  `test_eko110_qa_contrasts.py` and `frontend/tests/eslint-config.test.ts` (rows in
+  `architecture/capabilities.md`), 175 mutations killed; two recorded exceptions for test-data
+  suppressions (`architecture/exception-register.md`). Forwarded: the low findings S-01, F-01,
+  R-07, R-08 and R-09 (#67); which release is previous and how CI obtains its OpenAPI document
+  (EKO-1-15, #56); the Warsaw-time helpers and R-12's Sunday-late case (the first task with dates).
 
 - [ ] **EKO-1-11** — Make migrations safe against concurrent runs, older and newer schemas and
   stalls (#52).

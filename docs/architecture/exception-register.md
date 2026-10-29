@@ -74,3 +74,8 @@ Accepted at gate 2 of EKO-1-06 in [PR #57](https://github.com/TanerCRB/Eko_CRM/p
 - Exception EKO-1-06/B-01 — owner: @TanerCRB — reason: third-party images run by full-version tag, not digest, until EKO-1-15 pins them by digest — blocks again: 2027-03-31
 - Exception EKO-1-06/R23 — owner: @TanerCRB — reason: the proxy's OpenAPI refusal on the app site is a deliberate second layer (A-08) over backend serving its docs outside /api/, so removing it alone fails no test — blocks again: 2027-03-31
 - Exception EKO-1-06/R18 — owner: @TanerCRB — reason: the root-decoy mutation could not reach any image; the mechanism is covered by QA's decoy test (R18c) and the vacuous CI step was removed — blocks again: 2027-03-31
+
+Accepted at gate 2 of EKO-1-10 in [PR #65](https://github.com/TanerCRB/Eko_CRM/pull/65) (decided by the human on 2026-10-29 at the developer checkpoint, recorded on #51); both cover `scripts/weakening-check.sh` findings on test data inside EKO-1-10's own test files, which the check sees only in that task's change set:
+
+- Exception EKO-1-10/weakening-1 — owner: @TanerCRB — reason: the seven noqa strings are test data of the rule-19 suppression check and suppress nothing — blocks again: 2026-11-30
+- Exception EKO-1-10/weakening-2 — owner: @TanerCRB — reason: the type ignore makes the rule-9 fixture's bare dict return possible, which is the violation under test — blocks again: 2026-11-30
