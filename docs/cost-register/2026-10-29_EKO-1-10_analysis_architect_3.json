@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-29",
+  "task": "EKO-1-10",
+  "phase": "analysis",
+  "role": "architect",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Low",
+  "agentId": "a0ff60e2dcea73e5a",
+  "tokens": 1401300,
+  "tokenSplit": {
+    "input": 14,
+    "output": 3096,
+    "cacheWrite": 7305,
+    "cacheRead": 1390885
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 9,
+  "seconds": 54,
+  "fixRound": 0,
+  "reworkCause": "The C13/C14 lists disagreed across DoD 5, K-04 and the ADR-0001 addendum after the gate-1 answers; the Architect run that drafted the addenda could have fixed the lists once for the other two roles",
+  "notes": "Resumed run; numbers are the record cumulative values minus the earlier rows of this role; seconds from the task notification. ADR-0001 addendum: .toJSON( moved into C13, setSeconds/setMilliseconds added, UTC setters into C14, Why sentence adjusted. boundary-check: clean (shared snapshot, allowed docs/architecture/decisions/)"
+}

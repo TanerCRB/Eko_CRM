@@ -292,3 +292,54 @@ way round, as if the thread pool were smaller than the connection pool; the Revi
 (EKO-1-06, U-01), and this addendum states the actual mechanism. Approved by the human at gate 2 of
 EKO-1-06 on 2026-10-28 (Issue #19, PR #57). This is not a deviation: it decides a point this
 decision left open.
+
+### 2026-10-29 — ADR-0002-C13 restated, and *Now, today* extended to `backend/migrations/`
+
+**Status:** Accepted 2026-10-29, as a declared deviation (gate 1 of EKO-1-10, Issue #51).
+
+**What it restates.** EKO-1-10 (#51) builds ADR-0002-C13 as a check that CI runs on every pull
+request. Read to the letter, it fails where *Now, today, and Europe/Warsaw days* holds and passes
+where the rule is broken (hole R-09, forwarded from #19):
+
+- Its pattern `time.time(` also matches `datetime.time(9, 0)`, a time of day that reads no clock.
+- Its list misses PostgreSQL functions and input values that evaluate the current time or date:
+  `clock_timestamp()`, `statement_timestamp()`, `transaction_timestamp()`, and the special values
+  `'now'` and `'today'`, as in `'now'::timestamptz` and `'today'::date`.
+- It reads only `backend/app/`, so `server_default=sa.text("CURRENT_DATE")` in a migration
+  passes. ADR-0002-C3's `alembic check` does not catch it either, because Alembic compares server
+  defaults only when it is configured to.
+
+From this date:
+
+- **The rule's scope.** The rule "No other code under `backend/app/` reads the system time …
+  including as a column default" also binds `backend/migrations/`. No migration sets a column
+  default, or writes a value, that the database evaluates from its current time or date.
+- **ADR-0002-C13 reads:** No file under `backend/app/` or `backend/migrations/` other than
+  `backend/app/core/clock.py` contains any of the following. Comments, docstrings and SQL strings
+  are included, and the match ignores case. The exemption is that one file, not
+  `backend/app/core/` and not a file such as `clock_utils.py`.
+  - The existing list of ADR-0002-C13, with one change: `time.time(` and `time.time_ns(` match
+    only as calls of the `time` module, never as the end of a longer name. So
+    `datetime.time(9, 0)` and `dt.time()` are not findings.
+  - `clock_timestamp()`, `statement_timestamp()` and `transaction_timestamp()`, and
+    `timeofday()`.
+  - The quoted values `'now'`, `'today'`, `'tomorrow'` and `'yesterday'`. These
+    match wherever the value appears, with any cast or none, so `'now'::timestamptz`,
+    `'today'::date`, `'now'::date` and `CAST('now' AS date)` are all findings.
+
+  A migration's `Create Date:` header line is not a finding.
+- **ADR-0002-C4 reads:** `create_all` and `drop_all` appear in no file under
+  `backend/app/` or `backend/migrations/`. `grep -rl "sqlalchemy" backend/app` lists only files
+  under the directory `backend/app/data/`; `backend/app/data_export/` is not under it. A
+  `metadata.create_all` inside a revision creates schema that the revision's operations do not
+  describe. Expand → deploy → contract (ADR-0004) cannot then be read from the revision.
+
+Every other rule and control of this decision is unchanged.
+
+**Why.** A control must fail where its decision's rule is broken and pass where it holds. The
+rule's own scope, `backend/app/`, left the one place that creates column defaults unchecked. A
+default evaluated from the database's clock in a migration breaks the rule's aim, "the result
+does not depend on the zone of the container, the process or the database session", just as one
+in a model does. Restating an accepted control and widening its rule's scope is a declared
+deviation. It follows the precedent of this decision's addendum of 2026-10-28 on ADR-0002-C12.
+Approved by the human at gate 1 of EKO-1-10 on 2026-10-29 (G-4 A, Issue #51).

@@ -599,3 +599,29 @@ budget of ADR-0003-C19 and of the addendum of 2026-10-24.
 **Why.** *Identity server storage* forwards the values to EKO-1-06, and ADR-0003-C19 can be checked
 only against values recorded somewhere. Approved by the human at gate 2 of EKO-1-06 on 2026-10-28
 (Issue #19, PR #57). This is not a deviation.
+
+### 2026-10-29 — ADR-0003-C9 restated: any media type, any case, and request parameters
+
+**Status:** Accepted 2026-10-29, as a declared deviation (gate 1 of EKO-1-10, Issue #51).
+
+**What it restates.** EKO-1-10 (#51) builds ADR-0003-C9 as a check on the OpenAPI document the
+application generates. Its letter reads only request-body properties "named" `password`,
+`username` or `grant_type`. The flow this decision forbids, the resource-owner password grant,
+arrives as an `application/x-www-form-urlencoded` body, and FastAPI places that body's schema
+behind a `$ref`. *Browser flow* also says that no backend endpoint receives the password, and it
+names no channel. From this date:
+
+- **ADR-0003-C9 reads:** The OpenAPI document contains no operation with a request-body property
+  named `username` or `grant_type`, or whose name contains `password`. Names are compared without
+  regard to case. This covers any media type of the body, any depth, and a property reached
+  through a `$ref`. The document also contains no operation with a query, header, cookie
+  or path parameter named in the same way. No route sends e-mail.
+
+Every other rule and control of this decision is unchanged. ADR-0001's addendum of 2026-10-29
+restates ADR-0001-C6 in the same way.
+
+**Why.** A check built to the letter of ADR-0003-C9 would pass the password grant in exactly the
+shape it takes, a form body behind a `$ref`. It would also pass a credential sent in a
+URL, which ends up in logs. Restating an accepted control is a declared deviation. It follows the
+precedent of this decision's addendum of 2026-10-28 on ADR-0003-C4. Approved by the human at
+gate 1 of EKO-1-10 on 2026-10-29 (G-4 A, Issue #51).

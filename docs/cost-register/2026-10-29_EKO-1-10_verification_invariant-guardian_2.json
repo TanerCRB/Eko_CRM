@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-29",
+  "task": "EKO-1-10",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "a9502d91e380b81ff",
+  "tokens": 755881,
+  "tokenSplit": {
+    "input": 14,
+    "output": 4155,
+    "cacheWrite": 132203,
+    "cacheRead": 619509
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 6,
+  "seconds": 87,
+  "fixRound": 1,
+  "reworkCause": "Re-verification of fix round 1 (Reviewer STOP R-01..R-03)",
+  "notes": "Resumed run; numbers are the record cumulative values minus run 1. PASS at 2cec564 on the fix diff; U-01, U-02 still open (Actions runs after push); S-01 low carried. boundary-check: clean (--none, shared snapshot)"
+}

@@ -950,3 +950,31 @@ Every other rule and control of this decision is unchanged.
 start on new, empty volumes and leave the environment's data in the old ones. Approved by the human
 at gate 2 of EKO-1-06 on 2026-10-28 (Issue #19, PR #57). This is not a deviation: it records how
 the composition meets item 3.
+
+### 2026-10-29 — The previous release's OpenAPI document: its source forwarded to EKO-1-15
+
+**Status:** Accepted 2026-10-29 (gate 1 of EKO-1-10, Issue #51).
+
+**What it restates.** This decision's addendum of 2026-10-28 on the split of EKO-1-06 gives
+EKO-1-10 (#51) "a check that compares the OpenAPI document with the previous release's". No
+release exists yet. Building images from a release tag and referencing them by digest is
+EKO-1-15's (#56), and nothing yet fixes what a release tag is. This addendum changes only which
+task carries each part of that duty. From this date:
+
+- **EKO-1-10 (#51)** builds the comparison and runs it on every pull request. Given the previous
+  release's OpenAPI document and the document the pull request's backend generates, it fails on a
+  change that breaks a client built against the previous document. While no previous release
+  exists, its output says that it compared nothing, and it does not report a comparison.
+- **EKO-1-15 (#56)** gives the check its input: which release counts as the previous one, and how
+  CI obtains that release's document. Both documents are taken from the backend directly, never
+  through `proxy`, as ADR-0003's addendum of 2026-10-28 requires.
+- The check stops being vacuous at the second release.
+- EKO-1-07 (#20) keeps the lazy-chunk half, unchanged.
+
+No rule or control of this decision changes.
+
+**Why.** If EKO-1-10 defined "the previous release", it would fix the release tag's form before
+the task that builds releases. If the previous document were committed to the repository, a pull
+request could change it together with the break it hides. Approved by the human at gate 1 of
+EKO-1-10 on 2026-10-29 (G-12 A, Issue #51). This is not a deviation: no rule
+changes.

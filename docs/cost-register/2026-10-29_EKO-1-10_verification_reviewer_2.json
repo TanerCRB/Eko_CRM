@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-29",
+  "task": "EKO-1-10",
+  "phase": "verification",
+  "role": "reviewer",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "a845e901b3526d979",
+  "tokens": 912247,
+  "tokenSplit": {
+    "input": 12,
+    "output": 11709,
+    "cacheWrite": 191290,
+    "cacheRead": 709236
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 5,
+  "seconds": 167,
+  "fixRound": 1,
+  "reworkCause": "Re-verification of fix round 1 (Reviewer STOP R-01..R-03)",
+  "notes": "Resumed run; numbers are the record cumulative values minus run 1; seconds from the task notification. PASS at 2cec564; R-01..R-06 resolved; new lows R-07 (union pairing), R-08 (optional/list hidden bodies), R-09 (inert branch keyed to a path). boundary-check: clean (--none, shared snapshot)"
+}

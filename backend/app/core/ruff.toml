@@ -1,0 +1,11 @@
+# ADR-0001-C11: the `core` row of docs/architecture/layer-dependencies.md. Only `extend`
+# and these bans may be set here (ADR-0001-C8 as restated 2026-10-29).
+extend = "../../pyproject.toml"
+
+[lint.flake8-tidy-imports.banned-api]
+"app.domain".msg = "core must not depend on domain (docs/architecture/layer-dependencies.md)"
+"app.services".msg = "core must not depend on services (docs/architecture/layer-dependencies.md)"
+"app.data".msg = "core must not depend on data (docs/architecture/layer-dependencies.md)"
+"app.api".msg = "core must not depend on api (docs/architecture/layer-dependencies.md)"
+"app.integrations".msg = "core must not depend on integrations (docs/architecture/layer-dependencies.md)"
+"app.auth".msg = "core must not depend on auth (docs/architecture/layer-dependencies.md)"

@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-29",
+  "task": "EKO-1-10",
+  "phase": "analysis",
+  "role": "analyst",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Low",
+  "agentId": "ab3f66649594e001f",
+  "tokens": 133704,
+  "tokenSplit": {
+    "input": 4,
+    "output": 9689,
+    "cacheWrite": 124011,
+    "cacheRead": 0
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 1,
+  "seconds": 70,
+  "fixRound": 0,
+  "reworkCause": "evidence-chain lint: Contrast and Mutation labels had no text on the label line; the Analyst's own run 1 could have caught it (it could not run the lint, having no shell)",
+  "notes": "Resumed run; numbers are the record's cumulative values minus run 1's row; seconds from the task notification. Format-only fix plus the K-02 edge note after the PO's DoD 2 rewording; lint clean on the rebuilt body. boundary-check: clean (--none)"
+}

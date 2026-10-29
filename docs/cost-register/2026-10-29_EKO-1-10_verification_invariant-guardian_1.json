@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-29",
+  "task": "EKO-1-10",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "a9502d91e380b81ff",
+  "tokens": 2167631,
+  "tokenSplit": {
+    "input": 54,
+    "output": 23693,
+    "cacheWrite": 111240,
+    "cacheRead": 2032644
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 28,
+  "seconds": 411,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "PASS, UNDECIDABLE U-01, U-02 (the Actions runs after push); S-01 low (rule 26 has no mechanical assertion). Read VERIFIED 27fed95. boundary-check: clean (--none, shared snapshot around three parallel calls)"
+}
