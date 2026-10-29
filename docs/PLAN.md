@@ -246,6 +246,14 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   pipeline as proven.
   **Out of scope (explicit):** the deployment itself and production setup (EKO-1-08). After
   EKO-1-06; before EKO-1-08's first deployment.
+- [ ] **EKO-1-16** — Amend ADR-0006 to close the EKO-1-05 exceptions (#46).
+  *Done when:* a dated ADR-0006 addendum resolves EKO-1-05/R-11, R-15, R-16, R-17, R-18, B-06 and
+  Q-01; `tests/doc-checks/EKO-1-16.sh` proves the stated contrasts; the corresponding exception
+  entries leave the exception register through this task's gate-3 documentation PR; and the
+  completed EKO-1-05 plan entry remains unchanged.
+  **Out of scope (explicit):** EKO-5 implementation and runtime Google proof; real customer-data
+  processing until the DPIA's approval conditions are evidenced; and new Google data, scopes,
+  calendars or product behavior.
 
 ## EKO-2 — Access
 
