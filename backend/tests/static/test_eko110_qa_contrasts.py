@@ -20,7 +20,9 @@ import pytest
 from tests.static.test_eko110_k01_layers import layer_check_job
 from tests.static.test_eko110_k02_ruff import LAYER_DIRS, backend_dir_rows, configs, module_of
 from tests.static.test_eko110_k07_changeset import all_source_findings
+from tests.support import openapi_compat as oc
 from tests.support import ruff_config as rc
+from tests.support import source_checks as sc
 
 # K-01 -------------------------------------------------------------------------------------------
 
@@ -141,3 +143,91 @@ def test_eko110_qa_k04_helper_iso_and_intl_pass_every_control() -> None:
 @pytest.mark.parametrize("line", ["const s = d.toTimeString();\n", "const h = d.getHours();\n"])
 def test_eko110_qa_k04_helper_device_zone_line_fails(line: str) -> None:
     assert all_source_findings({HELPER: INTL + line}) != []
+
+
+# Fix round 1 (R-01, R-02, R-03): mechanisms the developer's cases reached only indirectly ------
+
+
+Schema = dict[str, Any]
+
+
+def _document(request: Schema, response: Schema, components: Schema | None = None) -> Schema:
+    content = "application/json"
+    return {
+        "openapi": "3.1.0",
+        "info": {"title": "qa", "version": "1"},
+        "paths": {
+            "/api/x": {
+                "post": {
+                    "requestBody": {"required": True, "content": {content: {"schema": request}}},
+                    "responses": {
+                        "200": {"description": "ok", "content": {content: {"schema": response}}}
+                    },
+                }
+            }
+        },
+        "components": {"schemas": components or {}},
+    }
+
+
+INTEGER: Schema = {"type": "integer"}
+STRINGS: Schema = {"type": "array", "items": {"type": "string"}}
+
+
+def _breaks(before: tuple[Schema, Schema], after: tuple[Schema, Schema]) -> bool:
+    return oc.breaking_changes(_document(*before), _document(*after)) != []
+
+
+def test_eko110_qa_k06_request_multiple_of_added_fails_response_passes() -> None:
+    stepped = {**INTEGER, "multipleOf": 5}
+    assert _breaks((INTEGER, INTEGER), (stepped, INTEGER))
+    assert not _breaks((INTEGER, INTEGER), (INTEGER, stepped))
+
+
+def test_eko110_qa_k06_request_unique_items_added_fails_removed_passes() -> None:
+    unique = {**STRINGS, "uniqueItems": True}
+    assert _breaks((STRINGS, STRINGS), (unique, STRINGS))
+    assert not _breaks((unique, STRINGS), (STRINGS, STRINGS))
+
+
+def _optional(max_length: int) -> Schema:
+    """Pydantic's `str | None = Field(max_length=...)`: the bound sits inside a nullable union."""
+    return {"anyOf": [{"type": "string", "maxLength": max_length}, {"type": "null"}]}
+
+
+def test_eko110_qa_k06_bound_inside_a_nullable_union_is_compared() -> None:
+    assert _breaks((_optional(100), INTEGER), (_optional(50), INTEGER))
+    assert not _breaks((_optional(100), INTEGER), (_optional(200), INTEGER))
+
+
+def _ref(name: str) -> Schema:
+    return {"$ref": f"#/components/schemas/{name}"}
+
+
+BRANCHES: Schema = {
+    name: {"type": "object", "properties": {"kind": {"const": name.lower()}}}
+    for name in ("Field", "Phone", "Email")
+}
+
+
+def test_eko110_qa_k06_request_union_losing_one_of_three_branches_fails() -> None:
+    three = {"oneOf": [_ref("Field"), _ref("Phone"), _ref("Email")]}
+    two = {"oneOf": [_ref("Field"), _ref("Phone")]}
+    previous = _document(three, INTEGER, BRANCHES)
+    assert oc.breaking_changes(previous, _document(two, INTEGER, BRANCHES)) != []
+    assert oc.breaking_changes(previous, _document(three, INTEGER, BRANCHES)) == []
+
+
+COMPONENT = "frontend/src/components/Card.tsx"
+
+
+def test_eko110_qa_k04_escaped_quote_in_a_new_date_argument() -> None:
+    one = r"const d = new Date('it\'s, 10:00');" + "\n"
+    two = r"const d = new Date('it\'s', 1);" + "\n"
+    assert sc.date_apis_outside_helper({COMPONENT: one}) == []
+    assert sc.date_apis_outside_helper({COMPONENT: two}) != []
+
+
+def test_eko110_qa_k02_source_deep_below_a_default_exclusion_fails() -> None:
+    assert rc.default_excluded_sources(["backend/app/services/dist/sub/x.py"]) != []
+    assert rc.default_excluded_sources(["backend/app/services/distribution/sub/x.py"]) == []
