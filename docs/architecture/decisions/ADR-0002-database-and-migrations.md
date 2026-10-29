@@ -213,3 +213,82 @@ Alpine-based tags ADR-0002-C12 does the reverse of *Image pinning and ICU*, and 
 untagged reference entirely, so a check built to its letter would pass the floating tag the rule
 forbids. Restating an accepted control is a declared deviation, approved by the human at gate 1 of
 EKO-1-06 on 2026-10-28 (AQ-1 A, Issue #19).
+
+### 2026-10-28 — PostgreSQL image first used
+
+**What it records.** The walking skeleton (EKO-1-06, #19) first uses the PostgreSQL image
+**`postgres:18.6-trixie`**: PostgreSQL 18.6 on the Debian release `trixie`, in the Debian-codename
+form of an OS release that the addendum of 2026-10-28 on ADR-0002-C12 defines. It is the `image:` of
+the `postgres` service in `compose.yaml` and the `FROM` of `backup/Dockerfile`, so `pg_dump` in
+`backup` matches the server's major version (ADR-0004). The running server reports
+`server_version_num` 180006, within the range ADR-0002-C1 requires.
+
+Under *Image pinning and ICU*, this reference is now the baseline: a change to it is an explicit
+upgrade, and an upgrade that brings a different ICU version includes the `REINDEX` and
+`ALTER DATABASE … REFRESH COLLATION VERSION` and is recorded as an addendum to this decision. A
+major-version upgrade is also recorded here (*Engine, migration tool, data access*). How a release
+references this image by digest is recorded in ADR-0004's addendum of 2026-10-28 on *Images*.
+
+No rule or control of this decision changes.
+
+**Why.** *Image pinning and ICU* makes the image reference the only thing that fixes the ICU
+library, so the version first used is the point every later upgrade is compared against. Approved
+by the human at gate 2 of EKO-1-06 on 2026-10-28 (Issue #19, PR #57). This is not a deviation.
+
+### 2026-10-28 — The `data` layer uses SQLAlchemy's synchronous API
+
+**What it adds.** *Forward references* leaves open whether the `data` layer uses SQLAlchemy's
+synchronous or asynchronous session API: the walking skeleton (EKO-1-06) proposes it, and it is
+recorded as an addendum before the first product task that persists data. From this date:
+
+- The `data` layer uses SQLAlchemy's **synchronous** API (`Engine`, `Session`) with psycopg 3 in
+  synchronous mode. `AsyncEngine` and `AsyncSession` are not used.
+- A route handler, or a dependency of one, that reaches the `data` layer, directly or through a
+  service, is a plain `def`, which FastAPI runs in its thread pool. No `async def` handler or
+  dependency calls the `data` layer.
+- Alembic (`backend/migrations/`) and the worker use the same synchronous API.
+
+**How a request waits for a connection.** In each backend process, the engine built by
+`create_app_engine` (`backend/app/data/database.py`) holds a pool of `pool_size` connections and
+opens at most `max_overflow` more. The composition sets 5 + 5, so one process holds at most 10
+connections, and the two web processes at most 20 (ADR-0003's addendum of 2026-10-28 on the
+connection budget). FastAPI runs plain `def` handlers in a thread pool of 40 threads per process,
+the default of its AnyIO thread limiter. The thread pool is therefore larger than the connection
+pool: up to 40 requests per process can run at once, and when more than 10 of them need a
+connection at the same time, those beyond 10 wait on pool checkout, each holding its thread while
+it waits. `create_app_engine` sets no `pool_timeout`, so a waiting request waits up to
+SQLAlchemy's default of 30 seconds and then fails.
+
+**Why this is acceptable.** The system has about ten users (brief, section 5). More than 10
+concurrent database requests in one process means more requests holding a connection at the same
+instant than the company has users. A request that waits on checkout waits for another request's
+database work to finish, not for the full 30 seconds, unless a request holds its connection that
+long. An asynchronous engine would not remove this wait: it has the same pool and the same
+checkout, and it frees only the thread, which is not the scarce resource here. The synchronous API
+keeps one style across handlers, Alembic, the worker and tests. It avoids the pitfalls of the
+asynchronous one: lazy loading raising `MissingGreenlet`, a session shared across tasks, and a
+blocking call hidden in an `async def`. The walking skeleton already runs this way (its health
+route is a plain `def`).
+
+**Cost.**
+
+- A request holds a thread while it waits on the database, including on pool checkout.
+- Under a burst of more than 10 concurrent database requests in one process, the requests beyond
+  10 queue for up to 30 seconds before they fail. `pool_timeout` stays at SQLAlchemy's default;
+  this addendum leaves that wait as a stated cost. Setting `pool_timeout` is a change to this
+  decision, recorded as an addendum.
+- A future long-polling or streaming endpoint needs an `async def` handler with no `data` access,
+  or a revisit of this decision by addendum.
+
+**Rejected.** `AsyncSession` with an asynchronous psycopg engine: a second style for Alembic
+(`run_sync`) and the worker, and stricter loading rules, with the same pool checkout wait, for no
+gain at this scale.
+
+Every other rule and control of this decision is unchanged.
+
+**Why.** This closes the open point named under *Forward references*, before the first product task
+that persists data. The developer's draft proposed the synchronous API but gave its reason the wrong
+way round, as if the thread pool were smaller than the connection pool; the Reviewer showed this
+(EKO-1-06, U-01), and this addendum states the actual mechanism. Approved by the human at gate 2 of
+EKO-1-06 on 2026-10-28 (Issue #19, PR #57). This is not a deviation: it decides a point this
+decision left open.

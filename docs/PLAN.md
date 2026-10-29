@@ -35,7 +35,8 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   both registers citing ADR-0003, merged in [PR #34](https://github.com/TanerCRB/Eko_CRM/pull/34) —
   QA's document checks (`tests/doc-checks/EKO-1-02.sh`) verified at `50e6e6d`, every named
   mutation killed; no recorded exceptions. Forwarded: who reviews admin events and ADR-0003-C22
-  (ADR-0004, #16); the Keycloak behaviours behind ADR-0003-C1, C7, C10 and C14..C20 (EKO-1-06, #19).
+  (ADR-0004, #16); the Keycloak behaviours behind ADR-0003-C1, C7, C10 and C14..C20 (EKO-1-06, #19; reassigned
+  to EKO-1-12, #53, at EKO-1-06's gate 1).
 
 - [x] **EKO-1-03** — Record the deployment and backup decision (ADR-0004).
   *Done when:* ADR-0004 is "Accepted <date>" and fixes the container runtime and composition, the
@@ -103,12 +104,24 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   task and the pilot); manual control ADR-0006-C23 before the pilot; the "removals not carried
   out" display for the owner and the manager (EKO-5).
 
-- [ ] **EKO-1-06** — Build a walking skeleton that runs in containers.
+- [x] **EKO-1-06** — Build a walking skeleton that runs in containers.
   *Done when:* one compose command starts backend, frontend, database and identity server
   locally; a test proves the backend health endpoint answers and the first migration applies on
   an empty database; CI runs the backend and frontend tests on every PR; the capability register
   lists these capabilities as proven, with links to the tests.
   **Out of scope (explicit):** any product feature; production server setup.
+  **Done 2026-10-28:** narrowed at gate 1 (the rest went to EKO-1-10..1-15, #51–#56) and merged in
+  [PR #57](https://github.com/TanerCRB/Eko_CRM/pull/57), verified at `833c3c1` after two fix
+  rounds — one composition (development profile of nine services, shared profile of eight), the
+  backend with a readiness health route and the first Alembic revision, the P2 SPA shell, the
+  PostgreSQL initialisation of the ADR-0004 2026-10-28 addendum and CI, proven by
+  `backend/tests/runtime/`, `backend/tests/static/`, `backend/tests/unit/` and `frontend/tests/`
+  (rows in `architecture/capabilities.md`), the CI runs linked there and a manual run on Windows on
+  2026-10-28; three recorded exceptions (`architecture/exception-register.md`). Forwarded: the
+  admin listener's source-address check and the fixed shared project name (EKO-1-08, #36);
+  assertions for checklist rules 4, 7 and 9 (EKO-1-10, #51); digests for the `proxy` base,
+  `postgres` and `keycloak` (EKO-1-15, #56); sensitive-path rows for `backup/**` and
+  `backend/app/serve.py` (#61).
 
 - [ ] **EKO-1-07** — Build the frontend shell and shared UI components from the chosen prototype.
   *Done when:* the app shell (navigation, header, responsive collapse) and the shared components
@@ -198,7 +211,9 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
 - [ ] **EKO-1-15** — Build the release pipeline that publishes images by digest (#56).
   *Done when:* a release tag makes CI build the backend, frontend and backup images and push them
   to the registry by digest as ADR-0004 *Images* decides; the composition used for a deployment
-  references those digests; the capability register lists the release pipeline as proven.
+  references those digests and, by the 2026-10-28 ADR-0004 addendum, also the `proxy` base,
+  `postgres` and `keycloak` by digest (EKO-1-06 B-01); the capability register lists the release
+  pipeline as proven.
   **Out of scope (explicit):** the deployment itself and production setup (EKO-1-08). After
   EKO-1-06; before EKO-1-08's first deployment.
 

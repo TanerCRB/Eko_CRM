@@ -866,3 +866,87 @@ shared initialisation differ. Inline init content in the pinned image keeps the 
 image and C4, and it changes only the secret inventory. Approved by the human at gate 1 of
 EKO-1-06 on 2026-10-28 (G-6 A, Issue #19). This is a declared deviation, because it changes the
 secret inventory of *Secret handling*.
+
+### 2026-10-28 — Image versions first used
+
+**What it records.** *Forwarded on from this decision* and *Forward references* have the walking
+skeleton (EKO-1-06, #19) choose the image versions first used; that duty stayed with EKO-1-06 after
+its split (addendum of 2026-10-28). Each reference below names a full version, with the base OS
+release for PostgreSQL as ADR-0002 requires (*Images*, ADR-0004-C2):
+
+| Service or image | Reference | Where |
+|---|---|---|
+| `proxy` | `caddy:2.11.7` | `FROM` of `proxy/Dockerfile` |
+| `frontend`, build stage | `node:22.23.4-alpine3.24` | `frontend/Dockerfile` |
+| `frontend`, final stage (static file server) | `caddy:2.11.7`, the same release as `proxy` | `frontend/Dockerfile` |
+| `backend`, `migrate`, `worker`, build stages | `ghcr.io/astral-sh/uv:0.13.6`, `python:3.12.16-slim-trixie` | `backend/Dockerfile` |
+| `backend`, `migrate`, `worker`, final stage | `python:3.12.16-slim-trixie` | `backend/Dockerfile` |
+| `keycloak` | `quay.io/keycloak/keycloak:26.8.1` (ADR-0003, addendum of 2026-10-28) | `image:` in `compose.yaml` |
+| `postgres` | `postgres:18.6-trixie` (ADR-0002, addendum of 2026-10-28) | `image:` in `compose.yaml` |
+| `backup` | `postgres:18.6-trixie`, the same image as `postgres` | `FROM` of `backup/Dockerfile` |
+| mail catcher, development profile only | `axllent/mailpit:v1.32.0` | `image:` in `compose.yaml` |
+
+`backend`, `migrate` and `worker` run one image, built once from `backend/Dockerfile`. The
+composition tags it locally as `localhost/eko-crm/backend:<tag>` and never pulls it; a release
+references it by digest (EKO-1-15, #56). The mail catcher is never part of a shared environment
+(*Composition and placement*).
+
+No rule or control of this decision changes. A later change to any of these references is made
+through a release of the repository (*Operator duties*); PostgreSQL and Keycloak changes are also
+recorded as ADR-0002 and ADR-0003 require.
+
+**Why.** The image versions first used are forwarded to EKO-1-06 by this decision. Approved by the
+human at gate 2 of EKO-1-06 on 2026-10-28 (Issue #19, PR #57). This is not a deviation.
+
+### 2026-10-28 — *Images*: release by digest also for `proxy`'s base, `postgres` and `keycloak`
+
+**What it changes.** *Images* has CI build the backend and frontend images from a release tag, and
+has a release's composition reference them by digest, "so the image deployed is the image CI
+tested". Every other image reference needs only a full version tag, and the publisher can re-point
+a tag. From this date, the release-by-digest rule also covers the third-party images that run in a
+shared environment:
+
+- the PostgreSQL image of the `postgres` service;
+- the Keycloak image of the `keycloak` service;
+- the Caddy base image of `proxy` (the `FROM` of `proxy/Dockerfile`).
+
+In a release for a shared environment, each of these references carries `@sha256:` followed by 64
+lower-case hexadecimal digits. The tag may stay beside the digest (`<tag>@sha256:<digest>`), so
+ADR-0002-C12 (as restated on 2026-10-28), ADR-0003-C3 and ADR-0004-C2 still hold. The `frontend`
+and `backup` images also build on third-party bases (Caddy, and node at build time; PostgreSQL),
+but CI builds both and a release references them by digest under *Images* (EKO-1-15, #56), so the
+bases they ran with are fixed in the image CI built.
+
+- **Who carries it.** EKO-1-15 (#56), which builds the release pipeline, carries this widening,
+  before EKO-1-08's (#36) first deployment, as it carries the rest of *Images*.
+- **Until then.** The tag pins of `caddy` (the `proxy` base), `postgres` and `keycloak` are the
+  recorded exception EKO-1-06/B-01, which blocks again on 2027-03-31.
+
+Every other rule and control of this decision is unchanged.
+
+**Why.** The security auditor's finding B-01 on EKO-1-06: a publisher or registry account that
+re-points the tag of one of these images runs code CI never tested, at the next pull, build or
+restore, in `proxy` (the TLS private keys), `keycloak` (the credential store) or `postgres` (all
+data and the role passwords). "The image deployed is the image CI tested" covered only the images
+the project builds. Widening a rule of this decision is a declared deviation, approved by the human
+at gate 2 of EKO-1-06 on 2026-10-28 (Issue #19, PR #57).
+
+### 2026-10-28 — The composition requires a project name
+
+**What it adds.** *Cloud-agnostic constraints*, item 3, keeps persistent state only in the named
+volumes `pgdata` and `proxy-data`. Docker Compose prefixes a volume's name with the project name,
+and without one it takes the project name from the directory the composition is started in. From
+this date, the composition requires `COMPOSE_PROJECT_NAME`, with no default
+(`name: ${COMPOSE_PROJECT_NAME:?…}` in `compose.yaml`), so a start without it is refused. A shared
+environment's `<project>_pgdata` and `<project>_proxy-data` therefore do not depend on the
+directory a release is unpacked in. The value is configuration that differs between environments
+and reaches the composition through the environment file (*Cloud-agnostic constraints*, item 2).
+The operator's rule for keeping one project name in a shared environment is forwarded to EKO-1-08
+(#36).
+
+Every other rule and control of this decision is unchanged.
+
+**Why.** With a project name taken from the directory, a release unpacked in a new directory would
+start on new, empty volumes and leave the environment's data in the old ones. Approved by the human
+at gate 2 of EKO-1-06 on 2026-10-28 (Issue #19, PR #57). This is not a deviation: it records how
+the composition meets item 3.
