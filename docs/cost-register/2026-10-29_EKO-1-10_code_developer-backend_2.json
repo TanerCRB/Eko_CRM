@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-29",
+  "task": "EKO-1-10",
+  "phase": "code",
+  "role": "developer-backend",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Low",
+  "agentId": "a931a65f70f997386",
+  "tokens": 1215500,
+  "tokenSplit": {
+    "input": 10,
+    "output": 2866,
+    "cacheWrite": 300797,
+    "cacheRead": 911827
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 6,
+  "seconds": 59,
+  "fixRound": 0,
+  "reworkCause": "leftovers-check: four print( lines in the comparator CLI; the Developer's own self-check could have caught it",
+  "notes": "Resumed run; numbers are the record cumulative values minus run 1; seconds from the task notification. Output routed through one writer; new developer checkpoint a81b575, leftovers-check clean. boundary-check: clean (backend/tests/support/openapi_compat.py)"
+}
