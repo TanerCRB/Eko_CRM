@@ -31,6 +31,7 @@ that task edits its own rows.
 | `frontend/package.json` | dependencies | ADR-0001 | frontend package manifest |
 | `frontend/pnpm-lock.yaml` | dependencies | ADR-0001 | frontend lock file |
 | `frontend/vite.config.*` | secrets | ADR-0001 | `VITE_*` values end up in the public bundle |
+| `frontend/env-allowlist.json` | secrets | ADR-0001, ADR-0004 | the `import.meta.env` names the bundle may read (checklist rule 4); a name added here is public by construction |
 | `**/.env*` | secrets | ADR-0004 | environment configuration |
 | `.env*` | secrets | ADR-0004 | environment files at the repository root (`**/.env*` needs a slash) |
 | `.gitignore` | secrets | ADR-0004 | keeps `.env*` files out of the repository; a dropped line lets a secret be committed |
@@ -59,6 +60,7 @@ that task edits its own rows.
 | `.github/workflows/**` | pipeline | — | who runs what, with which secrets |
 | `.githooks/**` | pipeline | — | the pre-push guard on `main` |
 | `scripts/**` | pipeline | — | the process checks the task command and CI rely on |
+| `docs/architecture/layer-dependencies.md` | pipeline | ADR-0001, ADR-0003, ADR-0006 | the layer table the CI layer check and the ruff bans read (ADR-0001-C9, C11); an emptied row drops a ban |
 | `agents/**` | model | — | role definitions: prompts that drive the agents |
 | `.claude/**` | model | — | commands and permission settings of the agent environment |
 

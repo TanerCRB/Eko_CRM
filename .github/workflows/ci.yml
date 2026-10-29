@@ -38,6 +38,23 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: bash scripts/ci-runtime-trigger.sh decide "$EVENT" "${BASE:-HEAD}" "${HEAD:-HEAD}" >> "$GITHUB_OUTPUT"
 
+  # The range is the PR's base...head, or the pushed commits on main. A base the checkout does not
+  # contain ends with exit 2, never "clean" (ADR-0001-C9, ADR-0003-C12).
+  layers:
+    name: layer check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Layer check against the base (ADR-0001-C9, ADR-0003-C12)
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash scripts/layer-check.sh "$BASE" "$HEAD"
+
   backend:
     name: backend unit tests and static checks
     runs-on: ubuntu-latest
@@ -68,6 +85,11 @@ jobs:
         env:
           CHANGESET_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: uv run pytest -v
+      # Until EKO-1-15 (#56) supplies the previous release's document, this says it compared
+      # nothing (ADR-0004 addendum of 2026-10-29); it is not red for that.
+      - name: API compatibility with the previous release (ADR-0004)
+        working-directory: backend
+        run: uv run python -m tests.support.openapi_compat
 
   frontend:
     name: frontend unit tests
@@ -86,6 +108,11 @@ jobs:
       - name: Install (ADR-0001-C2)
         working-directory: frontend
         run: pnpm install --frozen-lockfile
+      # Type-aware lint: a Date in a template literal or a concatenation is judged by its type
+      # (ADR-0001-C13 as restated 2026-10-29, G-7 A); `pnpm run build` does not catch it.
+      - name: Lint (ADR-0001-C13)
+        working-directory: frontend
+        run: pnpm lint
       - name: Unit tests
         working-directory: frontend
         run: pnpm test
