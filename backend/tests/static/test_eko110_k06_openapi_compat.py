@@ -7,7 +7,6 @@ import json
 import re
 import subprocess
 import sys
-import tomllib
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -17,6 +16,7 @@ import yaml
 
 from tests.static.test_k07_changeset import at_base, in_worktree
 from tests.support import api_surface as api
+from tests.support import changeset_checks as cc
 from tests.support import openapi_compat as oc
 from tests.support import workflow_checks as wc
 from tests.support.repo import REPO_ROOT, bash
@@ -81,12 +81,13 @@ def base() -> Document:
                         "title": {"type": "string"},
                         "status": {"type": "string", "enum": ["planned", "done"]},
                         "notes": {"type": "array", "items": ref("Note")},
+                        "visited_on": {"type": "string", "format": "date"},
                     },
-                    "required": ["id", "title", "status", "notes"],
+                    "required": ["id", "title", "status", "notes", "visited_on"],
                 },
                 "Note": {
                     "type": "object",
-                    "properties": {"text": {"type": "string"}},
+                    "properties": {"text": {"type": "string", "maxLength": 2000}},
                     "required": ["text"],
                 },
                 "VisitIn": {
@@ -96,6 +97,8 @@ def base() -> Document:
                         "title": {"type": "string"},
                         "kind": {"type": "string", "enum": ["field", "phone"]},
                         "note": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                        "contact": {"type": "string"},
+                        "name": {"type": "string", "maxLength": 100},
                     },
                     "required": ["title"],
                 },
@@ -201,6 +204,39 @@ BREAKING: dict[str, Change] = {
 }
 
 
+def visit_in(doc: Document, name: str) -> dict[str, Any]:
+    found: dict[str, Any] = schema(doc, "VisitIn")["properties"][name]
+    return found
+
+
+def visited_on(doc: Document) -> dict[str, Any]:
+    found: dict[str, Any] = schema(doc, "Visit")["properties"]["visited_on"]
+    return found
+
+
+def rename_path_parameter(doc: Document) -> None:
+    item = doc["paths"].pop(VISIT)
+    item["get"]["parameters"][0]["name"] = "id"
+    doc["paths"]["/api/visits/{id}"] = item
+
+
+# R-01: `format` and constraint keywords, by direction (a request may widen, a response narrow).
+BREAKING.update(
+    {
+        "response-format-changed": lambda d: visited_on(d).update(format="date-time"),
+        "response-format-removed": lambda d: visited_on(d).pop("format"),
+        "request-format-added": lambda d: visit_in(d, "contact").update(format="email"),
+        "request-max-length-tightened": lambda d: visit_in(d, "name").update(maxLength=50),
+        "request-pattern-added": lambda d: visit_in(d, "name").update(pattern="^[A-Z]"),
+        "request-minimum-added": lambda d: get_op(d)["parameters"][1]["schema"].update(minimum=2),
+        "request-min-length-added": lambda d: visit_in(d, "name").update(minLength=3),
+        "response-max-length-removed": lambda d: schema(d, "Note")["properties"]["text"].pop(
+            "maxLength"
+        ),
+    }
+)
+
+
 def changed(change: Change) -> Document:
     doc = base()
     change(doc)
@@ -244,7 +280,103 @@ ADDITIVE: dict[str, Change] = {
         "visit"
     ),
     "key-and-operation-order": lambda d: d.update(reverse_keys(copy.deepcopy(d))),
+    # R-01 contrasts: a request widening and a response narrowing break no previous client.
+    "request-max-length-loosened": lambda d: visit_in(d, "name").update(maxLength=200),
+    "request-max-length-removed": lambda d: visit_in(d, "name").pop("maxLength"),
+    "response-format-added": lambda d: schema(d, "Visit")["properties"]["title"].update(
+        format="email"
+    ),
+    "response-max-length-tightened": lambda d: schema(d, "Note")["properties"]["text"].update(
+        maxLength=500
+    ),
+    # R-05: documentation text and path-parameter names are no part of the wire contract.
+    "description-changed": lambda d: schema(d, "Visit").update(
+        title="Visit (renamed)", description="A field visit."
+    ),
+    "path-parameter-renamed": rename_path_parameter,
 }
+
+
+def union_base() -> Document:
+    """A response and a request carrying a two-model union, FastAPI's discriminated shape."""
+    doc = base()
+    schemas = doc["components"]["schemas"]
+    schemas["Address"] = {
+        "type": "object",
+        "properties": {"city": {"type": "string"}},
+        "required": ["city"],
+    }
+    schemas["FieldVisit"] = {
+        "type": "object",
+        "title": "FieldVisit",
+        "properties": {"kind": {"const": "field"}, "address": ref("Address")},
+        "required": ["kind", "address"],
+    }
+    schemas["PhoneVisit"] = {
+        "type": "object",
+        "title": "PhoneVisit",
+        "properties": {"kind": {"const": "phone"}, "number": {"type": "string"}},
+        "required": ["kind", "number"],
+    }
+    union = {"oneOf": [ref("FieldVisit"), ref("PhoneVisit")]}
+    get_op(doc)["responses"]["200"]["content"] = json_content(union)
+    doc["paths"][VISITS]["post"]["requestBody"]["content"] = json_content(copy.deepcopy(union))
+    return doc
+
+
+def union_changed(change: Change) -> Document:
+    doc = union_base()
+    change(doc)
+    return doc
+
+
+def add_branch(where: str) -> Change:
+    def apply(doc: Document) -> None:
+        doc["components"]["schemas"]["EmailVisit"] = {
+            "type": "object",
+            "properties": {"kind": {"const": "email"}},
+        }
+        if where == "response":
+            content = get_op(doc)["responses"]["200"]["content"]
+        else:
+            content = doc["paths"][VISITS]["post"]["requestBody"]["content"]
+        content["application/json"]["schema"]["oneOf"].append(ref("EmailVisit"))
+
+    return apply
+
+
+def drop_request_branch(doc: Document) -> None:
+    content = doc["paths"][VISITS]["post"]["requestBody"]["content"]
+    content["application/json"]["schema"]["oneOf"].pop()
+
+
+UNION_BREAKING: dict[str, Change] = {
+    "nested-removal-through-a-branch": lambda d: schema(d, "Address")["properties"].pop("city"),
+    "response-gains-a-branch": add_branch("response"),
+    "request-loses-a-branch": drop_request_branch,
+}
+UNION_COMPATIBLE: dict[str, Change] = {
+    "identical": lambda d: None,
+    "optional-property-in-one-branch": lambda d: schema(d, "PhoneVisit")["properties"].update(
+        extension={"type": "string"}
+    ),
+    "branch-description-changed": lambda d: schema(d, "FieldVisit").update(
+        description="Visited on site."
+    ),
+    "request-gains-a-branch": add_branch("request"),
+}
+
+
+@pytest.mark.parametrize("case_id", sorted(UNION_BREAKING))
+def test_eko110_k06_breaking_change_through_a_union_fails(case_id: str) -> None:
+    found = oc.breaking_changes(union_base(), union_changed(UNION_BREAKING[case_id]))
+    assert found != [], case_id
+
+
+@pytest.mark.parametrize("case_id", sorted(UNION_COMPATIBLE))
+def test_eko110_k06_compatible_change_through_a_union_passes(case_id: str) -> None:
+    found = oc.breaking_changes(union_base(), union_changed(UNION_COMPATIBLE[case_id]))
+    assert found == [], (case_id, found)
 
 
 def test_eko110_k06_additive_pair_passes() -> None:
@@ -362,21 +494,12 @@ def test_eko110_k06_unreadable_previous_release_fails(
 # No dependency (G-13 A) -----------------------------------------------------------------------
 
 
-def package_names(pyproject: str, lock: str) -> tuple[set[str], set[str]]:
-    manifest = tomllib.loads(pyproject)
-    declared = [*manifest["project"]["dependencies"]]
-    for group in manifest.get("dependency-groups", {}).values():
-        declared += group
-    names = {re.split(r"[\s<>=!~\[;]", spec, maxsplit=1)[0].lower() for spec in declared}
-    locked = {package["name"] for package in tomllib.loads(lock).get("package", [])}
-    return names, locked
-
-
 def test_eko110_k06_comparator_adds_no_dependency() -> None:
     manifest, lock = at_base("backend/pyproject.toml"), at_base("backend/uv.lock")
     manifest_now, lock_now = in_worktree("backend/pyproject.toml"), in_worktree("backend/uv.lock")
     assert manifest and lock and manifest_now and lock_now
-    assert package_names(manifest_now, lock_now) == package_names(manifest, lock)
+    in_base = at_base(cc.COMPARATOR) is not None
+    assert cc.package_additions((manifest, lock), (manifest_now, lock_now), in_base) == []
     tree = ast.parse(
         (REPO_ROOT / "backend/tests/support/openapi_compat.py").read_text(encoding="utf-8")
     )
@@ -392,3 +515,22 @@ def test_eko110_k06_comparator_adds_no_dependency() -> None:
         )
     }
     assert imported - set(sys.stdlib_module_names) <= {"tests"}, imported
+
+
+def with_package(manifest: str, lock: str) -> tuple[str, str]:
+    added_manifest = manifest.replace(
+        '    "pytest>=8.4",\n', '    "oasdiff-py>=1.0",\n    "pytest>=8.4",\n'
+    )
+    assert added_manifest != manifest
+    return added_manifest, lock + '\n[[package]]\nname = "oasdiff-py"\nversion = "1.0.0"\n'
+
+
+def test_eko110_k06_package_check_fails_on_an_added_package_in_this_change_set() -> None:
+    manifest, lock = at_base("backend/pyproject.toml"), at_base("backend/uv.lock")
+    assert manifest and lock
+    added = with_package(manifest, lock)
+    assert cc.package_additions((manifest, lock), added, comparator_in_base=False) != []
+    lock_only = (manifest, added[1])
+    assert cc.package_additions((manifest, lock), lock_only, comparator_in_base=False) != []
+    # Once the comparator is in the base, a later task's packages are its own business (R-04).
+    assert cc.package_additions((manifest, lock), added, comparator_in_base=True) == []

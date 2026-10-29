@@ -1,5 +1,6 @@
 """The ruff configuration that applies under backend/ (ADR-0001-C8, C11 as restated 2026-10-29)."""
 
+import fnmatch
 import json
 import re
 import subprocess
@@ -7,10 +8,12 @@ import sys
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 from typing import Any
 
 from tests.support.layer_table import Row
+from tests.support.repo import REPO_ROOT
 
 CONFIG_NAMES = {"pyproject.toml", "ruff.toml", ".ruff.toml"}
 ROOT_CONFIG = "backend/pyproject.toml"
@@ -75,6 +78,63 @@ def _nested_problems(path: str, config: dict[str, Any], row: Row, rows: list[Row
     return problems
 
 
+# R-03: keys that narrow what `ruff check .` lints, or switch the layer rules off for some files.
+SCOPING_KEYS = {"exclude", "extend-exclude", "include", "extend-include", "force-exclude"}
+LINT_SCOPING_KEYS = {"exclude", "extend-per-file-ignores"}
+TID_PREFIXES = {"ALL", "TID", "TID2", "TID25", "TID251", "TID252"}
+
+
+def _covers_tid(codes: object) -> bool:
+    return isinstance(codes, list) and any(str(code) in TID_PREFIXES for code in codes)
+
+
+def _root_scope_problems(path: str, ruff: Any) -> list[str]:
+    if not isinstance(ruff, dict):
+        return [f"{path}: [tool.ruff] is not a table"]
+    raw_lint = ruff.get("lint")
+    lint: dict[str, Any] = raw_lint if isinstance(raw_lint, dict) else {}
+    problems = [f"{path}: [tool.ruff] sets {key}" for key in sorted(SCOPING_KEYS & set(ruff))]
+    problems += [
+        f"{path}: [tool.ruff.lint] sets {k}" for k in sorted(LINT_SCOPING_KEYS & set(lint))
+    ]
+    for table in (ruff, lint):
+        for key in ("ignore", "extend-ignore"):
+            if _covers_tid(table.get(key)):
+                problems.append(f"{path}: {key} switches the layer rules (TID251, TID252) off")
+        for glob, codes in (table.get("per-file-ignores") or {}).items():
+            if not str(glob).startswith("tests/") and _covers_tid(codes):
+                problems.append(f"{path}: per-file-ignores {glob!r} switches the layer rules off")
+    return problems
+
+
+@cache
+def ruff_default_excludes() -> frozenset[str]:
+    """The directory names ruff skips by default, as the installed ruff itself reports them."""
+    result = subprocess.run(
+        [sys.executable, "-m", "ruff", "check", "--show-settings", "."],
+        cwd=REPO_ROOT / "backend",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    block = re.search(r"file_resolver\.exclude = \[(.*?)\]", result.stdout, re.DOTALL)
+    if block is None:
+        raise RuntimeError("ruff --show-settings no longer reports file_resolver.exclude")
+    return frozenset(re.findall(r'"([^"]+)"', block.group(1)))
+
+
+def default_excluded_sources(paths: list[str]) -> list[str]:
+    """R-03: a tracked source below a directory ruff skips by default is never linted."""
+    excludes = ruff_default_excludes()
+    return [
+        f"{path}: under {segment}/, which ruff does not lint by default"
+        for path in paths
+        if path.startswith("backend/") and path.endswith((".py", ".pyi"))
+        for segment in path.split("/")[1:-1]
+        if any(fnmatch.fnmatch(segment, pattern) for pattern in excludes)
+    ]
+
+
 def configuration_violations(files: Mapping[str, str], rows: list[Row]) -> list[str]:
     """The closed set (G-11 A): one `[tool.ruff]`, and six nested files holding only their bans."""
     problems: list[str] = []
@@ -89,6 +149,8 @@ def configuration_violations(files: Mapping[str, str], rows: list[Row]) -> list[
             has_ruff = "ruff" in config.get("tool", {})
             if path == ROOT_CONFIG and not has_ruff:
                 problems.append(f"{path}: has no [tool.ruff]")
+            elif path == ROOT_CONFIG:
+                problems += _root_scope_problems(path, config["tool"]["ruff"])
             elif path != ROOT_CONFIG and has_ruff:
                 problems.append(f"{path}: [tool.ruff] outside {ROOT_CONFIG}")
         elif path not in nested:

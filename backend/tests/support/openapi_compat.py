@@ -27,6 +27,12 @@ Document = dict[str, Any]
 Direction = Literal["request", "response"]
 SUCCESS = re.compile(r"2(\d\d|XX)")
 MAX_DEPTH = 64
+PATH_PARAMETER = re.compile(r"\{([^}]*)\}")
+
+
+def template(path: str) -> str:
+    """`/api/visits/{id}` and `/api/visits/{visit_id}` are the same URL to a client (R-05)."""
+    return PATH_PARAMETER.sub("{}", path)
 
 
 class CheckFailed(Exception):
@@ -44,7 +50,15 @@ class Shape:
     required: set[str] = field(default_factory=set)
     items: Any = None
     closed: bool = False
-    variants: list[str] | None = None
+    bounds: dict[str, Any] = field(default_factory=dict)
+    branches: list[Any] | None = None
+
+
+# R-01: what narrows a value, by keyword. An upper bound narrows when it falls or appears, a lower
+# bound when it rises or appears; `format`, `pattern` and `multipleOf` narrow on any new value.
+UPPER = ("maxLength", "maxItems", "maxProperties", "maximum", "exclusiveMaximum")
+LOWER = ("minLength", "minItems", "minProperties", "minimum", "exclusiveMinimum")
+EXACT = ("format", "pattern", "multipleOf")
 
 
 def _is_null(node: Any) -> bool:
@@ -74,14 +88,17 @@ def shape(doc: Document, node: Any, depth: int = 0) -> Shape:
     if "items" in node:
         result.items = node["items"]
     result.closed = result.closed or node.get("additionalProperties") is False
-    union = [resolve(doc, b) for key in ("anyOf", "oneOf") for b in node.get(key) or []]
+    for key in (*UPPER, *LOWER, *EXACT, "uniqueItems"):
+        if key in node:
+            result.bounds[key] = node[key]
+    union = [b for key in ("anyOf", "oneOf") for b in node.get(key) or []]
     if union:
-        result.nullable = result.nullable or any(_is_null(b) for b in union)
-        rest = [b for b in union if not _is_null(b)]
+        result.nullable = result.nullable or any(_is_null(resolve(doc, b)) for b in union)
+        rest = [b for b in union if not _is_null(resolve(doc, b))]
         if len(rest) == 1:
             _merge(result, shape(doc, rest[0], depth + 1))
         elif rest:
-            result.variants = sorted(json.dumps(b, sort_keys=True) for b in rest)
+            result.branches = rest
     if result.types is None and (result.properties or "items" in node):
         result.types = frozenset({"object"} if result.properties else {"array"})
     return result
@@ -95,7 +112,42 @@ def _merge(into: Shape, other: Shape) -> None:
     into.required |= other.required
     into.items = other.items if into.items is None else into.items
     into.closed = into.closed or other.closed
-    into.variants = other.variants if into.variants is None else into.variants
+    into.bounds = {**other.bounds, **into.bounds}
+    into.branches = other.branches if into.branches is None else into.branches
+
+
+def _narrower(than: dict[str, Any], bounds: dict[str, Any]) -> list[str]:
+    """The keywords on which `bounds` admits less than `than` does."""
+    found = []
+    for key, value in bounds.items():
+        before = than.get(key)
+        if key in UPPER and (before is None or value < before):
+            found.append(key)
+        elif key in LOWER and (before is None or value > before):
+            found.append(key)
+        elif key in EXACT and value != before:
+            found.append(key)
+        elif key == "uniqueItems" and value is True and before is not True:
+            found.append(key)
+    return found
+
+
+def _branch_key(doc: Document, node: Any) -> str:
+    """A union branch is the same branch in both documents by its component, else by its type."""
+    if _ref(node):
+        return _ref(node).rsplit("/", 1)[-1]
+    resolved = resolve(doc, node)
+    return "type:" + json.dumps(resolved.get("type") if isinstance(resolved, dict) else None)
+
+
+def _keyed(doc: Document, branches: list[Any]) -> dict[str, Any]:
+    keyed: dict[str, Any] = {}
+    for branch in branches:
+        key = _branch_key(doc, branch)
+        while key in keyed:
+            key += "'"
+        keyed[key] = branch
+    return keyed
 
 
 def _ref(node: Any) -> str:
@@ -133,12 +185,14 @@ class Comparison:
             )
         self._types(p, c, direction, where)
         self._enum(p, c, direction, where)
-        if p.variants is not None and c.variants is not None:
-            small, large = (
-                (c.variants, p.variants) if direction == "response" else (p.variants, c.variants)
-            )
-            if not set(small) <= set(large):
-                self.problems.append(f"{where}: the alternatives of a union changed")
+        # A request may not admit less than before; a response may not give more.
+        tighter = _narrower(p.bounds, c.bounds) if direction == "request" else []
+        looser = _narrower(c.bounds, p.bounds) if direction == "response" else []
+        for key in tighter:
+            self.problems.append(f"{where}: request {key} narrowed")
+        for key in looser:
+            self.problems.append(f"{where}: response {key} widened or removed")
+        self._union(p, c, direction, where, depth)
         if direction == "response":
             for name, sub in p.properties.items():
                 if name not in c.properties:
@@ -161,6 +215,21 @@ class Comparison:
                     self.problems.append(f"{where}.{name}: request property no longer accepted")
         if p.items is not None and c.items is not None:
             self.schema(p.items, c.items, direction, f"{where}[]", depth + 1)
+
+    def _union(self, p: Shape, c: Shape, direction: Direction, where: str, depth: int) -> None:
+        """R-01, R-05: union branches are paired and compared, never dumped as text."""
+        if p.branches is None and c.branches is None:
+            return
+        before = _keyed(self.previous, p.branches or [])
+        after = _keyed(self.current, c.branches or [])
+        if direction == "response":
+            for key in sorted(set(after) - set(before)):
+                self.problems.append(f"{where}: response union gains the alternative {key}")
+        else:
+            for key in sorted(set(before) - set(after)):
+                self.problems.append(f"{where}: request union loses the alternative {key}")
+        for key in sorted(set(before) & set(after)):
+            self.schema(before[key], after[key], direction, f"{where}<{key}>", depth + 1)
 
     def _types(self, p: Shape, c: Shape, direction: Direction, where: str) -> None:
         if direction == "response":
@@ -188,22 +257,29 @@ class Comparison:
             removed = sorted(set(p.enum or ["any value"]) - set(c.enum))
             self.problems.append(f"{where}: request enum loses {removed}")
 
-    def operation(self, name: str, old: tuple[Any, Any], new: tuple[Any, Any]) -> None:
+    def operation(
+        self, name: str, old: tuple[Any, Any], new: tuple[Any, Any], paths: tuple[str, str]
+    ) -> None:
         self.seen = set()
-        self._parameters(name, old, new)
+        self._parameters(name, old, new, paths)
         self._body(name, old[1], new[1])
         self._responses(name, old[1], new[1])
 
-    def _params(self, doc: Document, item: Any, op: Any) -> dict[tuple[str, str], Any]:
+    def _params(self, doc: Document, path: str, item: Any, op: Any) -> dict[tuple[str, str], Any]:
+        # R-05: a path parameter is its position in the template; its name is not on the wire.
+        positions = {name: f"#{i}" for i, name in enumerate(PATH_PARAMETER.findall(path))}
         found = {}
         for parameter in [*(item.get("parameters") or []), *(op.get("parameters") or [])]:
             parameter = resolve(doc, parameter)
-            found[(str(parameter.get("in")), str(parameter.get("name")))] = parameter
+            where, name = str(parameter.get("in")), str(parameter.get("name"))
+            found[(where, positions.get(name, name) if where == "path" else name)] = parameter
         return found
 
-    def _parameters(self, name: str, old: tuple[Any, Any], new: tuple[Any, Any]) -> None:
-        before = self._params(self.previous, *old)
-        for key, parameter in sorted(self._params(self.current, *new).items()):
+    def _parameters(
+        self, name: str, old: tuple[Any, Any], new: tuple[Any, Any], paths: tuple[str, str]
+    ) -> None:
+        before = self._params(self.previous, paths[0], *old)
+        for key, parameter in sorted(self._params(self.current, paths[1], *new).items()):
             where = f"{name}: {key[0]} parameter {key[1]!r}"
             if key not in before:
                 if parameter.get("required"):
@@ -249,13 +325,14 @@ class Comparison:
 def breaking_changes(previous: Document, current: Document) -> list[str]:
     """Every change that breaks a client built against `previous`, per operation."""
     comparison = Comparison(previous, current)
-    after = {(m, p): (item, op) for m, p, item, op in operations(current)}
+    after = {(m, template(p)): (p, item, op) for m, p, item, op in operations(current)}
     for method, path, item, op in sorted(operations(previous), key=lambda o: (o[1], o[0])):
         name = f"{method} {path}"
-        if (method, path) not in after:
+        if (method, template(path)) not in after:
             comparison.problems.append(f"{name}: operation removed")
             continue
-        comparison.operation(name, (item, op), after[(method, path)])
+        current_path, *new = after[(method, template(path))]
+        comparison.operation(name, (item, op), (new[0], new[1]), (path, current_path))
     return comparison.problems
 
 

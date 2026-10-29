@@ -153,6 +153,59 @@ FAILING_SETS: dict[str, Change] = {
     "nested-not-toml": put(SERVICES, "extend = \n"),
 }
 
+ROOT = "backend/pyproject.toml"
+TOOL_RUFF = "[tool.ruff]\n"
+LINT = "[tool.ruff.lint]\n"
+# R-03: a narrow scope in the root configuration drops TID251, TID252 and S608 for the files
+# below it while `ruff check .` stays green.
+ROOT_SCOPING: dict[str, Change] = {
+    "extend-exclude": edit(
+        ROOT, TOOL_RUFF, TOOL_RUFF + 'extend-exclude = ["app/data/generated"]\n'
+    ),
+    "exclude": edit(ROOT, TOOL_RUFF, TOOL_RUFF + 'exclude = ["app/services/legacy/*"]\n'),
+    "include": edit(ROOT, TOOL_RUFF, TOOL_RUFF + 'include = ["app/api/*.py"]\n'),
+    "extend-include": edit(ROOT, TOOL_RUFF, TOOL_RUFF + 'extend-include = ["*.pyw"]\n'),
+    "force-exclude": edit(ROOT, TOOL_RUFF, TOOL_RUFF + "force-exclude = true\n"),
+    "lint-exclude": edit(ROOT, LINT, LINT + 'exclude = ["app/services/legacy/*"]\n'),
+    "lint-extend-per-file-ignores": edit(
+        ROOT, LINT, LINT + 'extend-per-file-ignores = { "app/data/*" = ["E501"] }\n'
+    ),
+    "ignore-tid251": edit(ROOT, LINT, LINT + 'ignore = ["TID251"]\n'),
+    "extend-ignore-tid": edit(ROOT, LINT, LINT + 'extend-ignore = ["TID"]\n'),
+    "per-file-ignores-tid252": edit(
+        ROOT, '"app/serve.py" = ["S104"]', '"app/serve.py" = ["S104"]\n"app/data/**" = ["TID252"]'
+    ),
+}
+
+
+@pytest.mark.parametrize("case_id", sorted(ROOT_SCOPING))
+def test_eko110_k02_root_scoping_key_fails(case_id: str) -> None:
+    changed = ROOT_SCOPING[case_id](configs())
+    assert rc.configuration_violations(changed, lt.table_rows()) != [], case_id
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "backend/app/data/__pypackages__/x.py",
+        "backend/app/services/dist/x.py",
+        "backend/app/api/venv/x.py",
+        "backend/app/core/.venv/x.py",
+        "backend/migrations/versions/_build/0002_x.py",
+        "backend/app/services/node_modules/x.py",
+        "backend/app/data/site-packages/x.py",
+    ],
+)
+def test_eko110_k02_source_under_a_ruff_default_exclusion_fails(path: str) -> None:
+    assert rc.default_excluded_sources([path, "backend/app/main.py"]) != [], path
+
+
+def test_eko110_k02_no_source_under_a_ruff_default_exclusion() -> None:
+    assert rc.default_excluded_sources(sorted(sc.repository_sources())) == []
+    # ruff 0.17 lints `build/`; the list is the one ruff reports, not a hand-kept copy.
+    linted = ["backend/app/data/builder.py", "backend/app/data/build/x.py", "frontend/dist/x.js"]
+    assert rc.default_excluded_sources(linted) == []
+
 
 def test_eko110_k02_ruff_configuration_set_is_closed() -> None:
     files = configs()

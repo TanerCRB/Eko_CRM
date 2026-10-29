@@ -177,3 +177,37 @@ def route_response_problems(app: FastAPI) -> list[str]:
         elif context.path not in framework:
             problems.append(f"{context.path!r}: not a FastAPI route with a model")
     return problems
+
+
+INPUT_KINDS = ("query_params", "header_params", "cookie_params", "path_params", "body_params")
+
+
+def _input_names(field: Any, kind: str) -> list[str]:
+    names = [str(field.name), str(field.alias)]
+    model = getattr(field.field_info, "annotation", None)
+    if kind == "body_params" and isinstance(model, type) and issubclass(model, BaseModel):
+        schema = model.model_json_schema()
+        names += schema_property_names(schema, schema)
+    return names
+
+
+def credential_route_inputs(app: FastAPI) -> list[str]:
+    """L-01: the same credential names, read from the route table rather than the document.
+
+    A route hidden from the schema (`include_in_schema=False`) is invisible to the document
+    checks; here every route's parameters, body fields and their models, and its dependencies'
+    inputs are judged. A raw `await request.form()` read is not seen by either.
+    """
+    problems = []
+    for context in route_contexts(app):
+        if not isinstance(context.route, APIRoute):
+            continue
+        stack, found = [context.route.dependant], set()
+        while stack:
+            dependant = stack.pop()
+            stack += dependant.dependencies
+            for kind in INPUT_KINDS:
+                for field in getattr(dependant, kind):
+                    found |= {n for n in _input_names(field, kind) if is_credential(n)}
+        problems += [f"{context.path}: credential-shaped input {name!r}" for name in sorted(found)]
+    return problems

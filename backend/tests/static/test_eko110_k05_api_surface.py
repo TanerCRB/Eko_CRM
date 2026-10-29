@@ -8,7 +8,7 @@ import copy
 from typing import Annotated, Any
 
 import pytest
-from fastapi import APIRouter, Cookie, FastAPI, Header
+from fastapi import APIRouter, Cookie, Depends, FastAPI, Header
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -350,3 +350,75 @@ def test_eko110_k05_route_with_a_pydantic_response_passes(kind: str) -> None:
     app = rule9_app(kind)
     assert "GET /api/x" in api.judged_routes(app)
     assert api.route_response_problems(app) == []
+
+
+# L-01: a route hidden from the schema is judged on its inputs too, from the route table.
+
+
+def hidden_app(kind: str) -> FastAPI:
+    app = FastAPI()
+    if kind == "body":
+
+        @app.post("/api/change", include_in_schema=False)
+        def change(body: NewPasswordIn) -> Out:
+            return Out(ok=True)
+
+    elif kind == "query":
+
+        @app.get("/api/q", include_in_schema=False)
+        def q(password: str) -> Out:
+            return Out(ok=True)
+
+    elif kind == "header":
+
+        @app.get("/api/h", include_in_schema=False)
+        def h(x_password: Annotated[str, Header()]) -> Out:
+            return Out(ok=True)
+
+    elif kind == "dependency":
+
+        def login(username: str) -> str:
+            return username
+
+        @app.get("/api/d", include_in_schema=False)
+        def d(user: Annotated[str, Depends(login)]) -> Out:
+            return Out(ok=True)
+
+    elif kind == "nested-model":
+
+        class Outer(BaseModel):
+            account: NewPasswordIn
+
+        @app.post("/api/n", include_in_schema=False)
+        def n(body: Outer) -> Out:
+            return Out(ok=True)
+
+    elif kind == "included-router":
+        router = APIRouter()
+
+        @router.post("/change", include_in_schema=False)
+        def change2(body: NewPasswordIn) -> Out:
+            return Out(ok=True)
+
+        app.include_router(router, prefix="/api")
+    elif kind == "display-name":
+
+        @app.post("/api/rename", include_in_schema=False)
+        def rename(body: DisplayNameIn, page: int = 1) -> Out:
+            return Out(ok=True)
+
+    return app
+
+
+@pytest.mark.parametrize(
+    "kind", ["body", "query", "header", "dependency", "nested-model", "included-router"]
+)
+def test_eko110_k05_hidden_route_with_a_credential_input_fails(kind: str) -> None:
+    app = hidden_app(kind)
+    assert credential_problems(app.openapi()) == [], "hidden: the document cannot see it"
+    assert api.credential_route_inputs(app) != [], kind
+
+
+def test_eko110_k05_route_inputs_without_a_credential_pass() -> None:
+    assert api.credential_route_inputs(hidden_app("display-name")) == []
+    assert api.credential_route_inputs(api.real_app()) == []

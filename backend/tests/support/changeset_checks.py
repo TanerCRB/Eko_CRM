@@ -1,6 +1,7 @@
 """EKO-1-10 K-07: the change set's own discipline, each check returning its violations."""
 
 import re
+import tomllib
 from collections.abc import Mapping
 
 DATE = "2026-10-29"
@@ -89,3 +90,32 @@ def register_problems(base: str, head: str) -> list[str]:
     if rebuilt != base:
         problems.append("a row other than the two approved ones, or the text around them, changed")
     return problems
+
+
+COMPARATOR = "backend/tests/support/openapi_compat.py"
+
+
+def package_names(manifest: str, lock: str) -> tuple[set[str], set[str]]:
+    """Declared (dependencies and every dependency group) and locked package names."""
+    project = tomllib.loads(manifest)
+    declared = [*project["project"]["dependencies"]]
+    for group in project.get("dependency-groups", {}).values():
+        declared += group
+    names = {re.split(r"[\s<>=!~\[;]", spec, maxsplit=1)[0].lower() for spec in declared}
+    locked = {package["name"] for package in tomllib.loads(lock).get("package", [])}
+    return names, locked
+
+
+def package_additions(
+    base: tuple[str, str], head: tuple[str, str], comparator_in_base: bool
+) -> list[str]:
+    """K-06: the change set adding the comparator adds no backend package (G-13 A).
+
+    Once the comparator is in the base, a later change set is no longer this one (R-04).
+    """
+    if comparator_in_base:
+        return []
+    (declared, locked), (declared_now, locked_now) = package_names(*base), package_names(*head)
+    return [f"declared package added: {n}" for n in sorted(declared_now - declared)] + [
+        f"locked package added: {n}" for n in sorted(locked_now - locked)
+    ]

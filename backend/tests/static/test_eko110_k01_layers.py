@@ -144,6 +144,13 @@ def worker_row() -> lt.Row:
     return rows[0]
 
 
+def test_eko110_k01_worker_path_under_two_rows_fails() -> None:
+    # As layer-check.sh exits 2 on the same ambiguity: never "no row, nothing to judge".
+    rows = [*lt.table_rows(), lt.Row("entry", "backend/app/*.py", (), ("api",))]
+    assert lt.whole_file_findings(WORKER, "import logging\n", rows) != []
+    assert [row.name for row in lt.table_rows() if row.matches(WORKER)] == ["worker"]
+
+
 def test_eko110_k01_worker_imports_judged_against_its_row() -> None:
     row = worker_row()
     assert row.matches(WORKER) and (REPO_ROOT / WORKER).is_file()

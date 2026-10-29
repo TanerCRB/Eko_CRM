@@ -104,7 +104,13 @@ def imported_modules(source: str, path: str) -> list[tuple[int, str]]:
 
 
 def whole_file_findings(path: str, source: str, rows: list[Row]) -> list[str]:
-    """Every import of the file, judged against the row the file falls under (G-8 A)."""
+    """Every import of the file, judged against the row the file falls under (G-8 A).
+
+    A file under two rows is a finding, as layer-check.sh exits 2 on it: never judged as clean.
+    """
+    matching = [r.name for r in rows if r.matches(path)]
+    if len(matching) > 1:
+        return [f"{path}: falls under {len(matching)} layer rows: {', '.join(matching)}"]
     row = row_for(path, rows)
     if row is None:
         return []

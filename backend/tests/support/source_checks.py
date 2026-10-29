@@ -280,7 +280,6 @@ HELPER_ONLY = [
         "'moment",
         '"moment',
     ),
-    re.compile(r"\bnew\s+Date\s*\([^)]*,"),
     re.compile(r"\.setUTC\w*\s*\("),
     re.compile(r"\bDate\s*\.\s*now\b"),
     re.compile(r"\bnew\s+Date\s*\(\s*\)"),
@@ -288,8 +287,77 @@ HELPER_ONLY = [
 ]
 
 
+NEW_DATE_CALL = re.compile(r"\bnew\s+Date\s*\(")
+OPENING, CLOSING = "([{", ")]}"
+
+
+def _skip_literal(text: str, i: int) -> int:
+    """The index after the string, template or comment starting at `i`; `i` when there is none."""
+    if text.startswith("//", i):
+        end = text.find("\n", i)
+        return len(text) if end == -1 else end
+    if text.startswith("/*", i):
+        end = text.find("*/", i + 2)
+        return len(text) if end == -1 else end + 2
+    if text[i] in "'\"`":
+        quote, j = text[i], i + 1
+        while j < len(text) and text[j] != quote:
+            j += 2 if text[j] == "\\" else 1
+        return j + 1
+    return i
+
+
+def argument_count(text: str, start: int) -> int:
+    """Arguments of the call whose `(` is at `start`; a spread counts as two (unknown, many).
+
+    Brackets are balanced and strings, templates and comments skipped, so the commas inside
+    `Number(year)` or `'10, 00'` are not argument separators. A trailing comma adds none.
+    """
+    depth, i, count, pending = 0, start + 1, 0, False
+    while i < len(text):
+        skipped = _skip_literal(text, i)
+        if skipped != i:
+            pending, i = True, skipped
+            continue
+        ch = text[i]
+        if ch in OPENING:
+            depth += 1
+        elif ch in CLOSING:
+            if depth == 0:
+                return count + (1 if pending else 0)
+            depth -= 1
+        elif depth == 0 and ch == ",":
+            count, pending = count + (1 if pending else 0), False
+            i += 1
+            continue
+        elif depth == 0 and text.startswith("...", i):
+            count += 1
+        if not ch.isspace():
+            pending = True
+        i += 1
+    return count + (1 if pending else 0)
+
+
+def _new_date_with_arguments(files: Files) -> list[str]:
+    """ADR-0001-C14 as restated: `new Date(` with two or more arguments, outside the helper."""
+    found = []
+    for path, text in sorted(files.items()):
+        if path == HELPER or not under(path, FRONTEND_SRC):
+            continue
+        for match in NEW_DATE_CALL.finditer(text):
+            if argument_count(text, match.end() - 1) >= 2:
+                where = f"{path}:{line_of(text, match.start())}"
+                found.append(
+                    f"{where}: ADR-0001-C14 date API: new Date( with two or more arguments"
+                )
+    return found
+
+
 def date_apis_outside_helper(files: Files) -> list[str]:
-    return _findings(_except(files, HELPER), [FRONTEND_SRC], HELPER_ONLY, "ADR-0001-C14 date API")
+    scope = [FRONTEND_SRC]
+    return _findings(
+        _except(files, HELPER), scope, HELPER_ONLY, "ADR-0001-C14 date API"
+    ) + _new_date_with_arguments(files)
 
 
 STORAGE = re.compile(r"localStorage|sessionStorage|indexedDB|caches\.open|serviceWorker")

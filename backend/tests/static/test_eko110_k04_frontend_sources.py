@@ -285,3 +285,36 @@ def test_eko110_k04_cross_reference_fails(path: str, text: str) -> None:
 )
 def test_eko110_k04_cross_reference_contrasts_pass(path: str, text: str) -> None:
     assert sc.cross_tree_references({path: text + "\n"}) == []
+
+
+# R-02: "`new Date(` with two or more arguments", judged by its arguments, not by `[^)]*,`.
+TWO_OR_MORE_ARGUMENTS = [
+    "new Date(Number(year), month - 1, day)",
+    "new Date(parseInt(y, 10), 0, 1)",
+    "new Date(parts[0] /* ) */, 1)",
+    "new Date(parts[0] // )\n, 1)",
+    "new Date(...parts)",
+    "new Date(\n  year,\n  month,\n)",
+    "new Date(label(')'), 1)",
+    "new Date ( { y }.y, 1 )",
+]
+ONE_ARGUMENT = [
+    "new Date(Number(ms))",
+    "new Date(parseInt(s, 10))",
+    "new Date(toInstant(a, b))",
+    "new Date([a, b].join(''))",
+    "new Date('2026-10-25, 10:00')",
+    "new Date(`${a},${b}`)",
+    "new Date(iso,)",
+]
+
+
+@pytest.mark.parametrize("text", TWO_OR_MORE_ARGUMENTS)
+def test_eko110_k04_new_date_with_two_or_more_arguments_fails(text: str) -> None:
+    assert fails(sc.date_apis_outside_helper, COMPONENT, f"const d = {text};\n")
+    assert sc.date_apis_outside_helper({HELPER: f"const d = {text};\n"}) == []
+
+
+@pytest.mark.parametrize("text", ONE_ARGUMENT)
+def test_eko110_k04_new_date_with_one_argument_passes(text: str) -> None:
+    assert sc.date_apis_outside_helper({COMPONENT: f"const d = {text};\n"}) == []
