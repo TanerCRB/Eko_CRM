@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-29",
+  "task": "EKO-1-10",
+  "phase": "code",
+  "role": "developer-frontend",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "ab8a9a91145de95dd",
+  "tokens": 1069495,
+  "tokenSplit": {
+    "input": 38,
+    "output": 18541,
+    "cacheWrite": 66284,
+    "cacheRead": 984632
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 21,
+  "seconds": 489,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "READY FOR REVIEW (frontend share): 2 new paths; Vitest 10 -> 26, backend 946 passed; eslint.config.js unchanged (strictTypeChecked already sets both rules); lint tests passed at first run because the behaviour pre-existed; assumptions A-01..A-03. boundary-check: clean (frontend/)"
+}
