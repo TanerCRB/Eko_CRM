@@ -110,6 +110,13 @@ REGISTER_EDITS: dict[str, Callable[[str], str]] = {
         "| `scripts/**` |", "| `tools/**` | pipeline | — | x |\n| `scripts/**` |"
     ),
     "class-table-edited": lambda t: t.replace("| yes | no — it is fixed |", "| no | no |"),
+    # The approved row added twice, the second time with another class: only the count sees it.
+    "layer-table-row-duplicated": lambda t: "\n".join(
+        f"{line}\n{line.replace('| pipeline |', '| model |')}"
+        if line.startswith("| `docs/architecture/layer-dependencies.md` |")
+        else line
+        for line in t.split("\n")
+    ),
 }
 
 
