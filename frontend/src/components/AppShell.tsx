@@ -1,6 +1,7 @@
 import { useId, useState, type ReactNode } from "react";
 import mark from "../assets/mark.svg";
 import { messages } from "../i18n/pl";
+import { apiClient } from "@/api/client";
 
 interface AppShellProps {
   section: string;
