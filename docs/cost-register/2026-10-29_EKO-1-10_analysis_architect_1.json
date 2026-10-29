@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-29",
+  "task": "EKO-1-10",
+  "phase": "analysis",
+  "role": "architect",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "a0ff60e2dcea73e5a",
+  "tokens": 2626363,
+  "tokenSplit": {
+    "input": 40,
+    "output": 58192,
+    "cacheWrite": 201064,
+    "cacheRead": 2367067
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 41,
+  "seconds": 587,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "REQUIRES A HUMAN DECISION; four draft addenda (ADR-0001..0004) appended, uncommitted; new gate-1 questions G-8..G-14; risk-check run by the driving session (the role had no shell): auth, dependencies, external, personal-data, pipeline, schema, secrets. boundary-check: clean (docs/architecture/decisions/)"
+}
