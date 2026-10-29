@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-29",
+  "task": "EKO-1-10",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Low",
+  "agentId": "a8f93d23572e61350",
+  "tokens": 135346,
+  "tokenSplit": {
+    "input": 12,
+    "output": 3318,
+    "cacheWrite": 28411,
+    "cacheRead": 103605
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 6,
+  "seconds": 59,
+  "fixRound": 0,
+  "reworkCause": "Post-merge defect in the register fixture cases (see developer-backend 4)",
+  "notes": "PASS at 27a24f2, no findings. boundary-check: clean (--none, shared snapshot)"
+}
