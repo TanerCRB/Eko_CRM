@@ -978,3 +978,167 @@ the task that builds releases. If the previous document were committed to the re
 request could change it together with the break it hides. Approved by the human at gate 1 of
 EKO-1-10 on 2026-10-29 (G-12 A, Issue #51). This is not a deviation: no rule
 changes.
+
+### 2026-10-29 — `migrate`'s advisory lock and timeouts, and how the revision check establishes descent
+
+**Status:** Accepted 2026-10-29 (gate 1 of EKO-1-11, Issue #52; accepted by the human in the driving session, recorded on the Issue).
+<!-- Only a human changes this to "Accepted <YYYY-MM-DD>". GATE-1 markers below name the choices
+the human makes with this addendum (impact map of EKO-1-11, Q-1..Q-3). -->
+
+**What it settles.** *Migrations* has `migrate` hold an advisory lock for the whole run, run its
+statements with a lock timeout and a statement timeout once it holds that lock, and has `backend`,
+any worker and `migrate` accept a database revision that descends from their code's head. It
+forwards the timeout values and how descent is established for a revision the running code does
+not ship (*Forwarded on from this decision*, *Forward references*), and the addendum of 2026-10-28
+on the split of EKO-1-06 gives both to EKO-1-11 (#52). From this date:
+
+- **The advisory lock's identity.**
+  - It is one PostgreSQL advisory lock on the application database, taken with the
+    single-`bigint`-key form of the advisory-lock functions. The two-`integer`-key form is a
+    different lock and never counts as "the same advisory lock".
+  - Its key is a fixed, non-zero integer written **once** in the repository: as a literal in a
+    top-level extension field of `compose.yaml` (`x-migration-advisory-lock`), delivered to
+    `migrate` as the environment variable `MIGRATION_ADVISORY_LOCK_KEY` and read only through
+    `backend/app/core/settings.py` (ADR-0001-C10). The `backup` service (EKO-1-14, #55) receives
+    the same field by reference, never as a second literal. Its build context, `backup/`, cannot
+    read a file of the backend image, which is why the composition and not a backend module is the
+    one place.
+  - This decision does not repeat the value, so that the value stays in one tracked file outside
+    `backend/tests/`. Changing it is a change to this addendum, because `migrate` and `backup` must
+    change it together.
+  - The key is the same in every environment and part of the release, as the connection limits are
+    (addendum of 2026-10-28 on initialising PostgreSQL). It is not a secret.
+- **One connection, in this order.** A `migrate` run opens exactly one database connection and does
+  everything on it, inside the one transaction of the run (`backend/migrations/env.py`,
+  ADR-0003-C19 counts one connection for `migrate`):
+  1. it takes the advisory lock as a transaction-level lock, as the first statement of the run's
+     transaction, and waits for it with no time limit (*Migrations*: "waits for the lock");
+  2. once the lock is granted, it sets the lock timeout and the statement timeout for the rest of
+     that transaction only;
+  3. it reads the database's revision and makes the descent check below;
+  4. it applies the pending revisions, or none;
+  5. when it applied at least one revision, it writes the revision lineage record (below);
+  6. it commits, which releases the lock, or it fails and PostgreSQL rolls everything back,
+     which also releases the lock.
+
+  The revision is never read before the lock is granted. No second connection is opened, for the
+  lock, for the revision read or for the lineage record. The whole run stays one transaction
+  (Alembic's `transaction_per_migration` stays off), as ADR-0004-C14 requires. A transaction-level
+  lock conflicts with a session-level lock on the same key, so `backup` may hold it either way.
+- **Timeout values.**
+
+  | Setting | Value | Why this value |
+  |---|---|---|
+  | lock timeout | **5 seconds** | While `migrate` waits for a table lock, its queued exclusive request also holds back every later read of that table, so reps' requests touching that table wait as long as `migrate` waits. Five seconds is a pause a rep notices but does not take for a failure. It stays well below the 30-second pool checkout wait after which a request fails (ADR-0002, addendum of 2026-10-28). In a system of about ten users a DDL lock is normally granted at once. It waits only behind a long transaction, and a failed run leaves the previous release serving (*Migrations*), so the operator retries the deployment later at no cost to data. |
+  | statement timeout | **30 seconds** | It bounds one runaway statement. A statement that holds an exclusive table lock stalls reps' requests on that table for as long as it runs. With a few thousand customers (brief, section 5), an index build or a backfill takes well under a second, so 30 seconds leaves a wide margin. At 30 seconds a rep's request waiting behind the statement fails on pool checkout at about the same time anyway. |
+
+  - **Where they are set.** Both values are literals in the `environment` of the `migrate` service
+    in `compose.yaml`, with no Compose interpolation, so no environment file changes them. They are
+    read only through `backend/app/core/settings.py`, which refuses a missing, zero or negative
+    value (PostgreSQL reads `0` as "no timeout"). `env.py` applies them on the run's one connection
+    as transaction-local settings, after the advisory lock is granted (step 2 above).
+  - They are **not** set in the connection's start-up options, on the application role, on the
+    database or in the server configuration. Each of those would also bound the advisory-lock
+    wait, which must stay unbounded, or would bind `backend` and `worker` sessions, which this
+    decision does not ask for.
+  - **No revision changes them.** No revision sets `lock_timeout`, `statement_timeout` or
+    `transaction_timeout`. A revision that needs more time is split into several revisions, or
+    this addendum is changed first.
+- **The revision lineage record.** <!-- GATE-1 Q-1: option A below; B and C are in the impact map. -->
+  A revision the running code does not ship cannot be placed from that code's own tree. It is
+  placed from a record in the application database that the newer `migrate` wrote:
+  - The record is one table, `schema_revision_lineage`, with one column `revision` (text, the
+    primary key, compared byte-wise). It holds exactly the revisions from the base to the
+    database's current head, that head included. It holds no personal data and no time value
+    (ADR-0002, *Now, today*: no column default read from the database clock).
+  - **It is created by a revision of the real tree, `0002`**, a pure expand revision on top of the
+    baseline `0001`. That keeps *Versioned migrations* of ADR-0002 as written: the table is a
+    schema change made by an Alembic revision, and `migrate` writes only its rows, never its
+    schema. ADR-0002-C2 keeps one head. ADR-0002-C3 keeps holding, either through a model
+    declaration in the `data` layer or by excluding the table from Alembic's comparison, as the
+    developer chooses.
+  - **Only `migrate` writes it**, in the run's own transaction (step 5 above), right after the
+    last revision it applied, so it commits together with `alembic_version` or not at all. It
+    replaces the rows with the lineage of its own tree's head. A run that applies nothing writes
+    nothing, so a no-op run leaves both the schema and the record unchanged (ADR-0004-C13).
+  - It is part of the application database's dump, so a restore brings it back with the data, and
+    restore step 12 (*Restore procedure*) places a restored revision the same way.
+- **The descent check.** `backend`, `worker` and `migrate` run one function of the `data` layer
+  (`backend/app/data/`, ADR-0002-C4). It takes the code's head `H` and its tree from the image's
+  `migrations/` directory, and reads `alembic_version` and the lineage record:
+
+  | Database state | `backend`, `worker` | `migrate` |
+  |---|---|---|
+  | no `alembic_version` table | refuse | the empty application database: upgrade from the base (*The first deployment*) |
+  | `alembic_version` with no row, or with more than one row | refuse | fail, change nothing |
+  | one row `r`, `r` = `H` | serve or work | exit 0, change nothing |
+  | one row `r` in its own tree, `r` ≠ `H` (an ancestor, the history being linear) | refuse | upgrade to `H` |
+  | one row `r` not in its own tree, with both `r` and `H` in the lineage record | serve or work (a descendant) | exit 0, change nothing |
+  | one row `r` not in its own tree, and the lineage record missing or lacking `r` or `H` | refuse | fail, change nothing |
+
+  - A revision recorded beside `H` in the lineage and absent from the code's tree cannot be an
+    ancestor of `H`, because every ancestor of `H` is in that tree, so it descends from `H`. A
+    sibling of `H` (same parent, other revision) has a lineage without `H` and is refused. So is
+    an identifier no `migrate` wrote.
+  - "Refuse" means: exit non-zero before serving a request or taking a job, change nothing, and
+    log one line naming the process and the reason (older, unplaceable, missing). The line may
+    name revision identifiers. It never names the database URL, a host, a role or a password
+    (ADR-0005; the log format is EKO-1-13's).
+  - `backend` and `worker` neither take the advisory lock nor wait for it. A `migrate` run is one
+    transaction, so they read the revision as it was before it or as it is after it.
+- **Where each process runs the check.**
+  - **`migrate`:** in `backend/migrations/env.py`, at step 3 above, before Alembic resolves any
+    revision. Alembic itself fails on a revision missing from its tree, which would turn a
+    descendant into a failed run.
+  - **`backend`:** in `backend/app/serve.py`, after the settings are loaded (ADR-0004-C10 keeps
+    its order: a missing secret is named before any connection) and before `uvicorn.run`. It runs
+    in the one process that is the container's main process. A check in the application factory or
+    its lifespan would run in each uvicorn worker, whose supervisor restarts a worker that dies, so
+    the container would never exit (the same trap `serve.py` records for the secrets check). The
+    check uses its own single connection and closes it before `uvicorn.run`. It therefore never
+    adds to the 2 × (5 + 5) connections of ADR-0003-C19's budget.
+  - **`worker`:** in `backend/app/worker.py`, in its main process, after the settings are loaded
+    and before any job is taken, within its pool of 2.
+  - Only `migrate`'s command contains `alembic upgrade` (ADR-0004-C11). The check never migrates.
+- **Test-only revisions and the previous-release stand-in.** These never reach the image a release
+  ships:
+  - Test-only revisions live under `backend/tests/`, which `backend/.dockerignore` keeps out of the
+    build context, and never under `backend/migrations/versions/`.
+  - A test variant is an image built `FROM` the image the repository's normal build produced. It
+    only adds revision files to `/app/migrations/versions/`, so a variant runs the shipped
+    `env.py`, `app/` and entry points.
+  - The previous-release stand-in is the shipped image itself. The "next release" is a variant
+    that adds one expand test-only revision on top of the shipped head.
+  - No runtime configuration adds a revision location: `alembic.ini`'s `script_location` stays
+    fixed, and no environment variable sets `version_locations`.
+  - A fixture that changes `env.py` or an entry point, such as the lock removed, is a planted
+    contrast. A claim is never proven on it.
+- **What this does not bound (a stated cost).** <!-- GATE-1 Q-3: option A. -->
+  - The wait for the advisory lock has no limit. A run waiting behind a stuck backup does not
+    finish, and the deployment does not go ahead. The previous release keeps serving, because no
+    table lock is held while waiting.
+  - The lock timeout bounds a rep's stall only while `migrate` *waits* for a table lock. Once
+    `migrate` holds an exclusive lock, the run's single transaction keeps it until commit. Reps'
+    requests on that table then wait for the rest of the run, which is bounded per statement by
+    the statement timeout but not as a whole. At this data size a run takes seconds. Adding a
+    bound on the whole run (`transaction_timeout`) would be a change to this addendum.
+  - The values are proven to be in effect, not to be the right size for a future large backfill.
+
+Every other rule and control of this decision is unchanged. ADR-0004-C11..C14 and C26 are carried
+out on this mechanism. The backup half of ADR-0004-C26 stays with EKO-1-14 (#55), which takes the
+lock under the identity recorded here.
+
+**Consequence for EKO-1-11's Story.** The real tree becomes `0001` → `0002`. Definition of done
+item 9 ("keeps the single baseline `0001`") and criterion K-07 ("exactly `{0001}`") read
+"exactly `{0001, 0002}`, one head".
+
+**Why.** *Revision check and rollback*, option A, accepts a revision that descends from the code's
+head, and names the cost: "the check must establish descent for a revision its own code does not
+ship". The running code holds only its own tree, so that fact can come only from the database, and
+only the `migrate` that applied the newer revision knows it. A record written by `migrate` in the
+same transaction as `alembic_version` is the smallest store that cannot disagree with it. Creating
+it by a revision keeps ADR-0002 unchanged. The timeout values bound the stall reps feel within the
+"short, announced interruption" this decision accepts. Taking the lock and the timeouts on the run's
+one connection, in that order, keeps ADR-0003-C19's budget (23 of 30) and leaves the advisory wait
+unbounded, as *Migrations* says. This is not a deviation from ADR-0004 or ADR-0002: it decides what
+this decision forwarded. Pending the human's approval at gate 1 of EKO-1-11 (G-1 A, Issue #52).

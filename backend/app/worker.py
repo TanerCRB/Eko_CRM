@@ -1,7 +1,8 @@
 """Entry point of the `worker` service (ADR-0006): `python -m app.worker`.
 
-The walking skeleton's worker does no work. It never runs migrations; the revision check at start
-is EKO-1-11's.
+The walking skeleton's worker does no work. It never runs migrations; at start, in the main
+process, it refuses a database revision other than its code's head or a recorded descendant
+(ADR-0006-C13, ADR-0004 addendum 2026-10-29).
 """
 
 import logging
@@ -11,6 +12,7 @@ import threading
 from types import FrameType
 
 from app.core.settings import Settings, load_settings
+from app.data.schema_revision import refuse_unless_servable
 
 logger = logging.getLogger("app.worker")
 
@@ -25,6 +27,7 @@ def run(stop: threading.Event) -> int:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    refuse_unless_servable(load_settings(Settings), "worker")
     stop = threading.Event()
 
     def _request_stop(signum: int, _frame: FrameType | None) -> None:

@@ -14,12 +14,15 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
 
 from tests.support.repo import REPO_ROOT, write_synthetic_env
+
+if TYPE_CHECKING:
+    from tests.runtime.lab import Lab
 
 UP_TIMEOUT_SECONDS = 900
 PORT_VARIABLES = ("PROXY_HTTP_PORT", "PROXY_HTTPS_PORT", "PROXY_ADMIN_PORT")
@@ -196,3 +199,39 @@ def fresh(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Composition]:
 
 def random_marker() -> str:
     return "marker-" + secrets.token_hex(6)
+
+
+@pytest.fixture(scope="session")
+def lab(tmp_path_factory: pytest.TempPathFactory) -> Iterator["Lab"]:
+    """EKO-1-11: postgres and backend of the shipped image, with migrate runs on demand."""
+    from tests.runtime.lab import Lab, PsqlSession, docker
+
+    composition = new_composition(tmp_path_factory, "lab")
+    monitor: PsqlSession | None = None
+    started: Lab | None = None
+    try:
+        up = composition.compose(
+            "up", "--build", "--wait", "--wait-timeout", str(UP_TIMEOUT_SECONDS), "backend",
+            check=False, timeout=UP_TIMEOUT_SECONDS + 300,
+        )  # fmt: skip
+        if up.returncode != 0:
+            logs = composition.compose("logs", "--tail", "40", check=False).stdout
+            raise AssertionError(f"up exited {up.returncode}\n{up.stderr[-3000:]}\n{logs[-6000:]}")
+        prober = f"{composition.project}-prober"
+        composition.compose(
+            "run", "-d", "--no-deps", "--name", prober, "--entrypoint", "sleep", "migrate",
+            "infinity",
+        )  # fmt: skip
+        shipped = composition.inspect("backend")["Config"]["Image"]
+        monitor = PsqlSession(composition, name="eko-test-monitor")
+        workdir = tmp_path_factory.mktemp("lab-work")
+        started = Lab(composition, workdir, shipped, prober, monitor)
+        yield started
+    finally:
+        if monitor is not None:
+            monitor.close()
+        if started is not None:
+            docker("rm", "-f", started.prober, check=False)
+            for tag in started.images.values():
+                docker("rmi", "-f", tag, check=False)
+        composition.down()

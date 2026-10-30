@@ -3,12 +3,15 @@
 import uvicorn
 
 from app.core.settings import WebSettings, load_settings
+from app.data.schema_revision import refuse_unless_servable
 
 
 def main() -> None:
     # Read before uvicorn starts: its supervisor restarts a worker that dies on a missing secret,
     # so a check inside the workers would never stop the process (ADR-0004-C10).
     settings = load_settings(WebSettings)
+    # Here for the same reason: a refusal in the workers would be restarted, never exit.
+    refuse_unless_servable(settings, "backend")
     uvicorn.run(
         "app.main:create_app",
         factory=True,

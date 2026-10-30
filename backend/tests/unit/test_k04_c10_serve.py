@@ -24,8 +24,10 @@ def started(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 
 
 def test_k04_c10_serve_starts_uvicorn_with_the_configured_workers(
-    started: list[dict[str, Any]],
+    started: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # The revision check needs a database (EKO-1-11); this test is about uvicorn's arguments.
+    monkeypatch.setattr(serve, "refuse_unless_servable", lambda settings, process: None)
     serve.main()
     assert len(started) == 1
     assert started[0]["app"] == "app.main:create_app"
