@@ -17,8 +17,10 @@ from tests.support import migration_checks as mc
 
 pytestmark = pytest.mark.runtime
 
-# leftovers-allow: the probe runs in a container; stdout is its answer
-LIST_VERSIONS = "import os, sys; print('\\n'.join(sorted(os.listdir(sys.argv[1]))))"
+LIST_VERSIONS = (
+    "import os, sys; "
+    "print('\\n'.join(sorted(os.listdir(sys.argv[1]))))"  # leftovers-allow: probe stdout
+)
 # Every regular file and symlink of the image with its content digest; the paths Docker mounts or
 # writes into a running container are left out.
 LISTING = """

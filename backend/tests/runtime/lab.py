@@ -72,8 +72,8 @@ TABLES_PRESENT = (
 HEALTH_ONCE = """
 import sys, urllib.error, urllib.request
 try:
-    # leftovers-allow: the probe runs in a container; stdout is its answer
-    print(urllib.request.urlopen(sys.argv[1], timeout=3).status)
+    status = urllib.request.urlopen(sys.argv[1], timeout=3).status
+    print(status)  # leftovers-allow: probe runs in a container; stdout is its answer
 except urllib.error.HTTPError as exc:
     print(exc.code)  # leftovers-allow: probe runs in a container; stdout is its answer
 except OSError as exc:
@@ -488,8 +488,8 @@ def restart_count(container: str) -> int:
 
 HEALTH_BODY = """
 import sys, urllib.request
-# leftovers-allow: the probe runs in a container; stdout is its answer
-print(urllib.request.urlopen(sys.argv[1], timeout=3).read().decode())
+body = urllib.request.urlopen(sys.argv[1], timeout=3).read().decode()
+print(body)  # leftovers-allow: probe runs in a container; stdout is its answer
 """
 
 

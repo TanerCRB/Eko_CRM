@@ -14,8 +14,10 @@ from tests.runtime.lab import SHIPPED_HEAD, Lab, health_body
 
 pytestmark = pytest.mark.runtime
 
-# leftovers-allow: the probe runs in a container; stdout is its answer
-LIST_VERSIONS = "import os, sys; print('\\n'.join(sorted(os.listdir(sys.argv[1]))))"
+LIST_VERSIONS = (
+    "import os, sys; "
+    "print('\\n'.join(sorted(os.listdir(sys.argv[1]))))"  # leftovers-allow: probe stdout
+)
 VERSIONS_DIR = "/app/migrations/versions"
 
 
