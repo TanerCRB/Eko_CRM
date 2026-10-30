@@ -1,0 +1,19 @@
+# The double's SSH server. Every session, the sftp subsystem included, runs the recorder; the
+# recorder runs /usr/lib/openssh/sftp-server with the destination's flags (see
+# it-destination-fragment.conf, the configuration handed to the IT department).
+Port 22
+HostKey /etc/ssh/ssh_host_ed25519_key
+LogLevel VERBOSE
+PermitRootLogin prohibit-password
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+AuthorizedKeysFile /etc/ssh/authorized_keys/%u
+AllowUsers eko-backup root
+DisableForwarding yes
+PermitTunnel no
+PermitTTY no
+PermitUserRC no
+Subsystem sftp /usr/local/bin/eko-double-recorder
+ForceCommand /usr/local/bin/eko-double-recorder

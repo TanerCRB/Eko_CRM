@@ -2,3 +2,11 @@
 tools/*.mjs
 # Hook with a --self-test that reports its cases on the console.
 scripts/cost-capture.mjs
+# EKO-1-14: "backup" is the service's name, not a draft marker; these files are named after it.
+backup/eko-backup
+backend/tests/runtime/backup_lab.py
+backend/tests/runtime/test_adr0004_*backup*.py
+backend/tests/runtime/test_adr0005_backup_log_content.py
+backend/tests/runtime/revisions/t_backup_*.py
+backend/tests/static/test_adr0004_c26_backup_lock_by_reference.py
+backend/tests/support/backup_checks.py

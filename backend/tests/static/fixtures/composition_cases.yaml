@@ -4,20 +4,20 @@
   old: "    profiles: [\"dev\"]\n"
   new: ""
 - id: c2-postgres-bare-major
-  old: "image: postgres:18.6-trixie"
-  new: "image: postgres:18"
+  old: "image: &postgres-image postgres:18.6-trixie"
+  new: "image: &postgres-image postgres:18"
 - id: c2-postgres-floating-alpine
-  old: "image: postgres:18.6-trixie"
-  new: "image: postgres:18.1-alpine"
+  old: "image: &postgres-image postgres:18.6-trixie"
+  new: "image: &postgres-image postgres:18.1-alpine"
 - id: c2-mail-catcher-floating
   old: "image: axllent/mailpit:v1.32.0"
   new: "image: axllent/mailpit:latest"
 - id: adr0003-c3-keycloak-minor-only
-  old: "image: quay.io/keycloak/keycloak:26.8.1"
-  new: "image: quay.io/keycloak/keycloak:26.4"
+  old: "image: &keycloak-image quay.io/keycloak/keycloak:26.8.1"
+  new: "image: &keycloak-image quay.io/keycloak/keycloak:26.4"
 - id: c3-ports-on-postgres
-  old: "    image: postgres:18.6-trixie\n"
-  new: "    image: postgres:18.6-trixie\n    ports: [\"5432:5432\"]\n"
+  old: "    image: &postgres-image postgres:18.6-trixie\n"
+  new: "    image: &postgres-image postgres:18.6-trixie\n    ports: [\"5432:5432\"]\n"
 - id: c3-host-network-on-backend
   old: "      WEB_CONCURRENCY: \"2\"\n"
   new: "      WEB_CONCURRENCY: \"2\"\n    network_mode: host\n"
@@ -46,8 +46,8 @@
   old: "    image: localhost/eko-crm/backend:${BACKEND_IMAGE_TAG:?BACKEND_IMAGE_TAG is required}\n    pull_policy: never\n    command: [\"python\", \"-m\", \"app.worker\"]"
   new: "    build:\n      context: ./backend\n    command: [\"python\", \"-m\", \"app.worker\"]"
 - id: c28-build-on-postgres
-  old: "    image: postgres:18.6-trixie\n"
-  new: "    image: postgres:18.6-trixie\n    build: ./postgres\n"
+  old: "    image: &postgres-image postgres:18.6-trixie\n"
+  new: "    image: &postgres-image postgres:18.6-trixie\n    build: ./postgres\n"
 - id: c28-file-source
   old: "  postgres-init:\n    content: |\n"
   new: "  postgres-init:\n    file: ./init.sql\n  unused-inline-content:\n    content: |\n"

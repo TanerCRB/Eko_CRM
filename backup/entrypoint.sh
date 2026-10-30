@@ -1,16 +1,15 @@
 #!/bin/sh
-# The walking skeleton's backup service takes no backup: producing, encrypting and shipping sets
-# is EKO-1-14's. It only refuses to start without its required secret (ADR-0004-C10).
+# Refuses to start without a required variable, before any connection to the server or the
+# destination (ADR-0004-C10); a whitespace-only value counts as empty.
 set -eu
 
-if [ -z "$(printenv BACKUP_DB_PASSWORD | tr -d '[:space:]')" ]; then
-  echo "configuration error: missing or empty environment variable: BACKUP_DB_PASSWORD" >&2
-  exit 1
-fi
-
-echo "backup: no backup is configured in this release (EKO-1-14)"
-trap 'exit 0' TERM INT
-while :; do
-  sleep 3600 &
-  wait $!
+for name in BACKUP_DB_PASSWORD BACKUP_DESTINATION_CREDENTIAL BACKUP_ENCRYPTION_PUBLIC_KEY \
+  BACKUP_DESTINATION BACKUP_DESTINATION_HOST_KEY MIGRATION_ADVISORY_LOCK_KEY \
+  BACKUP_MANIFEST_BACKEND_IMAGE BACKUP_MANIFEST_KEYCLOAK_IMAGE BACKUP_MANIFEST_POSTGRES_IMAGE; do
+  if [ -z "$(printenv "$name" | tr -d '[:space:]')" ]; then
+    echo "configuration error: missing or empty environment variable: $name" >&2
+    exit 1
+  fi
 done
+
+exec "$@"

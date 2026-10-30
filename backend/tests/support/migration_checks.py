@@ -13,6 +13,7 @@ import yaml
 
 LOCK_FIELD = "x-migration-advisory-lock"
 LOCK_VARIABLE = "MIGRATION_ADVISORY_LOCK_KEY"
+LOCK_HOLDERS = ("migrate", "backup")
 LOCK_TIMEOUT_VARIABLE = "MIGRATION_LOCK_TIMEOUT_SECONDS"
 STATEMENT_TIMEOUT_VARIABLE = "MIGRATION_STATEMENT_TIMEOUT_SECONDS"
 TIMEOUTS = {LOCK_TIMEOUT_VARIABLE: "5", STATEMENT_TIMEOUT_VARIABLE: "30"}
@@ -40,9 +41,28 @@ def migrate_environment_node(compose_text: str) -> dict[str, yaml.Node]:
     return _migrate_environment(root)
 
 
+def environment_key_line(compose_text: str, service: str, variable: str) -> int:
+    """The 0-based line of `variable`'s key in `service`'s environment (an alias value's own
+    position is its anchor's, so the key node is used)."""
+    root = yaml.compose(compose_text)
+    assert root is not None
+    node = _mapping(_mapping(_mapping(root)["services"])[service])["environment"]
+    assert isinstance(node, yaml.MappingNode)
+    for key, _ in node.value:
+        if key.value == variable:
+            line: int = key.start_mark.line
+            return line
+    raise KeyError(variable)
+
+
 def _migrate_environment(root: yaml.Node) -> dict[str, yaml.Node]:
-    migrate = _mapping(_mapping(_mapping(root)["services"])["migrate"])
-    return _mapping(migrate["environment"])
+    return _service_environment(root, "migrate")
+
+
+def _service_environment(root: yaml.Node, service: str) -> dict[str, yaml.Node]:
+    node = _mapping(_mapping(_mapping(root)["services"])[service])
+    environment = node.get("environment")
+    return {} if environment is None else _mapping(environment)
 
 
 def lock_reference_violations(compose_text: str) -> list[str]:
@@ -61,7 +81,24 @@ def lock_reference_violations(compose_text: str) -> list[str]:
         problems.append(f"migrate's environment has no {LOCK_VARIABLE}")
     elif value is not field:
         problems.append(f"migrate's {LOCK_VARIABLE} is not a reference to {LOCK_FIELD}")
+    # EKO-1-14 (gate 1, developer stop 1 A): backup may receive the key, only as the same alias.
+    backup = _service_environment(root, "backup").get(LOCK_VARIABLE)
+    if backup is not None and backup is not field:
+        problems.append(f"backup's {LOCK_VARIABLE} is not {LOCK_FIELD}")
     return problems
+
+
+def backup_lock_reference_violations(compose_text: str) -> list[str]:
+    """`backup` receives MIGRATION_ADVISORY_LOCK_KEY as the alias of the top-level field."""
+    root = yaml.compose(compose_text)
+    assert root is not None
+    field = _mapping(root).get(LOCK_FIELD)
+    value = _service_environment(root, "backup").get(LOCK_VARIABLE)
+    if value is None:
+        return [f"backup's environment has no {LOCK_VARIABLE}"]
+    if field is None or value is not field:
+        return [f"backup's {LOCK_VARIABLE} is not {LOCK_FIELD}"]
+    return []
 
 
 def files_holding(files: Mapping[str, str], value: int) -> list[str]:
@@ -90,13 +127,19 @@ def timeout_literal_violations(compose_text: str) -> list[str]:
 
 
 def other_services_with_timeouts(rendered: dict[str, Any]) -> list[str]:
-    """No service but migrate receives the migration settings."""
+    """No service but migrate receives the timeouts; only migrate and backup receive the lock key.
+
+    EKO-1-14 (gate 1, developer stop 1 A): backup takes the lock by reference; that it is the
+    alias, not an equal literal, is lock_reference_violations' check on the source.
+    """
     problems = []
     for name, service in (rendered.get("services") or {}).items():
         environment = service.get("environment") or {}
-        for variable in (*TIMEOUTS, LOCK_VARIABLE):
+        for variable in TIMEOUTS:
             if name != "migrate" and variable in environment:
                 problems.append(f"{name}: receives {variable}")
+        if name not in LOCK_HOLDERS and LOCK_VARIABLE in environment:
+            problems.append(f"{name}: receives {LOCK_VARIABLE}")
     return problems
 
 

@@ -1,0 +1,326 @@
+#!/bin/bash
+# eko-backup: the backup run and its daily scheduler (ADR-0004 addendum 2026-10-30).
+#
+#   eko-backup run        one run now; exits 0 only once its set at the destination is complete
+#   eko-backup schedule   backup's main process: one run a day at the schedule file's time, in UTC
+#
+# The interface others read is documented in backup/README.md: the on-demand command, the failure
+# line and the operator step for existing volumes. Nothing of a set is ever written to a file:
+# each dump flows through age to the destination as one pipeline, and the manifest and the
+# completion record are built in memory. The tools' own messages never reach the log; they are
+# kept in memory only to name the failure.
+
+set -uo pipefail
+export LC_ALL=C.UTF-8
+umask 077
+
+readonly SCHEDULE_FILE=/etc/eko-backup/schedule
+readonly LOADED_SCHEDULE=/run/eko-backup/loaded-schedule
+readonly DB_HOST=postgres
+readonly DB_USER=eko_backup
+readonly APP_DB=eko
+readonly KEYCLOAK_DB=keycloak
+readonly SCHEDULE_POLL_SECONDS=20
+
+SET_NAME="-"
+
+utc_now() { date -u +%Y-%m-%dT%H:%M:%S.%6NZ; }
+
+# The one line of a failed run (README.md, "The failure line"); the EXIT trap cleans up.
+fail() {
+  local line="eko-backup: run failed reason=$1 set=$SET_NAME at=$(utc_now)"
+  if [ -n "${2:-}" ]; then line+=" sqlstate=$2"; fi
+  printf '%s\n' "$line" >&2
+  exit 1
+}
+
+# The SQLSTATE in a tool's message: psql's verbose form, else the server's fixed English text
+# for the refusals a dump tool's connection can meet (pg_dump prints no SQLSTATE).
+sqlstate_of() {
+  local text="$1"
+  if [[ "$text" =~ (ERROR|FATAL):\ +([0-9A-Z]{5}): ]]; then
+    printf '%s' "${BASH_REMATCH[2]}"
+    return
+  fi
+  case "$text" in
+    *"too many connections for role"* | *"remaining connection slots are reserved"*) printf 53300 ;;
+    *"sorry, too many clients already"*) printf 53300 ;;
+    *"password authentication failed"*) printf 28P01 ;;
+    *"permission denied"*) printf 42501 ;;
+  esac
+}
+
+# --- The control session ------------------------------------------------------------------
+
+CTL_PID=""
+CTL_IN=""
+CTL_OUT=""
+CTL_TEXT=""
+CTL_DONE="eko-backup-control-done-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+
+ctl_open() {
+  coproc CTL {
+    PGAPPNAME=eko-backup-control exec psql -X -q -A -t -v ON_ERROR_STOP=1 -v VERBOSITY=verbose \
+      -h "$DB_HOST" -U "$DB_USER" -d "$APP_DB" 2>&1
+  }
+  CTL_PID=$CTL_PID
+  # Own copies: bash closes a coprocess's descriptors once it ends, and its last words matter.
+  exec {CTL_IN}>&"${CTL[1]}" {CTL_OUT}<&"${CTL[0]}"
+}
+
+# Statements on the control session, then a marker query; their output in CTL_TEXT. Non-zero
+# when psql has ended (ON_ERROR_STOP). The marker is a query because psql flushes query output.
+ctl() {
+  CTL_TEXT=""
+  (printf "%s;\nSELECT '%s';\n" "$1" "$CTL_DONE" >&"$CTL_IN") 2>/dev/null
+  local line
+  while IFS= read -r line <&"$CTL_OUT"; do
+    if [ "$line" = "$CTL_DONE" ]; then return 0; fi
+    CTL_TEXT+="$line"$'\n'
+  done
+  return 1
+}
+
+ctl_fail() { fail "$1" "$(sqlstate_of "$CTL_TEXT")"; }
+
+ctl_close() {
+  (printf '\\q\n' >&"$CTL_IN") 2>/dev/null
+  wait "$CTL_PID" 2>/dev/null
+  CTL_PID=""
+}
+
+# --- The destination ----------------------------------------------------------------------
+
+RUNDIR=""
+DEST_ACCOUNT=""
+DEST_HOST=""
+DEST_PORT=""
+DEST_DIR=""
+HOST_FINGERPRINT=""
+
+destination_open() {
+  local pattern='^sftp://([a-z_][a-z0-9_-]*)@([A-Za-z0-9.-]+):([0-9]{1,5})(/[A-Za-z0-9._/-]*[A-Za-z0-9._-])$'
+  [[ "$BACKUP_DESTINATION" =~ $pattern ]] || fail destination
+  DEST_ACCOUNT="${BASH_REMATCH[1]}" DEST_HOST="${BASH_REMATCH[2]}"
+  DEST_PORT="${BASH_REMATCH[3]}" DEST_DIR="${BASH_REMATCH[4]}"
+  local key_type key_body
+  read -r key_type key_body _ <<< "$BACKUP_DESTINATION_HOST_KEY"
+  HOST_FINGERPRINT="$(printf '%s %s\n' "$key_type" "$key_body" \
+    | ssh-keygen -l -E sha256 -f - 2>/dev/null | awk '{print $2}')"
+  HOST_FINGERPRINT="${HOST_FINGERPRINT#SHA256:}"
+  [ -n "$HOST_FINGERPRINT" ] || fail destination
+  # The host key is public; the known-hosts file holds nothing else. The credential reaches the
+  # client only through the agent's memory.
+  printf 'eko-destination %s %s\n' "$key_type" "$key_body" > "$RUNDIR/known_hosts"
+  eval "$(ssh-agent -s -a "$RUNDIR/agent" 2>/dev/null)" > /dev/null || fail destination
+  printf '%s' "$BACKUP_DESTINATION_CREDENTIAL" | base64 -d 2>/dev/null \
+    | ssh-add -q - > /dev/null 2>&1 || fail destination
+}
+
+# Streams stdin to the destination; writes the byte count it sent to stdout.
+upload() {
+  curl --silent --hostpubsha256 "$HOST_FINGERPRINT" --user "$DEST_ACCOUNT:" \
+    --connect-timeout 30 --speed-limit 1 --speed-time 300 --upload-file - \
+    --write-out '%{size_upload}\n' --output /dev/null \
+    "sftp://$DEST_HOST:$DEST_PORT$DEST_DIR/$1" 2>/dev/null
+}
+
+# The size of a regular file as the destination reports it (one lstat; nothing is listed or
+# read). sftp echoes the batch command too, so only the listing line, which starts with -, counts.
+remote_size() {
+  printf 'ls -l %s\n' "$DEST_DIR/$1" \
+    | sftp -q -b - -P "$DEST_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+      -o HostKeyAlias=eko-destination -o UserKnownHostsFile="$RUNDIR/known_hosts" \
+      -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=30 \
+      "$DEST_ACCOUNT@$DEST_HOST" 2>/dev/null \
+    | awk -v path="$DEST_DIR/$1" '$1 ~ /^-/ && $NF == path { print $5 }'
+}
+
+confirm() {
+  local size
+  size="$(remote_size "$1")"
+  [ -n "$size" ] && [ "$size" = "$2" ] || fail destination
+}
+
+# --- One object: producer | age | (digest) | upload, nothing on disk ----------------------
+
+RECORD=""
+
+# stream_object <object> <reason> <producer...>
+stream_object() {
+  local object="$1" reason="$2"
+  shift 2
+  local name="$SET_NAME.$object" result
+  result="$(
+    {
+      { "$@" 2> >(sed 's/^/E /' >&3); echo "P $?" >&3; } \
+        | { age -r "$BACKUP_ENCRYPTION_PUBLIC_KEY" 2> /dev/null; echo "A $?" >&3; } \
+        | tee >(sha256sum | sed 's/^/H /' >&3) \
+        | { upload "$name" | sed 's/^/S /' >&3; echo "C ${PIPESTATUS[0]}" >&3; }
+    } 3>&1
+  )"
+  local producer encrypted uploaded digest sent errors
+  producer="$(sed -n 's/^P //p' <<< "$result")"
+  encrypted="$(sed -n 's/^A //p' <<< "$result")"
+  uploaded="$(sed -n 's/^C //p' <<< "$result")"
+  digest="$(sed -n 's/^H \([0-9a-f]\{64\}\).*/\1/p' <<< "$result")"
+  sent="$(sed -n 's/^S //p' <<< "$result")"
+  errors="$(sed -n 's/^E //p' <<< "$result")"
+  if [ "$uploaded" != 0 ]; then fail destination; fi
+  if [ "$encrypted" != 0 ]; then fail encryption; fi
+  if [ "$producer" != 0 ]; then
+    local sqlstate
+    sqlstate="$(sqlstate_of "$errors")"
+    case "$sqlstate:$errors" in
+      53300:* | 28P01:* | *"could not translate host name"* | *"Connection refused"*)
+        fail database "$sqlstate" ;;
+    esac
+    fail "$reason" "$sqlstate"
+  fi
+  [ -n "$digest" ] && [ -n "$sent" ] || fail destination
+  confirm "$name" "$sent"
+  RECORD+="$name $sent $digest"$'\n'
+}
+
+dump_application() {
+  PGAPPNAME=eko-backup-dump-application pg_dump --no-password -h "$DB_HOST" -U "$DB_USER" \
+    -d "$APP_DB" --format=custom --compress=none --snapshot="$SNAPSHOT"
+}
+
+dump_keycloak() {
+  PGAPPNAME=eko-backup-dump-keycloak pg_dump --no-password -h "$DB_HOST" -U "$DB_USER" \
+    -d "$KEYCLOAK_DB" --format=custom --compress=none
+}
+
+dump_roles() {
+  PGAPPNAME=eko-backup-dump-roles pg_dumpall --no-password -h "$DB_HOST" -U "$DB_USER" \
+    -l "$APP_DB" --roles-only --no-role-passwords
+}
+
+# Image references and revisions hold only these characters, so they need no JSON escaping.
+json_safe() { [[ "$1" =~ ^[A-Za-z0-9._:/@+,-]*$ ]]; }
+
+# --- The run ------------------------------------------------------------------------------
+
+cleanup() {
+  if [ -n "$CTL_PID" ]; then kill "$CTL_PID" 2>/dev/null; fi
+  if [ -n "${SSH_AGENT_PID:-}" ]; then kill "$SSH_AGENT_PID" 2>/dev/null; fi
+  if [ -n "$RUNDIR" ]; then rm -rf "$RUNDIR"; fi
+}
+
+run_now() {
+  trap cleanup EXIT
+  trap 'fail interrupted' TERM INT
+  local started
+  started="$(utc_now)"
+  export PGPASSWORD="$BACKUP_DB_PASSWORD" PGCONNECT_TIMEOUT=30
+  RUNDIR="$(mktemp -d /tmp/eko-backup.XXXXXXXX)" || fail destination
+  export HOME="$RUNDIR"
+  local key="$MIGRATION_ADVISORY_LOCK_KEY"
+  [[ "$key" =~ ^-?[0-9]{1,19}$ ]] || fail lock
+
+  destination_open
+  ctl_open
+  ctl "SELECT 1" || ctl_fail database
+  # Session level, before the snapshot's transaction, waiting as migrate does: no time limit.
+  ctl "SELECT pg_advisory_lock(CAST($key AS bigint))" || ctl_fail lock
+  # The transaction's first statement fixes and exports the snapshot; its statement time is the
+  # backup point. Both go in one message, so no marker query can come first.
+  ctl "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY; SELECT pg_export_snapshot(), to_char(statement_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), to_char(statement_timestamp() AT TIME ZONE 'UTC', 'YYYYMMDD\"T\"HH24MISS.US\"Z\"')" \
+    || ctl_fail dump-application
+  local backup_point compact
+  IFS='|' read -r SNAPSHOT backup_point compact <<< "$CTL_TEXT"
+  SET_NAME="eko-$compact-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+  [[ "$SET_NAME" =~ ^eko-[0-9]{8}T[0-9]{6}\.[0-9]{6}Z-[0-9a-f]{16}$ ]] || fail dump-application
+
+  ctl "SELECT coalesce(string_agg(version_num, ',' ORDER BY version_num COLLATE \"C\"), '') FROM alembic_version" \
+    || ctl_fail dump-application
+  local revision="${CTL_TEXT%$'\n'}"
+  # Every ordinary or partitioned table outside the catalogs, counted in the same snapshot.
+  ctl "SELECT coalesce(json_object_agg(t.name, t.n ORDER BY t.name COLLATE \"C\"), '{}') FROM (SELECT n.nspname || '.' || c.relname AS name, (xpath('/row/n/text()', query_to_xml(format('SELECT count(*) AS n FROM %I.%I', n.nspname, c.relname), false, true, '')))[1]::text::bigint AS n FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relkind IN ('r', 'p') AND c.relpersistence <> 't' AND n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%') AS t" \
+    || ctl_fail dump-application
+  local row_counts="${CTL_TEXT%$'\n'}"
+
+  stream_object application.dump.age dump-application dump_application
+  # The snapshot has served; the advisory lock stays held through the Keycloak dump.
+  ctl "COMMIT" || ctl_fail dump-application
+  stream_object keycloak.dump.age dump-keycloak dump_keycloak
+  ctl "SELECT pg_advisory_unlock(CAST($key AS bigint))" || ctl_fail lock
+  ctl_close
+  stream_object roles.sql.age dump-roles dump_roles
+
+  local value
+  for value in "$revision" "$BACKUP_MANIFEST_BACKEND_IMAGE" "$BACKUP_MANIFEST_KEYCLOAK_IMAGE" \
+    "$BACKUP_MANIFEST_POSTGRES_IMAGE"; do
+    json_safe "$value" || fail dump-application
+  done
+  local manifest
+  manifest="{\"format\":\"eko-backup-manifest/1\",\"set\":\"$SET_NAME\",\"backup_point\":\"$backup_point\",\"alembic_revision\":\"$revision\",\"images\":{\"backend\":\"$BACKUP_MANIFEST_BACKEND_IMAGE\",\"keycloak\":\"$BACKUP_MANIFEST_KEYCLOAK_IMAGE\",\"postgres\":\"$BACKUP_MANIFEST_POSTGRES_IMAGE\"},\"row_counts\":$row_counts}"
+  stream_object manifest.json.age dump-application printf '%s\n' "$manifest"
+
+  # Written last, in plaintext: names, sizes and digests of the ciphertext only.
+  local record_name="$SET_NAME.complete" sent
+  sent="$(printf '%s' "$RECORD" | upload "$record_name")" || fail destination
+  [ "$sent" = "${#RECORD}" ] || fail destination
+  confirm "$record_name" "$sent"
+
+  printf 'eko-backup: run succeeded set=%s started=%s ended=%s row_counts=%s\n' \
+    "$SET_NAME" "$started" "$(utc_now)" "$row_counts"
+  exit 0
+}
+
+# `run`: the run in its own process group, so a stop reaches every tool of the pipeline; the
+# group's leader writes the one line and this process returns its status.
+run() {
+  setsid "$0" run-now &
+  local child=$!
+  trap 'kill -TERM -- "-$child" 2>/dev/null' TERM INT
+  local status
+  while :; do
+    wait "$child"
+    status=$?
+    kill -0 "$child" 2>/dev/null || break
+  done
+  exit "$status"
+}
+
+# --- The scheduler ------------------------------------------------------------------------
+
+schedule() {
+  [ "$(date +%Z)" = UTC ] || fail schedule
+  [ -r "$SCHEDULE_FILE" ] || fail schedule
+  local entries
+  entries="$(grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "$SCHEDULE_FILE")"
+  [ -n "$entries" ] && [ "$(wc -l <<< "$entries")" -eq 1 ] || fail schedule
+  local time zone command
+  read -r time zone command <<< "$entries"
+  [[ "$time" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]] && [ "$zone" = UTC ] && [ -n "$command" ] \
+    || fail schedule
+  local table="time=$time zone=$zone command=$command"
+  printf '%s\n' "$table" > "$LOADED_SCHEDULE" || fail schedule
+  printf 'eko-backup: schedule loaded %s\n' "$table"
+  local -a words
+  read -r -a words <<< "$command"
+
+  local stopping="" child="" last=""
+  trap 'stopping=1; if [ -n "$child" ]; then kill -TERM "$child" 2>/dev/null; fi' TERM INT
+  while [ -z "$stopping" ]; do
+    # Compared with the UTC clock; at most one run per UTC date, and no missed run made up.
+    if [ "$(date -u +%H:%M)" = "$time" ] && [ "$(date -u +%F)" != "$last" ]; then
+      last="$(date -u +%F)"
+      "${words[@]}" &
+      child=$!
+      while kill -0 "$child" 2>/dev/null; do wait "$child"; done
+      child=""
+    fi
+    [ -n "$stopping" ] || { sleep "$SCHEDULE_POLL_SECONDS" & wait $!; }
+  done
+  exit 0
+}
+
+case "${1:-}" in
+  run) run ;;
+  run-now) run_now ;;
+  schedule) schedule ;;
+  *) echo "usage: eko-backup run | schedule" >&2; exit 2 ;;
+esac

@@ -1145,3 +1145,351 @@ one connection, in that order, keeps ADR-0003-C19's budget (23 of 30) and leaves
 unbounded, as *Migrations* says. This is not a deviation from ADR-0004 or ADR-0002: it decides what
 this decision forwarded. Approved by the human at gate 1 of EKO-1-11 on 2026-10-29 (G-1 A,
 Issue #52).
+
+### 2026-10-30 — The backup run: lock and snapshot, the set, its encryption and destination, the schedule and the failure line
+
+**Status:** Accepted 2026-10-30 (gate 1 of EKO-1-14, Issue #55; accepted by the human in the driving session with every recommended option, recorded on the Issue).
+
+**What it settles.** *Backup* decides what a set holds and in which order, that it is encrypted
+with a public key before it leaves `backup`, that `backup`'s credential can add sets but cannot
+delete or overwrite them, the daily time and the on-demand run, and that a failed run is reported.
+*Migrations* has `backup` take the advisory lock "for the whole of its dumps". The addendum of
+2026-10-28 on initialising PostgreSQL leaves the backup role's read privileges to the task that
+builds the backup. None of these says how the destination is written to, in what format a set is
+encrypted and in what form the IT department holds the key, what the manifest's "time" is, how the
+schedule is kept, what the report of a failed run looks like, or how a test holds a run at a given
+point. EKO-1-14 (#55) builds `backup` against a destination double. From this date:
+
+- **One run: its sessions, the lock and the snapshot.**
+  - A run holds at most **two** database sessions at the same time: its control session on the
+    application database, open for the whole run, and the session of the one dump tool running at
+    that moment. The dumps run one after another, never in parallel jobs. The run therefore fits
+    `eko_backup`'s `CONNECTION LIMIT 5` (ADR-0003, addendum of 2026-10-28, value table). A design
+    that needs more than five sessions stops the work, and the change returns here.
+  - Each session sets a fixed application name naming its part: `eko-backup-control`,
+    `eko-backup-dump-application`, `eko-backup-dump-keycloak` and `eko-backup-dump-roles`.
+  - On the control session, in this order:
+    1. it takes the advisory lock under the identity of the addendum of 2026-10-29 (one lock,
+       single-`bigint` form), and waits for it with no time limit, as `migrate` does. The key
+       reaches `backup` as `MIGRATION_ADVISORY_LOCK_KEY`, the name `migrate` uses, by YAML
+       reference to `x-migration-advisory-lock`, never as a second literal;
+    2. only once the lock is granted, it begins a `REPEATABLE READ`, read-only transaction. The
+       first statement of that transaction establishes and exports its snapshot and returns the
+       backup point (below);
+    3. in that transaction it reads the Alembic revision and counts the rows of every application
+       table;
+    4. the application database is dumped on the exported snapshot, so the dump, the revision and
+       the counts are those of one snapshot (*Scope*: "counted inside the dump's own snapshot");
+    5. after the application dump has ended, Keycloak's database is dumped, and then the cluster's
+       roles without their passwords;
+    6. it releases the lock only after the Keycloak dump has ended. On a failure, ending the control
+       session releases it.
+  - The lock is never first taken inside the transaction whose snapshot the dump uses. In
+    `REPEATABLE READ` that snapshot is fixed at the transaction's first statement, so a lock waited
+    for there would leave a snapshot older than the grant. A session-level lock taken before that
+    transaction begins meets this rule. The addendum of 2026-10-29 ("`backup` may hold it either
+    way") is unchanged: this rule adds only the order.
+  - An **application table** is every ordinary or partitioned table of the application database
+    outside `pg_catalog` and `information_schema`. The counts list each by its schema-qualified
+    name, and a table with no rows has the count 0.
+  - **Two runs at once.** <!-- GATE-1: Q-3 (G-7) — options and recommendation in EKO-1-14's
+    impact map --> A second run, scheduled or on demand, waits for the lock like any other holder,
+    then takes its own snapshot and leaves its own set. A waiting run holds one session, so while
+    one run is active (two sessions) at most three more can wait within the limit of 5. A further
+    run is refused a session by the server (SQLSTATE 53300) and fails with the failure line. The
+    unbounded wait is the cost recorded in the addendum of 2026-10-29 (*What this does not
+    bound*); it now also covers a backup waiting behind a stuck backup.
+- **The backup point and the manifest.**
+  - The manifest's time is the **backup point** of ADR-0005 (*Erasure and backups*, *The backup
+    point*): the start of the application dump's snapshot. It is read from the PostgreSQL server's
+    clock, in the control session, as `statement_timestamp()` of the statement that establishes
+    and exports the snapshot. That value is no earlier than the lock's grant and no later than the
+    snapshot. It is never the `backup` container's clock, never the run's start, and never a clock
+    read after the snapshot was taken. A time slightly earlier than the true snapshot can only make
+    a set count as older, which is the side ADR-0005 treats as safe ("counts as started before
+    it").
+  - It is written in UTC with an explicit zone, as RFC 3339 with the suffix `Z` and microseconds
+    (for example `2026-10-30T01:00:00.123456Z`), never in local time and never without a zone.
+  - ADR-0002 *Now, today* binds `backend/app/` and `backend/migrations/`; `backup` is neither.
+    The server clock read here is the clock ADR-0005 *The commit time* refers to ("on the clock
+    behind the snapshot start"), so the task that builds erasure reads its commit time from the
+    same PostgreSQL server.
+  - The manifest is one UTF-8 JSON document with: `format` (`eko-backup-manifest/1`), `set` (the
+    set's name), `backup_point`, `alembic_revision`, `images` (`backend`, `keycloak`, `postgres`)
+    and `row_counts`.
+  - The three image references reach `backup` as non-secret environment values,
+    `BACKUP_MANIFEST_BACKEND_IMAGE`, `BACKUP_MANIFEST_KEYCLOAK_IMAGE` and
+    `BACKUP_MANIFEST_POSTGRES_IMAGE`, each a YAML reference to the `image:` value of its service in
+    `compose.yaml`, so they cannot differ from what the composition runs. `backup` never queries
+    the container runtime and is never given access to its socket. When a release names images by
+    digest (EKO-1-15, #56), the manifest names the digests with no change to `backup`.
+- **The set: its objects, its name and when it is complete.**
+  - A set is four encrypted objects and one completion record, all in the destination's incoming
+    directory (the account cannot create directories, below):
+    - `<set>.application.dump.age`: the application database, `pg_dump` custom archive format;
+    - `<set>.keycloak.dump.age`: Keycloak's database, `pg_dump` custom archive format;
+    - `<set>.roles.sql.age`: the cluster's roles, as `pg_dumpall --roles-only
+      --no-role-passwords` writes them;
+    - `<set>.manifest.json.age`: the manifest;
+    - `<set>.complete`: the completion record, written last.
+  - **Naming rule.** `<set>` is `eko-` followed by the backup point as `YYYYMMDDTHHMMSS.ffffffZ`,
+    a hyphen, and 16 lower-case hexadecimal digits read from the kernel's random source. A name
+    holds only those characters and no host, environment, project or account name. Two runs never
+    share a name, also within one microsecond or after the clock is set back. A run writes only
+    names it generated itself, each once, and no name that a reader would follow to "the latest"
+    set.
+  - **The completion record** <!-- GATE-1: Q-5 — plaintext completion record; options in
+    EKO-1-14's impact map --> is plaintext UTF-8, one line per encrypted object: its name, its size
+    in bytes, and the SHA-256 digest of its bytes as uploaded (the ciphertext). It holds nothing of
+    the set's contents: no manifest field other than the set's name, no count, no personal data.
+    It lets a check that has no private key, such as the 26-hour check of ADR-0004-C17, tell a
+    complete set from a partial one.
+  - **Completeness rule.** A set is complete when its completion record exists, lists exactly the
+    four objects above, and each listed object exists at the destination with exactly the recorded
+    size and SHA-256 digest. Anything else under a set name is an incomplete set: objects without a
+    record, a record that does not parse, an object of another size or digest. An incomplete set is
+    not a backup set: not for ADR-0004-C15, not for the 26-hour check, not for the monthly
+    verification and not for a restore. The destination is append-only, so a failed or interrupted
+    run leaves its partial objects there. This rule, not a deletion, keeps them from counting. The
+    destination's own housekeeping removes them with the others (*Retention*).
+  - A run reports success only once the destination has confirmed the set: after each upload it
+    reads the object's size at the destination and compares it with the bytes it sent, and it does
+    the same for the completion record. Only then does it exit 0.
+- **Encryption.** <!-- GATE-1: Q-2 — encryption format and key form; options in EKO-1-14's impact
+  map -->
+  - **Format.** Each object is a separate file in the **age** format, version 1
+    (`age-encryption.org/v1`), binary (not armoured), with exactly one X25519 recipient: the
+    configured public key. No passphrase recipient and no second recipient. It is encrypted as a
+    stream from the dump tool's output. The format authenticates every chunk, so a truncated or
+    altered object fails to decrypt.
+  - **Key form the IT department holds.** The private key is an age identity, one line beginning
+    `AGE-SECRET-KEY-1`. The IT department keeps its two off-server copies (*Secret handling*) as
+    that line, and may keep each copy passphrase-protected; that choice is the IT department's,
+    recorded at EKO-1-08 (#36). The public key is the matching recipient, one line beginning
+    `age1`, delivered in `BACKUP_ENCRYPTION_PUBLIC_KEY`. Because a set does not name its key, the
+    IT department records the date of every key rotation, and a set is decrypted with the key in
+    effect at its backup point ("older backups keep their key").
+  - **Executable outside the composition.** The reference `age` command-line tool, or any
+    implementation of the format, generates the key pair and decrypts a set on any host. A test
+    generates the pair outside the composition and gives the composition only the recipient.
+  - In `backup`, the tool comes from the Debian `trixie` package of the pinned base image, at an
+    exact package version written in `backup/Dockerfile`. If the package does not exist for that
+    base, the work stops and returns here before any other source of the tool is used.
+  - No file of the `backup` image, of its running container, or of any environment file of the
+    composition holds an age identity.
+- **The destination: write protocol and how write-only is enforced.** <!-- GATE-1: Q-1 —
+  destination write protocol; options in EKO-1-14's impact map -->
+  - **Protocol.** SFTP (the SSH File Transfer Protocol, as OpenSSH's `internal-sftp` serves it) on
+    the IT department's destination host, with one account per environment for `backup`,
+    authenticated by public key only.
+  - **Write-only is enforced by the destination, not by `backup`:**
+    - the account's sessions are forced to `internal-sftp`, with no shell, no command execution
+      and no forwarding, and are confined (`ChrootDirectory`) to a directory owned by root that
+      holds one incoming directory;
+    - `internal-sftp` runs with an **allow list** of requests: open, write, close, the three stat
+      requests and realpath. Every other request is refused: remove, rename and its extensions,
+      mkdir, rmdir, the setstat requests, symlink, hardlink, read, opendir, readdir and every
+      other extension;
+    - its umask is `0377`, so every file the account creates is read-only to its owner from the
+      moment it is created. The descriptor of the create that made it stays writable until it is
+      closed. Any later open of an existing name for writing or truncation is refused by the file
+      system;
+    - the account can neither read nor list what it wrote.
+  - **What counts as what.** An *add* is the creation of a name that did not exist, its writes and
+    its close. An *overwrite* is any open for writing or truncation of an existing name, a rename
+    onto it, or a change of its attributes. A *delete* is a remove, or a rename away from the name.
+    A *rewritten pointer* is an overwrite of, or a create of, a name a reader would follow to "the
+    latest" set; the naming rule has no such name.
+  - **The destination's record of attempts.** The destination keeps a record of every request each
+    account makes, refused requests included, with the account and key that made it: the
+    `internal-sftp` log at level `VERBOSE` and the SSH server's authentication record, kept by the
+    IT department off the server. EKO-1-08 (#36) shows that this record lists refused requests.
+  - **The destination's identity.** `backup` checks the destination's host key against
+    `BACKUP_DESTINATION_HOST_KEY` and refuses any other key; it never accepts a key on first use.
+  - **The credential.** An Ed25519 key in OpenSSH format, delivered in
+    `BACKUP_DESTINATION_CREDENTIAL` as the base64 encoding of the key file on one line. Inside
+    `backup` it reaches the client only through process memory, a pipe or an agent. It is never
+    written to a file of the image, of the container or of a volume.
+  - **Transport.** Each object is streamed from the encryption step to the destination. The client
+    comes from a Debian `trixie` package of the pinned base, at an exact version. If no such client
+    can stream an upload from a pipe under these rules, the work stops and returns here.
+  - Retention and housekeeping stay the destination's own (*Retention*). The same host may serve
+    ADR-0005 *Keycloak events off the server* with an account of its own under the same rules; that
+    is EKO-1-09's (#41) decision.
+- **The destination double, in the test harness only.**
+  - It lives only in the test harness, never in `compose.yaml`, so ADR-0004-C1 is unchanged. A test
+    attaches it to the composition's network while it runs.
+  - It is built from a pinned image with an OpenSSH server. The exact destination fragment above
+    (`ChrootDirectory`, `ForceCommand internal-sftp`, the allow list, the umask) is kept with the
+    harness, as the fragment handed to the IT department at EKO-1-08 (#36). The double itself does
+    not run that fragment as written, because a double configured that way cannot keep the access
+    record below: the stock `sftp-server` logs a refused request without its name, nothing logs
+    whether a name existed, and a chrooted `internal-sftp` has no `/dev/log`.
+  - Instead, the double's SSH server forces a small recorder, present in the double's image only.
+    For each client request the recorder writes one JSON line (the credential, the request type,
+    the name, the open flags and whether the name existed at that moment) and passes the bytes on
+    to `/usr/lib/openssh/sftp-server` with the destination's flags:
+    `-l VERBOSE -u 0377 -p open,write,close,stat,lstat,fstat,realpath`. The double container's own
+    `/` stands in for the chroot root, so `backup` sees the same `/incoming/...` paths.
+  - What that difference costs: the double runs the same `sftp-server` code with the same flags,
+    but not `internal-sftp` inside the SSH server and not the chroot. It therefore does not prove
+    the IT fragment itself; that is EKO-1-08's (#36).
+  - It has a second, administrative credential that may delete and overwrite. That credential is
+    the contrast that shows a refusal is bound to `backup`'s credential.
+  - Its access record is the recorder's lines: every request it receives, refused or not. It can
+    also run with refusal switched off (no allow list, an ordinary umask), so a test can show that
+    the record sees a non-add.
+  - What it refuses proves nothing about the real destination (EKO-1-08, #36).
+  - Amended at gate 1 of EKO-1-14, 2026-10-30 (developer stop 2 A).
+- **Nothing of a set at rest on the server.** `backup` writes no file holding any part of a set
+  (a plaintext dump, an encrypted object, the manifest or the completion record) in its image, its
+  container (a tmpfs included) or a volume. Each dump flows from the dump tool through the
+  encryption to the upload as one pipeline. The manifest and the completion record are built in
+  memory. A failure of any stage of a pipeline fails the run; no stage's exit status is lost. If a
+  design needs a staging file, the work stops and returns to the Architect as an ADR-0005 question
+  (*Places off the paths*). The diagnostic output of the tools (`pg_dump`, `pg_dumpall`, `psql`,
+  `age`, the SFTP client) never reaches the log. The run maps it to the fields of the failure line.
+- **The schedule and the on-demand run.**
+  - The scheduler is `backup`'s own main process, not `cron`. Debian's `cron` would run the job as
+    root and without the container's environment, so the secrets would have to be written to a
+    file for it.
+  - It reads its table from one schedule file in the image, kept in the repository at
+    `backup/schedule`. The file holds exactly one entry: the time `01:00`, the zone written `UTC`,
+    and the run command. The scheduler refuses to start, with the failure line, when the file holds
+    no entry, more than one, or any zone other than `UTC`. Once started, it writes the table it
+    loaded, as parsed, to one non-secret file in the container, `/run/eko-backup/loaded-schedule`,
+    and into its start-up log line. A test reads that file through `docker compose exec`.
+  - It compares the entry with the UTC clock, whatever the container's zone. The container's zone
+    is UTC, and the scheduler refuses to start when its effective zone is anything else, so a zone
+    set to Europe/Warsaw fails visibly. It starts at most one run per UTC date, in the minute 01:00
+    UTC, and makes up no missed run (ADR-0004-C17 catches a missing set).
+  - The schedule entry and the on-demand command run the same entry point, `eko-backup run`.
+  - **The on-demand command** is a one-off container of the `backup` service, with that service's
+    environment, removed when it ends and starting no other service:
+    `docker compose run --rm --no-deps backup eko-backup run`. Its exact text is kept in
+    `backup/README.md`. It exits 0 only once the set at the destination is complete under the
+    completeness rule. *Deployment* step 1 is this command.
+  - `backup` is a dependency of no other service, so starting another service never starts it.
+    ADR-0005's *No backup before the re-apply* therefore holds at a restore: `backup` runs only
+    once the operator starts it, at restore step 14.
+- **A failed run is one line.**
+  - Every failed run exits non-zero and writes exactly one line of this form to standard error,
+    which is the container log for a scheduled run and the operator's terminal for an on-demand
+    run: `eko-backup: run failed reason=<reason> set=<set name, or -> at=<RFC 3339 UTC time>`,
+    optionally followed by ` sqlstate=<five-character SQLSTATE>`.
+  - `<reason>` is one of a closed list: `schedule`, `database` (connection or authentication,
+    refusal for the connection limit included), `lock`, `dump-application`, `dump-keycloak`,
+    `dump-roles`, `encryption`, `destination` (unreachable, refused, wrong host key, an upload
+    broken off, or a confirmation that failed) and `interrupted`.
+  - The line holds no other field and no free text: no tool's message, no host, address, port,
+    account, path or connection string, no credential and no row value (ADR-0005 *What may appear
+    in logs*).
+  - A required variable that is unset or empty stops `backup` before any connection, with the
+    message every service uses for ADR-0004-C10 (`configuration error: missing or empty
+    environment variable: <NAME>`). That is a refusal to start, not a failed run.
+  - A successful run writes one line holding its start and end times, the set's name, its outcome
+    and the row counts, and no line of the failure form.
+  - **The one place it is documented** is `backup/README.md`. It holds the line's exact pattern,
+    the reason list, the on-demand command and the operator step for existing volumes (below). The
+    test reads the pattern from there, and the IT department's monitoring is connected to that
+    document at EKO-1-08 (#36). A change to the line's form is a change to this addendum.
+- **An interrupted run.** <!-- GATE-1: Q-4 (G-8) — options and recommendation in EKO-1-14's
+  impact map --> On `SIGTERM` (for example `docker compose stop`), the run stops its tools, writes
+  the failure line with `reason=interrupted` and exits non-zero within the composition's stop grace
+  period. On `SIGKILL` it writes nothing. Either way, no file holds any part of the set, no
+  completion record is written, so the set is incomplete, and the server releases the lock when the
+  control session ends.
+- **Where a test holds a run.** No hold point is a lock that `migrate` can wait for, except where
+  the advisory lock is itself the subject:
+  - **H0, before the snapshot.** A test session holds the advisory lock, same key and same form,
+    and no other lock. `backup` waits at step 1. It is used where the advisory lock is the subject
+    (the backup half of ADR-0004-C26, `migrate` holding the lock) or the reference time (the
+    backup point is no earlier than the release).
+  - **H1, during the Keycloak dump, after the application dump has ended.** A test session holds
+    an `ACCESS EXCLUSIVE` lock on one table of Keycloak's database that Keycloak does not use after
+    its start. `backup`'s Keycloak dump waits on that table with its session open. No `migrate` run
+    can contend with that lock, because the application role cannot connect to Keycloak's database
+    (ADR-0003-C11), so an exclusion seen at H1 can come only from the advisory lock. If no
+    Keycloak table qualifies, the work returns here.
+  - Never a hold point: a lock on any object of the application database; a hook, variable or
+    pause built into the shipped `backup` image or its scripts. A changed entry point is a planted
+    contrast, and a claim is never proven on it (addendum of 2026-10-29, *Test-only revisions*).
+- **`eko_backup`'s read privileges.**
+  - The init content grants `eko_backup` membership in PostgreSQL's predefined role
+    `pg_read_all_data`, in the same session as the rest. It then reads every table, view and
+    sequence in every schema of the two databases it may connect to, tables created later
+    included, with no further grant. It gets no write privilege. Its attributes are unchanged
+    (ADR-0004-C28), `CONNECT` is unchanged, and `TEMPORARY` stays revoked from `PUBLIC`.
+  - `pg_read_all_data` does not bypass row-level security, and `eko_backup` keeps `NOBYPASSRLS`.
+    `pg_dump` then fails on a table with row-level security, rather than dumping it partially. A
+    task that enables row-level security on a table changes this addendum first.
+  - **Existing volumes** (addendum of 2026-10-28, *Existing volumes*). The release that brings this
+    grant announces one operator step: as the PostgreSQL superuser, run
+    `GRANT pg_read_all_data TO eko_backup;` on the running `postgres`. The step is written in
+    `backup/README.md`. Without it, a run fails with `reason=dump-application` and SQLSTATE 42501.
+    Granting it again changes nothing.
+  - At restore step 4 the init content creates the membership on the empty volume.
+- **Secret inventory: the variable names.** The two rows read, in addition to what they say:
+  - *Backup destination write credential* — variable `BACKUP_DESTINATION_CREDENTIAL`.
+  - *Backup encryption public key* — variable `BACKUP_ENCRYPTION_PUBLIC_KEY`.
+
+  No other cell of either row changes. Both are required in `compose.yaml` with no default
+  (ADR-0004-C9). Unset, empty or whitespace-only, either one stops `backup` before it connects to
+  the server or the destination (ADR-0004-C10). Two further values differ between environments
+  and are not secret (*Cloud-agnostic constraints*, item 2): `BACKUP_DESTINATION`
+  (`sftp://<account>@<host>:<port>/<incoming directory>`) and `BACKUP_DESTINATION_HOST_KEY` (the
+  destination host's public key line). They are required and refused in the same way, and they
+  are not in the inventory. `backup` receives no other service's environment file, `backend`'s in
+  particular, so no Google token encryption key can reach a set (ADR-0006-C3).
+
+Every other rule and control of this decision is unchanged. ADR-0004-C1 is unchanged: no service
+is added. ADR-0004-C15's seven days, ADR-0004-C16 at the real destination and ADR-0004-C17 remain
+EKO-1-08's (#36).
+
+**The IT department's acceptance.** The protocol, its configuration, the encryption format and
+the key form are a proposal that the IT department has not yet accepted (Issue #55, C-1 A).
+EKO-1-08 (#36) records its acceptance. If the IT department refuses, this addendum changes and the
+transport and encryption step of `backup` is reworked. That rework risk is accepted.
+
+**Consequence for EKO-1-14's Story.**
+
+- Definition of done item 6 and criterion K-03, static check: "a private key" reads "a backup
+  encryption private key (an age identity)". `BACKUP_DESTINATION_CREDENTIAL` in `backup`'s
+  environment file is itself an SSH private key, and the check must not count it.
+- Criterion K-02 (a) holds `backup` at H1; K-02 (b) and K-03 point 6 at H0.
+- Criterion K-05 reads the failure pattern from `backup/README.md`.
+- Criterion K-06's ADR-0004-C10 checks also cover `BACKUP_DESTINATION` and
+  `BACKUP_DESTINATION_HOST_KEY`.
+- Criterion K-03's existing-volume contrast uses the operator step above.
+
+**Options considered for this addendum.**
+
+| Question | Option | Cost | Closes off |
+|---|---|---|---|
+| Destination protocol (Q-1) | **A. SFTP on OpenSSH, request allow list and umask `0377`** (proposed) | the IT department configures one restricted account and keeps its `VERBOSE` log; the write credential is an SSH private key in `backup`'s environment file; the client must stream from a pipe without a key file | nothing |
+| | B. An S3-compatible object store on the IT department's host, with put-only access and object lock | the IT department runs an object-store product; refusing an overwrite, not only keeping the old version, depends on that product; the double must implement request signing | nothing |
+| | C. HTTPS `PUT` to a receiver the IT department runs | stock WebDAV servers overwrite on `PUT`, so create-only needs software the IT department maintains | nothing |
+| Encryption (Q-2) | **A. age v1, one X25519 recipient, one-line keys** (proposed) | a tool the IT department may not know | nothing |
+| | B. OpenPGP with GnuPG | a multi-line public key encoded for one variable; a keyring written inside the container; more modes to get wrong | nothing |
+| Completion record (Q-5) | **A. Plaintext, names, sizes and digests only** (proposed) | the destination sees set names and sizes, which the object names already show | nothing |
+| | B. Encrypted, or none | a check without the private key cannot tell a complete set from a partial one, so ADR-0004-C17 counts a partial upload as fresh | a freshness check off the server that needs no private key |
+| Scheduler | **A. `backup`'s own main process, one-entry schedule file** (chosen) | a small loop to maintain | nothing |
+| | B. `cron` in the image | jobs run as root without the container's environment; the secrets would be written to a file | secrets only as environment variables |
+| | C. A third-party scheduler binary | a download outside the base's packages, pinned by checksum | nothing |
+| Read privileges | **A. `pg_read_all_data`** (chosen) | it reads every schema of both databases, as a backup must | nothing |
+| | B. `GRANT SELECT` plus `ALTER DEFAULT PRIVILEGES` per schema and per creating role | misses a table created in a new schema or by another role, and needs one set of statements per database | tables created later without a new grant |
+| Hold points | **A. H0 (the advisory lock) and H1 (a lock in Keycloak's database only)** (chosen) | H1 needs a Keycloak table unused after start | nothing |
+| | B. A test variant of the `backup` image that pauses the dump tool | the claim is proven on an image that differs from the one shipped | proving the claim on the shipped image |
+| | C. A pause hook in the shipped service | test code in the release | a release free of test hooks |
+
+**Why.** Each rule here decides something *Backup*, *Migrations* and the addendum of 2026-10-28
+leave open. The task cannot be built without these decisions, and the choices that bind the IT
+department are reviewed by a human before code depends on them (Issue #55, G-1 A). Two sessions
+keep the run within the limit of 5 that ADR-0003 records. One control session that holds the lock,
+then exports the snapshot and counts in it, gives the order *Migrations* asks for and the counts
+*Scope* asks for. It also gives a backup point that ADR-0005 can use. Streaming through the
+encryption keeps every part of a set off the server's disks, as ADR-0005 *Places off the paths*
+requires. A completeness rule replaces the deletion that an append-only destination forbids.
+Enforcing write-only at the destination keeps ADR-0004-C16 true against a compromised server. This
+is not a deviation from ADR-0004, ADR-0003 or ADR-0005: it decides what they leave open. To be
+approved by the human at gate 1 of EKO-1-14 (G-1 A, Issue #55).

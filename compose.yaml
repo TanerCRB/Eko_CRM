@@ -68,7 +68,7 @@ services:
   # local (`localhost/` never resolves to a public registry) and never pulled; a release references
   # the registry digest instead (EKO-1-15).
   backend:
-    image: localhost/eko-crm/backend:${BACKEND_IMAGE_TAG:?BACKEND_IMAGE_TAG is required}
+    image: &backend-image localhost/eko-crm/backend:${BACKEND_IMAGE_TAG:?BACKEND_IMAGE_TAG is required}
     build:
       context: ./backend
     pull_policy: build
@@ -124,7 +124,7 @@ services:
     restart: unless-stopped
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.8.1
+    image: &keycloak-image quay.io/keycloak/keycloak:26.8.1
     depends_on:
       postgres:
         condition: service_healthy
@@ -167,7 +167,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:18.6-trixie
+    image: &postgres-image postgres:18.6-trixie
     # max_connections is part of the release (ADR-0004-C28): the three role limits below sum to
     # 30 + 25 + 5 = 60 < 100 - 3 (ADR-0003-C19, ADR-0004-C19).
     command: ["postgres", "-c", "max_connections=100", "-c", "superuser_reserved_connections=3"]
@@ -204,6 +204,8 @@ services:
       retries: 40
     restart: unless-stopped
 
+  # One run a day at 01:00 UTC from its own scheduler, and on demand (backup/README.md). A
+  # dependency of no other service, so starting another service never starts a backup.
   backup:
     build:
       context: ./backup
@@ -211,6 +213,15 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      BACKUP_DESTINATION_CREDENTIAL: ${BACKUP_DESTINATION_CREDENTIAL:?BACKUP_DESTINATION_CREDENTIAL is required}
+      BACKUP_ENCRYPTION_PUBLIC_KEY: ${BACKUP_ENCRYPTION_PUBLIC_KEY:?BACKUP_ENCRYPTION_PUBLIC_KEY is required}
+      BACKUP_DESTINATION: ${BACKUP_DESTINATION:?BACKUP_DESTINATION is required}
+      BACKUP_DESTINATION_HOST_KEY: ${BACKUP_DESTINATION_HOST_KEY:?BACKUP_DESTINATION_HOST_KEY is required}
+      MIGRATION_ADVISORY_LOCK_KEY: *migration-advisory-lock
+      # The manifest names the images the composition runs, by reference, never by a copy.
+      BACKUP_MANIFEST_BACKEND_IMAGE: *backend-image
+      BACKUP_MANIFEST_KEYCLOAK_IMAGE: *keycloak-image
+      BACKUP_MANIFEST_POSTGRES_IMAGE: *postgres-image
       BACKUP_DB_PASSWORD: ${BACKUP_DB_PASSWORD:?BACKUP_DB_PASSWORD is required}
     restart: unless-stopped
 
@@ -262,6 +273,9 @@ configs:
       REVOKE CONNECT, TEMPORARY ON DATABASE keycloak FROM PUBLIC;
       GRANT CONNECT ON DATABASE eko TO eko_backup;
       GRANT CONNECT ON DATABASE keycloak TO eko_backup;
+      -- Reads every table of both databases, tables created later included; writes none
+      -- (ADR-0004 addendum 2026-10-30). Existing volumes: the step in backup/README.md.
+      GRANT pg_read_all_data TO eko_backup;
       SQL
       # Written last: its absence marks a volume whose first initialisation did not complete.
       touch "$$PGDATA/eko-init-complete"

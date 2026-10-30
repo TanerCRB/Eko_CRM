@@ -22,6 +22,7 @@ import pytest
 from tests.support.repo import REPO_ROOT, write_synthetic_env
 
 if TYPE_CHECKING:
+    from tests.runtime.backup_lab import BackupLab
     from tests.runtime.lab import Lab
 
 UP_TIMEOUT_SECONDS = 900
@@ -235,3 +236,11 @@ def lab(tmp_path_factory: pytest.TempPathFactory) -> Iterator["Lab"]:
             for tag in started.images.values():
                 docker("rmi", "-f", tag, check=False)
         composition.down()
+
+
+@pytest.fixture(scope="session")
+def backup_lab(tmp_path_factory: pytest.TempPathFactory) -> Iterator["BackupLab"]:
+    """EKO-1-14: postgres, keycloak, migrate on demand and the destination double."""
+    from tests.runtime.backup_lab import backup_lab_session
+
+    yield from backup_lab_session(tmp_path_factory)
