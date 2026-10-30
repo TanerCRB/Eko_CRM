@@ -191,13 +191,29 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   R-07, R-08 and R-09 (#67); which release is previous and how CI obtains its OpenAPI document
   (EKO-1-15, #56); the Warsaw-time helpers and R-12's Sunday-late case (the first task with dates).
 
-- [ ] **EKO-1-11** — Make migrations safe against concurrent runs, older and newer schemas and
+- [x] **EKO-1-11** — Make migrations safe against concurrent runs, older and newer schemas and
   stalls (#52).
   *Done when:* ADR-0004-C12, C13, C14 and C26's migrate half pass; the lock and statement timeout
   values are set; the revision descent check of `backend`, `migrate` and `worker` passes;
   ADR-0006-C13's runtime half (the worker refuses an older revision) passes.
   **Out of scope (explicit):** expand → contract of a real product migration (first product task
   that alters a table). After EKO-1-06; before EKO-3-01.
+  **Done 2026-10-30:** the values and the descent mechanism were recorded in the ADR-0004 addendum
+  of 2026-10-29, accepted at gate 1 (lock key in `compose.yaml`'s `x-migration-advisory-lock`,
+  5 s / 30 s, the real expand revision `0002` creating `schema_revision_lineage`). Merged in
+  [PR #70](https://github.com/TanerCRB/Eko_CRM/pull/70), verified at `2a88d4b` after one fix
+  round (`migrate` refuses every migration-running command except `alembic upgrade head`), proven
+  by `backend/tests/runtime/test_adr0004_c12_concurrent_migrate.py`,
+  `test_adr0004_c26_advisory_lock_shared.py`, `test_adr0004_c13_backend_revision_check.py`,
+  `test_adr0004_c13_migrate_revision_check.py`, `test_adr0004_c13_migrate_command_refusal.py`,
+  `test_adr0006_c13_worker_revision_check.py`, `test_adr0004_c14_failing_revision.py`,
+  `test_adr0004_c26_lock_timeout.py`, `test_adr0004_c26_statement_timeout.py`,
+  `test_adr0003_c19_migrate_one_connection.py`, `test_adr0002_c2_shipped_revision_tree.py` and
+  `backend/tests/static/test_adr0004_c26_lock_key_recorded_once.py` (rows in
+  `architecture/capabilities.md`), 48 mutations killed. Forwarded: the backup half of C26
+  (EKO-1-14, #55); a published previous release (EKO-1-15, #56); C26's read through a product
+  endpoint and the first expand → contract (EKO-3-01); the reviewer's low finding R-02 (a
+  branched tree is reported as "unknown destination revision").
 
 - [ ] **EKO-1-12** — Configure Keycloak in the composition as ADR-0003..ADR-0005 require (#53).
   *Done when:* the realm export meets ADR-0003-C1, C14, C15, C17 and ADR-0005-C7; bootstrap opens
@@ -230,6 +246,15 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   pipeline as proven.
   **Out of scope (explicit):** the deployment itself and production setup (EKO-1-08). After
   EKO-1-06; before EKO-1-08's first deployment.
+- [x] **EKO-1-16** — Amend ADR-0006 to close the EKO-1-05 exceptions (#46).
+  *Done when:* a dated ADR-0006 addendum resolves EKO-1-05/R-11, R-15, R-16, R-17, R-18, B-06 and
+  Q-01; `tests/doc-checks/EKO-1-16.sh` proves the stated contrasts; the corresponding exception
+  entries leave the exception register through this task's gate-3 documentation PR; and the
+  completed EKO-1-05 plan entry remains unchanged.
+  **Out of scope (explicit):** EKO-5 implementation and runtime Google proof; real customer-data
+  processing until the DPIA's approval conditions are evidenced; and new Google data, scopes,
+  calendars or product behavior.
+  **Done 2026-10-30:** merged in [PR #73](https://github.com/TanerCRB/Eko_CRM/pull/73), verified by `tests/doc-checks/EKO-1-16.sh` (nine passing contrasts). The accepted DPIA remains synthetic-data-only; Google runtime behavior is explicitly unproven pending EKO-5 and pre-go-live evidence.
 
 ## EKO-2 — Access
 

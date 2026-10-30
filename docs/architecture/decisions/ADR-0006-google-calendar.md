@@ -750,3 +750,89 @@ Identifier and acceptance criterion only.
 
 <!-- A change to an accepted decision is a dated addendum with a reason, never an edit of the text
 above. -->
+
+### 2026-10-29 — Close the EKO-1-05 synchronization exceptions
+
+**Addendum status:** Draft — scope approved at Gate 1; pending QA document-check evidence and final human acceptance.
+
+**What it changes.** This addendum resolves EKO-1-05/R-11, R-15, R-16, R-17, R-18, B-06 and
+Q-01. It changes no OAuth scope, Google field, calendar, data category or user-visible product
+rule. It restates the ordering and record-keeping rules that let the existing change detection,
+Ownership, erasure, sweep and removal rules coexist.
+
+- **R-11 -- a Google time change remains the last synchronised time change.** For *Conflict rule*
+  and *Read before write*, the event record holds the last synchronised `start` and `end`: the
+  values last confirmed by the application after an application write, or last applied from a
+  Google time change. Polling, the first read at link or relink, and the read before a write update
+  those values when they apply a Google time change. A later Google edit that changes another field
+  only does not make the already-applied Google time change look new again. The comparison in
+  *Read before write* is with these last synchronised values, not only with values last written by
+  the application.
+
+- **R-15 and R-16 -- erasure is not indefinitely blocked by loss of access or Ownership.** An
+  erasure deletion and a sweep by marker remain ordered after a request already sent for the same
+  visit, but a suspended sweep does not hold a later job of that visit. While a calendar link works,
+  these erasure removals run even when its ordinary synchronisation jobs are suspended by
+  *Ownership*. While its link is unavailable, or a deletion or sweep cannot be carried out, the
+  removal is recorded as not carried out and that job ends; it is taken up under *Removals not
+  carried out* when that same calendar is linked again or its link works. It is never sent to a
+  different calendar. This is limited to erasure removals of application-generated events and does
+  not make an ordinary cross-owner event writable through another owner's link. **R-01:** an event
+  discovered only from its marker and identifier prefix is never deleted automatically. It is
+  recorded as unresolved pending validated provenance as an application-generated event; marker and
+  prefix alone are not that validation. This provenance must be validated before any real-data use.
+
+- **R-17 -- a pending create remains assigned to the calendar in which it began.** When an owner
+  confirms a different calendar, every pending create record remains tied to the earlier calendar,
+  with its chosen event identifier and any outstanding removal. It is neither discarded nor treated
+  as an event in the new calendar. A planned visit may receive a new create in the confirmed new
+  calendar only under a new identifier; the earlier pending record remains a tracked potential
+  event and is read and removed only if the earlier calendar is linked again. It never becomes an
+  untracked twin or a candidate for synchronisation in the new calendar.
+
+- **R-18 -- a failed sweep has a removal record.** A sweep removal recorded as not carried out has
+  a record distinct from an event record. It names only the visit identifier, environment marker,
+  calendar owner, chosen identifier prefix, any identifier returned by the list, the date and time
+  needed for the existing notice, and the removal state. It carries no customer field value. The
+  record supplies the existing owner-and-manager notice and the same-calendar take-up rule of
+  *Removals not carried out*; it is cleared only after Google confirms deletion or answers that the
+  event is deleted or absent.
+
+- **B-06 -- a moved event cannot freeze another rep's usable link.** Before an event recorded for
+  another owner can impose or continue an *Ownership* hold on the calendar where it is found, the
+  application reads the event in its recorded owner's calendar. If that read confirms it absent or
+  deleted, it is handled as the existing Google deletion under VIS-11 and does not hold the other
+  owner's link. If it remains live in its recorded owner's calendar, the existing Ownership hold
+  still applies. **R-02:** if the recorded-owner calendar read fails, the candidate enters
+  non-blocking pending ownership verification: the candidate event is not altered, verification is
+  retried, and an operational notice with no customer value is issued. No link-wide Ownership hold,
+  including the hold propagated to other links, is imposed until that read succeeds. In either case
+  the cross-owner event is never synchronised or changed through the
+  calendar where it was found, except for the erasure rule above.
+
+- **Q-01 -- the sweep's identifier prefix is explicit.** The `id` field in *Event content* begins
+  with an application-generated prefix composed solely from an encoding of the environment
+  identifier and the visit's opaque identifier, followed by a delimiter and the create-specific
+  random value. The prefix is preserved across retries of that create, differs for another visit or
+  environment, and is restricted to the characters and length Google accepts. The sweep by marker
+  deletes an event only when its marker names that visit and environment and its identifier begins
+  with that prefix; a Google-generated identifier does not satisfy that condition.
+
+**Required document check.** Before this addendum can be accepted, QA adds
+`tests/doc-checks/EKO-1-16.sh`. Its contrasts must fail if: an Ownership hold blocks or hides an
+erasure removal; a lost-access sweep blocks a later job; an already-applied Google time change is
+reverted after a later non-time Google edit; a confirmed calendar switch discards or misassigns a
+pending create; a failed sweep lacks a take-up record or notice; a moved event holds another rep's
+  link after its recorded-calendar deletion is confirmed; or the `id` rule omits the
+  application-generated prefix or allows the sweep beyond that prefix and marker. It must also fail
+  if an event found only by marker and prefix is automatically deleted rather than recorded unresolved
+  pending validated provenance before real-data use, or if a failed recorded-owner read alters the
+  candidate, skips retry or its no-customer-value operational notice, or imposes a link-wide
+  Ownership hold before the read succeeds. The check is
+
+Every other rule and control of this decision is unchanged.
+
+**Why.** The seven recorded exceptions show that the accepted rules leave an erased customer's data
+without a bounded recovery path, can reverse a Google time move already applied to the visit, or
+can suspend an unrelated rep's work. The resolutions retain the existing primary-calendar-only
+scope, marker, field list, notifications, access-loss handling and synthetic-data restriction. They
