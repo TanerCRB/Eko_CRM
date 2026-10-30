@@ -25,6 +25,7 @@ that task edits its own rows.
 | `backend/app/core/settings.py` | secrets | ADR-0001, ADR-0004 | the one place configuration and secrets are read |
 | `backend/app/core/**` | secrets | ADR-0001, ADR-0004 | configuration code beside settings.py |
 | `backend/app/integrations/**` | external, personal-data | ADR-0001, ADR-0005, ADR-0006 | adapters to external systems receive personal data |
+| `backend/app/serve.py` | schema, secrets | ADR-0001, ADR-0004 | the backend entry point: reads the settings before uvicorn and refuses a schema revision other than its code's head or a recorded descendant |
 | `backend/app/worker.py` | schema, external, personal-data, secrets | ADR-0001, ADR-0004, ADR-0005, ADR-0006 | the worker's entry point: refuses an older schema and never migrates, drives the Google sync jobs carrying customer data, reads the Google secrets through settings |
 | `backend/pyproject.toml` | dependencies | ADR-0001 | backend package manifest |
 | `backend/*.lock` | dependencies | ADR-0001 | backend lock file (`uv.lock`) |
