@@ -777,7 +777,10 @@ Ownership, erasure, sweep and removal rules coexist.
   removal is recorded as not carried out and that job ends; it is taken up under *Removals not
   carried out* when that same calendar is linked again or its link works. It is never sent to a
   different calendar. This is limited to erasure removals of application-generated events and does
-  not make an ordinary cross-owner event writable through another owner's link.
+  not make an ordinary cross-owner event writable through another owner's link. **R-01:** an event
+  discovered only from its marker and identifier prefix is never deleted automatically. It is
+  recorded as unresolved pending validated provenance as an application-generated event; marker and
+  prefix alone are not that validation. This provenance must be validated before any real-data use.
 
 - **R-17 -- a pending create remains assigned to the calendar in which it began.** When an owner
   confirms a different calendar, every pending create record remains tied to the earlier calendar,
@@ -800,7 +803,11 @@ Ownership, erasure, sweep and removal rules coexist.
   application reads the event in its recorded owner's calendar. If that read confirms it absent or
   deleted, it is handled as the existing Google deletion under VIS-11 and does not hold the other
   owner's link. If it remains live in its recorded owner's calendar, the existing Ownership hold
-  still applies. In either case the cross-owner event is never synchronised or changed through the
+  still applies. **R-02:** if the recorded-owner calendar read fails, the candidate enters
+  non-blocking pending ownership verification: the candidate event is not altered, verification is
+  retried, and an operational notice with no customer value is issued. No link-wide Ownership hold,
+  including the hold propagated to other links, is imposed until that read succeeds. In either case
+  the cross-owner event is never synchronised or changed through the
   calendar where it was found, except for the erasure rule above.
 
 - **Q-01 -- the sweep's identifier prefix is explicit.** The `id` field in *Event content* begins
@@ -816,8 +823,12 @@ Ownership, erasure, sweep and removal rules coexist.
 erasure removal; a lost-access sweep blocks a later job; an already-applied Google time change is
 reverted after a later non-time Google edit; a confirmed calendar switch discards or misassigns a
 pending create; a failed sweep lacks a take-up record or notice; a moved event holds another rep's
-link after its recorded-calendar deletion is confirmed; or the `id` rule omits the
-application-generated prefix or allows the sweep beyond that prefix and marker. The check is
+  link after its recorded-calendar deletion is confirmed; or the `id` rule omits the
+  application-generated prefix or allows the sweep beyond that prefix and marker. It must also fail
+  if an event found only by marker and prefix is automatically deleted rather than recorded unresolved
+  pending validated provenance before real-data use, or if a failed recorded-owner read alters the
+  candidate, skips retry or its no-customer-value operational notice, or imposes a link-wide
+  Ownership hold before the read succeeds. The check is
 
 Every other rule and control of this decision is unchanged.
 
