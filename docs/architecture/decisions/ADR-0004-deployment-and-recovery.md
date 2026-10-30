@@ -982,8 +982,6 @@ changes.
 ### 2026-10-29 — `migrate`'s advisory lock and timeouts, and how the revision check establishes descent
 
 **Status:** Accepted 2026-10-29 (gate 1 of EKO-1-11, Issue #52; accepted by the human in the driving session, recorded on the Issue).
-<!-- Only a human changes this to "Accepted <YYYY-MM-DD>". GATE-1 markers below name the choices
-the human makes with this addendum (impact map of EKO-1-11, Q-1..Q-3). -->
 
 **What it settles.** *Migrations* has `migrate` hold an advisory lock for the whole run, run its
 statements with a lock timeout and a statement timeout once it holds that lock, and has `backend`,
@@ -1044,8 +1042,8 @@ on the split of EKO-1-06 gives both to EKO-1-11 (#52). From this date:
   - **No revision changes them.** No revision sets `lock_timeout`, `statement_timeout` or
     `transaction_timeout`. A revision that needs more time is split into several revisions, or
     this addendum is changed first.
-- **The revision lineage record.** <!-- GATE-1 Q-1: option A below; B and C are in the impact map. -->
-  A revision the running code does not ship cannot be placed from that code's own tree. It is
+- **The revision lineage record.** Chosen at gate 1 of EKO-1-11 (Q-1 A; options B and C are
+  in the impact map of EKO-1-11). A revision the running code does not ship cannot be placed from that code's own tree. It is
   placed from a record in the application database that the newer `migrate` wrote:
   - The record is one table, `schema_revision_lineage`, with one column `revision` (text, the
     primary key, compared byte-wise). It holds exactly the revisions from the base to the
@@ -1113,10 +1111,14 @@ on the split of EKO-1-06 gives both to EKO-1-11 (#52). From this date:
     fixed, and no environment variable sets `version_locations`.
   - A fixture that changes `env.py` or an entry point, such as the lock removed, is a planted
     contrast. A claim is never proven on it.
-- **What this does not bound (a stated cost).** <!-- GATE-1 Q-3: option A. -->
-  - The wait for the advisory lock has no limit. A run waiting behind a stuck backup does not
-    finish, and the deployment does not go ahead. The previous release keeps serving, because no
-    table lock is held while waiting.
+- **What this does not bound (a stated cost).** Chosen at gate 1 of EKO-1-11 (Q-3 A).
+  - The wait for the advisory lock has no limit. Any session connected to the application database
+    that holds the same advisory lock stalls `migrate` for as long as it holds it: a stuck backup,
+    but equally an operator's `psql` session, or a hung or compromised process running as
+    `eko_app` or `eko_backup`. Taking an advisory lock needs no privilege, and the key is a
+    non-secret literal in `compose.yaml`. A run waiting behind any of them does not finish, and
+    the deployment does not go ahead. The previous release keeps serving, because no table lock
+    is held while waiting. This is accepted as a cost; this addendum adds no mitigation for it.
   - The lock timeout bounds a rep's stall only while `migrate` *waits* for a table lock. Once
     `migrate` holds an exclusive lock, the run's single transaction keeps it until commit. Reps'
     requests on that table then wait for the rest of the run, which is bounded per statement by
@@ -1141,4 +1143,5 @@ it by a revision keeps ADR-0002 unchanged. The timeout values bound the stall re
 "short, announced interruption" this decision accepts. Taking the lock and the timeouts on the run's
 one connection, in that order, keeps ADR-0003-C19's budget (23 of 30) and leaves the advisory wait
 unbounded, as *Migrations* says. This is not a deviation from ADR-0004 or ADR-0002: it decides what
-this decision forwarded. Pending the human's approval at gate 1 of EKO-1-11 (G-1 A, Issue #52).
+this decision forwarded. Approved by the human at gate 1 of EKO-1-11 on 2026-10-29 (G-1 A,
+Issue #52).

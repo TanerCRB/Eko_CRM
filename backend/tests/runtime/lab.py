@@ -360,8 +360,10 @@ class Lab:
             extra_files=[override],
         )
 
-    def start_migrate(self, image: str | None = None) -> MigrateRun:
-        started = self._with_image("migrate", image).compose("run", "-d", "--no-deps", "migrate")
+    def start_migrate(self, image: str | None = None, command: tuple[str, ...] = ()) -> MigrateRun:
+        """A migrate run; `command` replaces the service's command, as an operator's override."""
+        composition = self._with_image("migrate", image)
+        started = composition.compose("run", "-d", "--no-deps", "migrate", *command)
         container = started.stdout.strip().splitlines()[-1]
         address = docker(
             "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", container
@@ -371,8 +373,10 @@ class Lab:
         run.start_waiting()
         return run
 
-    def run_migrate(self, image: str | None = None, timeout: float = 180) -> tuple[int, str]:
-        run = self.start_migrate(image)
+    def run_migrate(
+        self, image: str | None = None, timeout: float = 180, command: tuple[str, ...] = ()
+    ) -> tuple[int, str]:
+        run = self.start_migrate(image, command)
         try:
             code = run.wait(timeout)
             return code, run.logs()
