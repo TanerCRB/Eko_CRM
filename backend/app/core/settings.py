@@ -32,6 +32,23 @@ class WebSettings(Settings):
     web_concurrency: int = Field(ge=1)
 
 
+class MigrateSettings(Settings):
+    """`migrate` only (ADR-0004 addendum 2026-10-29); backend and worker never read these."""
+
+    # Single-bigint advisory-lock key, written once in compose.yaml (`x-migration-advisory-lock`).
+    migration_advisory_lock_key: int = Field(ge=-(2**63), le=2**63 - 1)
+    # Required and positive: PostgreSQL reads 0 as "no timeout".
+    migration_lock_timeout_seconds: int = Field(gt=0)
+    migration_statement_timeout_seconds: int = Field(gt=0)
+
+    @field_validator("migration_advisory_lock_key")
+    @classmethod
+    def _non_zero(cls, value: int) -> int:
+        if value == 0:
+            raise ValueError("zero")
+        return value
+
+
 def load_settings[T: Settings](cls: type[T]) -> T:
     """Read the settings, or stop the process naming the variables at fault and nothing else."""
     try:

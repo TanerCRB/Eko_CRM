@@ -44,8 +44,9 @@ def test_k02_c1_contrast_a_17x_server_fails() -> None:
 def test_k02_c2_contrast_a_second_head_fails(tmp_path: Path) -> None:
     versions = tmp_path / "versions"
     shutil.copytree(REPO_ROOT / "backend" / "migrations" / "versions", versions)
-    (versions / "0002_second_root.py").write_text(
-        'revision = "0002"\ndown_revision = None\nbranch_labels = None\ndepends_on = None\n\n\n'
+    # 9999: an identifier no real revision uses, so the plant adds a root instead of replacing one.
+    (versions / "9999_second_root.py").write_text(
+        'revision = "9999"\ndown_revision = None\nbranch_labels = None\ndepends_on = None\n\n\n'
         "def upgrade() -> None:\n    pass\n\n\ndef downgrade() -> None:\n    pass\n",
         encoding="utf-8",
     )
@@ -55,15 +56,15 @@ def test_k02_c2_contrast_a_second_head_fails(tmp_path: Path) -> None:
     heads = ScriptDirectory.from_config(config).get_heads()
     output = "\n".join(f"{head} (head)" for head in heads)
     assert len(heads) == 2
-    assert dc.c2_heads(output, ["0001"]) != []
+    assert dc.c2_heads(output, ["0002"]) != []
 
 
 def test_k02_c2_the_repository_has_one_head_and_the_check_reads_it() -> None:
     config = Config(str(REPO_ROOT / "backend" / "alembic.ini"))
     heads = ScriptDirectory.from_config(config).get_heads()
-    assert heads == ["0001"]
-    assert dc.c2_heads("0001 (head)\n", ["0001"]) == []
-    assert dc.c2_heads("0001 (head)\n", []) != []
+    assert heads == ["0002"]
+    assert dc.c2_heads("0002 (head)\n", ["0002"]) == []
+    assert dc.c2_heads("0002 (head)\n", []) != []
 
 
 @pytest.mark.parametrize(

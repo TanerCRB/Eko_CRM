@@ -13,6 +13,11 @@
 # containers, volumes or the backend image.
 name: ${COMPOSE_PROJECT_NAME:?COMPOSE_PROJECT_NAME is required}
 
+# The advisory lock migrate holds for its whole run, single-bigint form (ADR-0004 addendum
+# 2026-10-29). Written once, here: migrate (and backup, EKO-1-14) take it by reference, never as a
+# second literal. It is part of the release, not a secret.
+x-migration-advisory-lock: &migration-advisory-lock "5002214189396619825"
+
 services:
   proxy:
     build:
@@ -98,6 +103,11 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
       APP_DB_POOL_SIZE: "1"
       APP_DB_MAX_OVERFLOW: "0"
+      MIGRATION_ADVISORY_LOCK_KEY: *migration-advisory-lock
+      # Set once the lock is granted, for the run's transaction only; literals, so no environment
+      # file changes them (ADR-0004 addendum 2026-10-29, *Timeout values*).
+      MIGRATION_LOCK_TIMEOUT_SECONDS: "5"
+      MIGRATION_STATEMENT_TIMEOUT_SECONDS: "30"
     restart: "no"
 
   worker:
