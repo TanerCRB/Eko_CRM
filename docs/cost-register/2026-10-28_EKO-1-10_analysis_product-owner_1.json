@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-28",
+  "task": "EKO-1-10",
+  "phase": "analysis",
+  "role": "product-owner",
+  "model": "no data",
+  "invocation": "general-purpose",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "no data",
+  "tokens": "no data",
+  "tokenSplit": "no data",
+  "tokensSource": "no data",
+  "measured": "by hand",
+  "toolCalls": "no data",
+  "seconds": "no data",
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "boundary-check: clean; no cost-capture record was available because the general-purpose task result did not expose an agent ID."
+}
