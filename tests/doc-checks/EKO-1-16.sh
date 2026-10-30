@@ -3,9 +3,9 @@
 #
 # Run with: bash tests/doc-checks/EKO-1-16.sh
 #
-# The checks read only the dated addendum. They establish that its seven resolutions retain their
+# The checks read only the dated addendum. They establish that its nine resolutions retain their
 # stated contrasts; they do not prove the future EKO-5 implementation or Google behaviour.
-# Each K-01..K-07 comment names the Analyst mutation that must make that check fail.
+# Each K-01..K-07 and R-01..R-02 comment names the Analyst mutation that must make that check fail.
 
 set -uo pipefail
 
@@ -143,6 +143,29 @@ k07() {
     'Google-generated identifier does not satisfy that condition'
 }
 
+# R-01 -- marker/prefix discovery requires validated provenance.
+# Contrast: an event found only by its marker and identifier prefix is unresolved, not an automatic
+# deletion candidate. Mutation R01-M1: permit automatic deletion from marker and prefix alone.
+r01() {
+  all \
+    'event discovered only from its marker and identifier prefix is never deleted automatically' \
+    'recorded as unresolved pending validated provenance as an application-generated event' \
+    'marker and prefix alone are not that validation' \
+    'provenance must be validated before any real-data use'
+}
+
+# R-02 -- failed recorded-owner read does not change the candidate or hold every link.
+# Contrast: the failed read leaves the candidate unchanged while verification retries and notices;
+# it cannot impose a link-wide or propagated Ownership hold. Mutation R02-M1: remove retry.
+r02() {
+  all \
+    'recorded-owner calendar read fails, the candidate enters non-blocking pending ownership verification' \
+    'candidate event is not altered' \
+    'verification is retried' \
+    'operational notice with no customer value is issued' \
+    'No link-wide Ownership hold, including the hold propagated to other links, is imposed until that read succeeds'
+}
+
 check 'K-01 ownership erasure disposition and notice' k01
 check 'K-02 per-calendar progress across access loss' k02
 check 'K-03 synchronised Google-time baseline' k03
@@ -150,6 +173,8 @@ check 'K-04 pending-create disposition on calendar switch' k04
 check 'K-05 failed-sweep durable record notice and take-up' k05
 check 'K-06 moved-event no-hold contrast' k06
 check 'K-07 identifier-prefix bounded sweep' k07
+check 'R-01 marker-prefix discovery requires validated provenance' r01
+check 'R-02 failed recorded-owner read remains non-blocking' r02
 
 echo "EKO-1-16 doc-checks: $passed passed, $failed failed"
 [ "$failed" -eq 0 ]
