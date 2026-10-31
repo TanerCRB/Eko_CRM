@@ -171,9 +171,7 @@ def test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement(
             page.on(
                 "framenavigated",
                 lambda frame: (
-                    automatic_navigations.append(frame.url)
-                    if frame == page.main_frame
-                    else None
+                    automatic_navigations.append(frame.url) if frame == page.main_frame else None
                 ),
             )
             page.on("pageerror", lambda error: page_errors.append(str(error)))
@@ -297,9 +295,7 @@ def test_r01_two_consecutive_lazy_chunk_failures_stop_after_one_recovery(
             page.on(
                 "framenavigated",
                 lambda frame: (
-                    automatic_navigations.append(frame.url)
-                    if frame == page.main_frame
-                    else None
+                    automatic_navigations.append(frame.url) if frame == page.main_frame else None
                 ),
             )
             page.goto(app_url, wait_until="networkidle")

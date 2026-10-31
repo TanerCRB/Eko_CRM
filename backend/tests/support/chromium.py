@@ -35,9 +35,7 @@ def current_archive() -> ArchiveSpec:
     record = records["platforms"].get(key)
     if record is None:
         raise RuntimeError(f"no authenticated Chromium archive for platform {key}")
-    return ArchiveSpec(
-        url=record["url"], sha256=record["sha256"], executable=record["executable"]
-    )
+    return ArchiveSpec(url=record["url"], sha256=record["sha256"], executable=record["executable"])
 
 
 def checked_member_destination(destination: Path, member_name: str) -> Path:
@@ -58,9 +56,7 @@ def prepare_chromium(
     archive_path = destination / "chromium.zip"
     digest = hashlib.sha256()
     with archive_path.open("wb+") as archive_file:
-        with httpx.stream(
-            "GET", archive_url, follow_redirects=True, timeout=120
-        ) as response:
+        with httpx.stream("GET", archive_url, follow_redirects=True, timeout=120) as response:
             response.raise_for_status()
             for chunk in response.iter_bytes():
                 archive_file.write(chunk)
