@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-31",
+  "task": "EKO-1-07",
+  "phase": "code",
+  "role": "developer-backend",
+  "model": "no data",
+  "invocation": "general-purpose",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "agent-3",
+  "tokens": "no data",
+  "tokenSplit": "no data",
+  "tokensSource": "no data",
+  "measured": "by hand",
+  "toolCalls": "no data",
+  "seconds": "no data",
+  "fixRound": 1,
+  "reworkCause": "B-01 unverified Chromium artifact from Security Auditor; backend dependency/test design could have caught it earlier; S-01 disputed using task procedure",
+  "notes": "boundary-check: clean; B-01 fixed with three red-first tests and browser proofs; no cost-capture record was available"
+}
