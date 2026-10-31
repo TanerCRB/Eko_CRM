@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-31",
+  "task": "EKO-1-07",
+  "phase": "verification",
+  "role": "reviewer",
+  "model": "no data",
+  "invocation": "general-purpose",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Low",
+  "agentId": "agent-8",
+  "tokens": "no data",
+  "tokenSplit": "no data",
+  "tokensSource": "no data",
+  "measured": "by hand",
+  "toolCalls": "no data",
+  "seconds": "no data",
+  "fixRound": 0,
+  "reworkCause": "Verdict marker validation rejected the finding severity heading; the Reviewer could have caught it with the required heading format",
+  "notes": "boundary-check: clean; report-format correction only; no cost-capture record was available"
+}
