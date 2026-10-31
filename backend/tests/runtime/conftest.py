@@ -136,7 +136,12 @@ class Composition:
         return self.compose("exec", "-T", "proxy", "wget", "-qO-", url).stdout
 
     def through_proxy(
-        self, listener: str, path: str, method: str = "GET", host: str | None = None
+        self,
+        listener: str,
+        path: str,
+        method: str = "GET",
+        host: str | None = None,
+        headers: dict[str, str] | None = None,
     ) -> httpx.Response:
         """A request to one of proxy's host ports, with the listener's host name as SNI and Host."""
         env = self.env
@@ -150,7 +155,7 @@ class Composition:
         url = httpx.URL(scheme=scheme, host="127.0.0.1", port=int(port), raw_path=path.encode())
         extensions = {"sni_hostname": host} if scheme == "https" else {}
         with httpx.Client(verify=False, timeout=15, follow_redirects=False) as client:
-            request = client.build_request(method, url, headers={"Host": host})
+            request = client.build_request(method, url, headers={"Host": host, **(headers or {})})
             request.extensions.update(extensions)
             return client.send(request)
 
