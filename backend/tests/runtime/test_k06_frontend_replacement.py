@@ -209,11 +209,18 @@ def test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement(
             assert old_chunk is not None, (
                 "the old build has no lazy Klienci destination chunk to preserve across deployment"
             )
+            never_existed = module_import(page, "/assets/k06-never-existed-0.js")
+            assert never_existed["failed"] is True, never_existed
             navigations_before_activation = len(automatic_navigations)
             page.get_by_role("link", name=DESTINATION, exact=True).click()
-            expect(page.get_by_role("heading", name=DESTINATION, exact=True)).to_be_visible(
-                timeout=15_000
-            )
+            try:
+                expect(page.get_by_role("heading", name=DESTINATION, exact=True)).to_be_visible(
+                    timeout=15_000
+                )
+            except AssertionError as error:
+                raise AssertionError(
+                    f"lazy destination failed; browser page errors: {page_errors}"
+                ) from error
             assert any(urlsplit(url).path == old_chunk for url in requested), (
                 "activation never requested the old build's unloaded destination chunk"
             )
@@ -228,8 +235,5 @@ def test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement(
                     "document changed without an observed automatic recovery navigation"
                 )
                 assert urlsplit(page.url).path == "/klienci"
-
-            never_existed = module_import(page, "/assets/k06-never-existed-0.js")
-            assert never_existed["failed"] is True, never_existed
         finally:
             browser.close()
