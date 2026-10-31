@@ -88,3 +88,19 @@ def test_k06_contrast_the_leak_scanner_finds_each_value_and_a_connection_string(
         assert leaks(f"line {value} line", values) != []
     for form in ("postgresql://eko_backup@postgres/eko", "host=postgres dbname=eko"):
         assert leaks(form, []) != []
+
+
+def test_k06_the_failed_runs_log_holds_no_tool_message(
+    backup_lab: BackupLab, runs: tuple[list[str], RunResult, RunResult, str]
+) -> None:
+    """QA (EKO-1-14): a dump tool's own error names the server's host, address and port, which the
+    leak scan above cannot recognise as a connection string. The failed run's log is therefore its
+    one failure line and nothing else (ADR-0004 addendum 2026-10-30: the tools' diagnostic output
+    never reaches the log), and the successful run's log is its one success line."""
+    from tests.runtime.test_adr0004_backup_failure_line import backup_lines
+
+    _, succeeded, failed, _ = runs
+    [line] = backup_lines(failed.output)
+    assert line.startswith("eko-backup: run failed reason=dump-keycloak "), line
+    [line] = backup_lines(succeeded.output)
+    assert line.startswith("eko-backup: run succeeded "), line

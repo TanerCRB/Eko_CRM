@@ -674,6 +674,12 @@ def backup_lab_session(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Bac
         if lab is not None:
             for tag in lab.images.values():
                 docker("rmi", "-f", tag, check=False)
+        # The planted schedule images of K-05's contrasts, and this lab's double image (QA,
+        # EKO-1-14: both outlived every session before).
+        if started is not None:
+            for tag in started.images.values():
+                docker("rmi", "-f", tag, check=False)
         if double is not None:
             docker("rm", "-f", double.container, check=False)
+        docker("rmi", "-f", f"localhost/eko-crm/backup-double:{composition.project}", check=False)
         composition.down()

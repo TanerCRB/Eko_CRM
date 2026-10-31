@@ -7,6 +7,7 @@ zone, with no network: it must refuse to start, so no table is loaded and the ch
 """
 
 import subprocess
+import uuid
 from pathlib import Path
 
 import pytest
@@ -80,7 +81,16 @@ def offline_scheduler(image: str, *env: str) -> subprocess.CompletedProcess[str]
     arguments = [item for name, value in OFFLINE_ENV.items() for item in ("-e", f"{name}={value}")]
     for pair in env:
         arguments += ["-e", pair]
-    return docker("run", "--rm", "--network", "none", *arguments, image, check=False, timeout=60)
+    # Named, and removed in any case: a scheduler that does not refuse keeps running after the
+    # timeout fails the test (QA, EKO-1-14: two such containers outlived a mutation run).
+    name = f"bkp-offline-{uuid.uuid4().hex[:10]}"
+    try:
+        return docker(
+            "run", "--rm", "--name", name, "--network", "none", *arguments, image,
+            check=False, timeout=60,
+        )  # fmt: skip
+    finally:
+        docker("rm", "-f", name, check=False)
 
 
 @pytest.mark.parametrize(

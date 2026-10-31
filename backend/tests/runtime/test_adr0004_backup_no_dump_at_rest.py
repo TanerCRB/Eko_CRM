@@ -9,12 +9,16 @@ included, is checked for the set's objects by digest and by each object's own ag
 """
 
 import hashlib
+import subprocess
+import time
 from collections.abc import Iterator
 
 import pytest
 
 from tests.runtime.backup_lab import (
+    KEY,
     OBJECTS,
+    UNLOCK_BIGINT,
     BackupLab,
     container_files,
     failure_fields,
@@ -150,3 +154,77 @@ def test_k07_g8_an_interrupted_run_writes_one_line_and_leaves_nothing(
         assert files_holding(iter(files), needles) == []
     finally:
         docker("rm", "-f", name_of_container, check=False)
+
+
+# QA (EKO-1-14): during the application dump, not only at H1. A dump staged in a file and removed
+# once it is uploaded is gone by H1, and the Keycloak dump held at H1 has written nothing yet, so
+# the H1 scan alone cannot see it. Here the application dump is made slow (padded rows) and the
+# run container is searched repeatedly while it runs.
+
+PAD_ROWS = 150_000
+# A tmpfs of the run container: the place a staged dump is least visible from outside.
+PLANTED_SHM = "/dev/shm/eko-test-planted"  # noqa: S108 - inside the run container only
+# Every place in the run container a process can write to: the root filesystem (its writable
+# layer), /dev/shm and any tmpfs; /proc and /sys are the kernel's.
+SEARCH = 'grep -rlsF --exclude-dir=proc --exclude-dir=sys -e "$1" / /dev/shm; true'
+
+
+def files_with(container: str, marker: str) -> list[str]:
+    found = subprocess.run(
+        ["docker", "exec", "-u", "0", container, "sh", "-c", SEARCH, "search", marker],
+        capture_output=True, timeout=120,
+    )  # fmt: skip
+    return sorted(set(found.stdout.decode(errors="replace").split()))
+
+
+def scans_during_the_application_dump(backup_lab: BackupLab, marker: str) -> tuple[int, list[str]]:
+    """Searches the run container while its application dump runs: (scans made, files found)."""
+    backup_lab.pad(PAD_ROWS)
+    with backup_lab.advisory_lock_held() as holder:
+        run = backup_lab.start_run()
+        backup_lab.wait_until(
+            "backup waits for the advisory lock",
+            lambda: ("eko", "eko-backup-control", "Lock") in backup_lab.backup_sessions(),
+        )
+        holder.query(UNLOCK_BIGINT, k=str(KEY))
+    scans, found = 0, []
+    deadline = time.monotonic() + 600
+    while run.running() and time.monotonic() < deadline:
+        names = {s[1] for s in backup_lab.backup_sessions()}
+        if "eko-backup-dump-keycloak" in names or "eko-backup-dump-roles" in names:
+            break
+        found += files_with(run.container_name, marker)
+        scans += 1
+    result = run.wait()
+    assert result.code == 0, result.stderr
+    return scans, found
+
+
+def test_k07_during_the_application_dump_no_marker_in_the_container(
+    backup_lab: BackupLab,
+) -> None:
+    backup_lab.at_probe_head()
+    marker = unique_marker("rest-dump")
+    backup_lab.plant_row(marker)
+    scans, found = scans_during_the_application_dump(backup_lab, marker)
+    assert scans >= 2, f"only {scans} scans while the application dump ran"
+    assert found == []
+
+
+def test_k07_contrast_the_search_finds_a_marker_written_into_the_container(
+    backup_lab: BackupLab,
+) -> None:
+    backup_lab.at_probe_head()
+    marker = unique_marker("rest-planted")
+    run = backup_lab.start_run(name="bkp-rest-search", remove=False)
+    try:
+        with backup_lab.keycloak_table_held():
+            backup_lab.wait_until("backup waits at H1", backup_lab.waiting_at_h1, 120)
+            subprocess.run(
+                ["docker", "exec", "-i", "bkp-rest-search", "sh", "-c", f"cat > {PLANTED_SHM}"],
+                input=marker.encode("utf-8"), check=True, capture_output=True,
+            )  # fmt: skip
+            assert files_with("bkp-rest-search", marker) == [PLANTED_SHM]
+        run.wait()
+    finally:
+        docker("rm", "-f", "bkp-rest-search", check=False)

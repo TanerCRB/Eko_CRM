@@ -18,7 +18,9 @@ from tests.runtime.backup_lab import (
     complete_sets,
     failure_fields,
     failure_lines,
+    open_set,
     set_names,
+    unique_marker,
 )
 from tests.support import migration_checks as mc
 
@@ -141,3 +143,26 @@ def test_k02_b_contrast_another_lock_does_not_hold_backup(backup_lab: BackupLab,
         )
         result = run.wait()
     assert result.code == 0, result.stderr
+
+
+def test_k02_b_the_snapshot_is_taken_after_the_lock_is_granted(backup_lab: BackupLab) -> None:
+    """QA (EKO-1-14): the lock is held from *before* the application snapshot. A row committed
+    while backup waits at H0 is in the application dump, so the dump's snapshot postdates the
+    grant (ADR-0004 addendum 2026-10-30: the lock is never first taken inside the transaction
+    whose snapshot the dump uses). Without this, a snapshot fixed before the wait passes (b)."""
+    backup_lab.at_probe_head()
+    marker = unique_marker("k02-waited")
+    before = set_names(backup_lab.double)
+    with backup_lab.advisory_lock_held() as holder:
+        run = backup_lab.start_run()
+        backup_lab.wait_until(
+            "backup waits for the advisory lock",
+            lambda: ("eko", "eko-backup-control", "Lock") in backup_lab.backup_sessions(),
+        )
+        backup_lab.plant_row(marker)
+        holder.query("SELECT pg_advisory_unlock(CAST(:'k' AS bigint))", k=str(KEY))
+    result = run.wait()
+    assert result.code == 0, result.stderr
+    [name] = set_names(backup_lab.double) - before
+    contents = open_set(backup_lab.double, name, backup_lab.identity)
+    assert marker.encode("utf-8") in contents.application

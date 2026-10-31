@@ -441,3 +441,59 @@ def test_k03_existing_volume_needs_the_documented_operator_step(
         if connected:
             docker("network", "disconnect", f"{old.project}_default", double.container, check=False)
         old.down()
+
+
+# Point 7, the mechanism: counts and dump inside the one exported snapshot (QA, EKO-1-14) -------
+# The restored-count check cannot see counts read in the milliseconds just before the snapshot is
+# taken: no test write lands there. The server's own statement log can: for one run, the control
+# session's statements in order, with eko_backup's statements logged for that run only.
+
+LOGGED = re.compile(r"\[(?P<pid>[0-9]+)\] LOG:  statement: (?P<text>.*)$")
+
+
+def logged_statements(backup_lab: BackupLab) -> list[tuple[str, str]]:
+    logs = backup_lab.composition.compose("logs", "--no-color", "postgres", check=False)
+    found = (LOGGED.search(line) for line in (logs.stdout + logs.stderr).splitlines())
+    return [(m["pid"], m["text"].rstrip().rstrip(";")) for m in found if m]
+
+
+def statement_logged_run(backup_lab: BackupLab) -> list[tuple[str, str]]:
+    """One run with eko_backup's statements logged; the statements logged during it."""
+    backup_lab.at_probe_head()
+    already = len(logged_statements(backup_lab))
+    backup_lab.sql("ALTER ROLE eko_backup SET log_statement = 'all'")
+    try:
+        result = backup_lab.run()
+    finally:
+        backup_lab.sql("ALTER ROLE eko_backup RESET log_statement")
+    assert result.code == 0, result.stderr
+    return logged_statements(backup_lab)[already:]
+
+
+def test_k03_7_counts_and_dump_are_read_in_the_exported_snapshot(backup_lab: BackupLab) -> None:
+    run = statement_logged_run(backup_lab)
+    [control] = {pid for pid, text in run if text.startswith("SELECT pg_advisory_lock(")}
+    texts = [text for pid, text in run if pid == control]
+    lock = next(i for i, t in enumerate(texts) if t.startswith("SELECT pg_advisory_lock("))
+    begin = next(i for i, t in enumerate(texts) if t.startswith("BEGIN ISOLATION LEVEL REPEATABLE"))
+    commit = next(i for i, t in enumerate(texts) if i > begin and t == "COMMIT")
+    counts = [i for i, t in enumerate(texts) if "count(" in t]
+    # Lock first, then the transaction, whose first statement exports the snapshot.
+    assert lock < begin, texts
+    assert "pg_export_snapshot()" in texts[begin + 1], texts
+    # Every count of the run is read inside that transaction, after the export.
+    assert counts and all(begin + 1 < i < commit for i in counts), texts
+    # The application dump joins the exported snapshot; the Keycloak dump cannot.
+    joined = [t for pid, t in run if pid != control and t.startswith("SET TRANSACTION SNAPSHOT")]
+    assert len(joined) == 1, joined
+
+
+def test_k03_7_contrast_the_statement_log_holds_nothing_outside_the_logged_run(
+    backup_lab: BackupLab,
+) -> None:
+    """The log window is the run's own: with logging reset, a second run adds no statement."""
+    statement_logged_run(backup_lab)
+    already = len(logged_statements(backup_lab))
+    result = backup_lab.run()
+    assert result.code == 0, result.stderr
+    assert logged_statements(backup_lab)[already:] == []
