@@ -1414,21 +1414,80 @@ point. EKO-1-14 (#55) builds `backup` against a destination double. From this da
   - Never a hold point: a lock on any object of the application database; a hook, variable or
     pause built into the shipped `backup` image or its scripts. A changed entry point is a planted
     contrast, and a claim is never proven on it (addendum of 2026-10-29, *Test-only revisions*).
-- **`eko_backup`'s read privileges.**
-  - The init content grants `eko_backup` membership in PostgreSQL's predefined role
-    `pg_read_all_data`, in the same session as the rest. It then reads every table, view and
-    sequence in every schema of the two databases it may connect to, tables created later
-    included, with no further grant. It gets no write privilege. Its attributes are unchanged
-    (ADR-0004-C28), `CONNECT` is unchanged, and `TEMPORARY` stays revoked from `PUBLIC`.
-  - `pg_read_all_data` does not bypass row-level security, and `eko_backup` keeps `NOBYPASSRLS`.
-    `pg_dump` then fails on a table with row-level security, rather than dumping it partially. A
-    task that enables row-level security on a table changes this addendum first.
-  - **Existing volumes** (addendum of 2026-10-28, *Existing volumes*). The release that brings this
-    grant announces one operator step: as the PostgreSQL superuser, run
-    `GRANT pg_read_all_data TO eko_backup;` on the running `postgres`. The step is written in
-    `backup/README.md`. Without it, a run fails with `reason=dump-application` and SQLSTATE 42501.
-    Granting it again changes nothing.
-  - At restore step 4 the init content creates the membership on the empty volume.
+- **`eko_backup`'s read privileges.** Amended in fix round 1 of EKO-1-14, 2026-10-31 (B-01 A):
+  explicit grants replace membership in the predefined role `pg_read_all_data`, which also reads
+  `pg_authid` and cannot be narrowed.
+  - **What it is granted.** The schema is `public` in both databases: in the application database
+    `eko`, and in Keycloak's database `keycloak`. `compose.yaml` sets no `KC_DB_SCHEMA`, and no
+    schema named `eko_keycloak` exists, so Keycloak's tables land in `public`. In each of the two
+    databases, `eko_backup` gets:
+    - `USAGE` on schema `public`;
+    - `SELECT` on every table and every sequence that already exists in it
+      (`GRANT SELECT ON ALL TABLES IN SCHEMA public`, `GRANT SELECT ON ALL SEQUENCES IN SCHEMA
+      public`). "Tables" here includes views, materialized views and foreign tables;
+    - default privileges for the role that owns the database, `eko_app` in `eko` and `eko_keycloak`
+      in `keycloak`. They are written without `IN SCHEMA`, so they apply in every schema of that
+      database: `ALTER DEFAULT PRIVILEGES FOR ROLE <owner> GRANT SELECT ON TABLES TO eko_backup`,
+      the same `ON SEQUENCES`, and `GRANT USAGE ON SCHEMAS TO eko_backup`. A table, sequence or
+      schema that the owning role creates later is then readable with no new grant (K-03
+      point 8). That covers a migration run by `migrate` as `eko_app` and Keycloak's own schema
+      updates run as `eko_keycloak`.
+
+    It gets no write privilege. Its attributes are unchanged (ADR-0004-C28), `CONNECT` is
+    unchanged, and `TEMPORARY` stays revoked from `PUBLIC`.
+  - **Who runs the grants, and where.** The init content in `compose.yaml` runs them as the
+    PostgreSQL superuser (`POSTGRES_USER`), in the same `psql` run as the rest, after the
+    statements that create the roles and databases. Grants on objects and default privileges
+    each belong to one database, so the run connects to `eko` and runs that database's
+    statements, then does the same in `keycloak`. Default privileges apply only to objects created
+    by the role they name. The statements are therefore always written `FOR ROLE eko_app` and
+    `FOR ROLE eko_keycloak`, never for the superuser that runs them; a superuser may set them for
+    any role. On an empty volume no table exists yet, so at first initialisation it is the default
+    privileges that take effect, and the `ON ALL TABLES`/`ON ALL SEQUENCES` statements matter for
+    existing volumes. The two per-database connections are sessions of their own. They carry no
+    secret, so the one-session rule of the addendum of 2026-10-28 (*What it creates*) does not
+    cover them. That rule keeps a password out of the server log, and its list leaves the backup
+    role's read privileges to this task.
+  - **What it cannot read.** `eko_backup` belongs to no predefined role and is not a superuser.
+    It cannot read `pg_authid`, so it cannot read any role's password verifier, the superuser's
+    included.
+  - **The roles object without `pg_authid`.** With `--no-role-passwords`, `pg_dumpall` reads the
+    roles from the view `pg_roles` instead of `pg_authid`. That is documented PostgreSQL behaviour
+    since version 10 and still holds in 18. Memberships come from `pg_auth_members` and per-role
+    settings from `pg_db_role_setting`, and every role can read both. So
+    `pg_dumpall --roles-only --no-role-passwords` runs as `eko_backup`. The object is complete
+    except for passwords: every role other than the predefined `pg_` roles, with its attributes,
+    `CONNECTION LIMIT` and `VALID UNTIL`, its memberships with their options, and its settings. A
+    run that drops `--no-role-passwords` makes `pg_dumpall` read `pg_authid`. It then fails with
+    `reason=dump-roles` and SQLSTATE 42501 instead of putting verifiers in the set.
+  - `SELECT` does not bypass row-level security, and `eko_backup` keeps `NOBYPASSRLS`. `pg_dump`
+    then fails on a table with row-level security, rather than dumping it partially. A task that
+    enables row-level security on a table changes this addendum first.
+  - **What is not covered (residual).** Default privileges cover only objects created by
+    `eko_app` in `eko` and by `eko_keycloak` in `keycloak`. Three kinds of object get no grant:
+    - an object created by any other role, such as the superuser by hand or a role added later;
+    - on an existing volume, an object in a schema other than `public`;
+    - a large object.
+
+    The dump then fails with `reason=dump-application` or `reason=dump-keycloak` and SQLSTATE
+    42501. It fails closed: there is never a set that silently lacks the object (the K-03
+    contrast). A task that adds a role creating objects in either database changes this addendum
+    first.
+  - **Existing volumes** (addendum of 2026-10-28, *Existing volumes*). The release that brings these
+    grants announces one operator step, as the PostgreSQL superuser on the running `postgres`:
+    - connected to `eko`: `GRANT USAGE ON SCHEMA public TO eko_backup;`,
+      `GRANT SELECT ON ALL TABLES IN SCHEMA public TO eko_backup;`,
+      `GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO eko_backup;`, and
+      `ALTER DEFAULT PRIVILEGES FOR ROLE eko_app GRANT SELECT ON TABLES TO eko_backup;` with the
+      same for `ON SEQUENCES` and `GRANT USAGE ON SCHEMAS`;
+    - connected to `keycloak`: the same six statements, with `FOR ROLE eko_keycloak`;
+    - once, in either database: `REVOKE pg_read_all_data FROM eko_backup;`. This brings a volume
+      first initialised by an earlier content of this task to the same state. On any other volume
+      it changes nothing beyond a warning.
+
+    The step is written in `backup/README.md`. Without it, a run fails with
+    `reason=dump-application` and SQLSTATE 42501. Running it again changes nothing.
+  - At restore step 4 the init content sets these privileges on the empty volume.
 - **Secret inventory: the variable names.** The two rows read, in addition to what they say:
   - *Backup destination write credential* — variable `BACKUP_DESTINATION_CREDENTIAL`.
   - *Backup encryption public key* — variable `BACKUP_ENCRYPTION_PUBLIC_KEY`.
@@ -1476,8 +1535,8 @@ transport and encryption step of `backup` is reworked. That rework risk is accep
 | Scheduler | **A. `backup`'s own main process, one-entry schedule file** (chosen) | a small loop to maintain | nothing |
 | | B. `cron` in the image | jobs run as root without the container's environment; the secrets would be written to a file | secrets only as environment variables |
 | | C. A third-party scheduler binary | a download outside the base's packages, pinned by checksum | nothing |
-| Read privileges | **A. `pg_read_all_data`** (chosen) | it reads every schema of both databases, as a backup must | nothing |
-| | B. `GRANT SELECT` plus `ALTER DEFAULT PRIVILEGES` per schema and per creating role | misses a table created in a new schema or by another role, and needs one set of statements per database | tables created later without a new grant |
+| Read privileges | A. `pg_read_all_data` (chosen at gate 1; withdrawn in fix round 1 of EKO-1-14, 2026-10-31, B-01 A) | it also reads `pg_authid`, so every role's password verifier, the superuser's included, and PostgreSQL cannot narrow a predefined role | keeping password verifiers out of `backup`'s reach |
+| | **B. `USAGE` and `GRANT SELECT` on schema `public`, plus `ALTER DEFAULT PRIVILEGES` for the owning role of each database** (chosen in fix round 1 of EKO-1-14, 2026-10-31, B-01 A, because `pg_read_all_data` exposes `pg_authid`) | an object created by another role, an object in another schema on an existing volume, or a large object is not granted, and the run fails with 42501; one set of statements per database | reading objects created later by a role other than the owners with no new grant |
 | Hold points | **A. H0 (the advisory lock) and H1 (a lock in Keycloak's database only)** (chosen) | H1 needs a Keycloak table unused after start | nothing |
 | | B. A test variant of the `backup` image that pauses the dump tool | the claim is proven on an image that differs from the one shipped | proving the claim on the shipped image |
 | | C. A pause hook in the shipped service | test code in the release | a release free of test hooks |

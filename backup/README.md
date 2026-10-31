@@ -46,7 +46,7 @@ Its exact pattern (an extended regular expression, matching the whole line):
 | `database` | a connection to the database server, or its authentication, a refusal for the connection limit included (`sqlstate=53300`) |
 | `lock` | taking or releasing the advisory lock shared with `migrate` |
 | `dump-application` | the application database's snapshot, revision, row counts, dump or manifest; without the operator step below, `sqlstate=42501` |
-| `dump-keycloak` | Keycloak's database dump |
+| `dump-keycloak` | Keycloak's database dump; a table lock it waited for more than 180 s, `sqlstate=57014` |
 | `dump-roles` | the dump of the cluster's roles |
 | `encryption` | encrypting an object to the public key (for example a malformed key) |
 | `destination` | the destination: unreachable, refused, a wrong host key, an upload broken off, or a size the destination did not confirm |
@@ -87,19 +87,48 @@ for the 26-hour check, the monthly verification and a restore. The check needs n
 
 ## Existing volumes: the operator step
 
-The release that brings this service grants `eko_backup` read access to every table through
-PostgreSQL's predefined role `pg_read_all_data`. A new `pgdata` volume gets the grant from the
-init content. On a volume that an earlier release initialised, run this once as the PostgreSQL
-superuser on the running `postgres` service, before the first backup:
+The release that brings this service grants `eko_backup` read access by explicit grants: `USAGE`
+on schema `public` and `SELECT` on its tables and sequences in both databases, plus default
+privileges for the role that owns each database (`eko_app` in `eko`, `eko_keycloak` in
+`keycloak`), so tables those roles create later are readable with no new grant. `eko_backup`
+belongs to no predefined role, so it cannot read `pg_authid` or any password verifier. A new
+`pgdata` volume gets the grants from the init content. On a volume that an earlier release
+initialised, run the two blocks below once, as the PostgreSQL superuser on the running `postgres`
+service, before the first backup: the first connected to `eko`, the second connected to
+`keycloak`.
 
-<!-- existing-volume-step -->
+<!-- existing-volume-step-eko -->
 ```sql
-GRANT pg_read_all_data TO eko_backup;
+GRANT USAGE ON SCHEMA public TO eko_backup;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO eko_backup;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO eko_backup;
+ALTER DEFAULT PRIVILEGES FOR ROLE eko_app GRANT SELECT ON TABLES TO eko_backup;
+ALTER DEFAULT PRIVILEGES FOR ROLE eko_app GRANT SELECT ON SEQUENCES TO eko_backup;
+ALTER DEFAULT PRIVILEGES FOR ROLE eko_app GRANT USAGE ON SCHEMAS TO eko_backup;
+REVOKE pg_read_all_data FROM eko_backup;
 ```
 
-For example: `docker compose exec -T postgres psql -U postgres -d postgres -c '<the statement>'`.
-Without the step, a run fails with `reason=dump-application` and `sqlstate=42501`. Granting it
+<!-- existing-volume-step-keycloak -->
+```sql
+GRANT USAGE ON SCHEMA public TO eko_backup;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO eko_backup;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO eko_backup;
+ALTER DEFAULT PRIVILEGES FOR ROLE eko_keycloak GRANT SELECT ON TABLES TO eko_backup;
+ALTER DEFAULT PRIVILEGES FOR ROLE eko_keycloak GRANT SELECT ON SEQUENCES TO eko_backup;
+ALTER DEFAULT PRIVILEGES FOR ROLE eko_keycloak GRANT USAGE ON SCHEMAS TO eko_backup;
+```
+
+For example: `docker compose exec -T postgres psql -U postgres -d eko -v ON_ERROR_STOP=1` with
+the first block on standard input, then the same with `-d keycloak` and the second block. The
+`REVOKE` brings a volume first initialised with an earlier content of this release, which granted
+`pg_read_all_data`, to the same state; on any other volume it changes nothing beyond a warning.
+Without the step, a run fails with `reason=dump-application` and `sqlstate=42501`. Running it
 again changes nothing.
+
+What the grants do not cover fails closed, never as a set that silently lacks an object: a table
+or sequence created by another role (the superuser by hand, for example), on an existing volume
+an object in a schema other than `public`, or a large object. The run then fails with
+`reason=dump-application` or `reason=dump-keycloak` and `sqlstate=42501`.
 
 ## Configuration
 
@@ -111,6 +140,6 @@ again changes nothing.
 | `BACKUP_DESTINATION_CREDENTIAL` | the destination account's Ed25519 key in OpenSSH format, base64 on one line (secret) |
 | `BACKUP_ENCRYPTION_PUBLIC_KEY` | the age recipient, one line beginning `age1` (secret by inventory) |
 | `BACKUP_DESTINATION` | `sftp://<account>@<host>:<port>/<incoming directory>` |
-| `BACKUP_DESTINATION_HOST_KEY` | the destination host's public key line; no other key is accepted |
+| `BACKUP_DESTINATION_HOST_KEY` | the destination host's Ed25519 public key line, as in its `/etc/ssh/ssh_host_ed25519_key.pub` (`ssh-ed25519 AAAA…`); the run verifies that key, whatever other host keys the destination offers, and accepts no other |
 
 The private key that decrypts a set is never given to the composition.

@@ -47,25 +47,29 @@ sqlstate_of() {
     *"sorry, too many clients already"*) printf 53300 ;;
     *"password authentication failed"*) printf 28P01 ;;
     *"permission denied"*) printf 42501 ;;
+    *"canceling statement due to statement timeout"*) printf 57014 ;;
   esac
 }
 
 # --- The control session ------------------------------------------------------------------
 
-CTL_PID=""
+# A background psql on two named pipes, not a bash coprocess: bash unsets a coprocess's PID and
+# descriptor variables when it reaps it, which under `set -u` aborted the run's own cleanup. The
+# pipes are unlinked once both ends are open; they never hold data at rest.
+CTL_PROC=""
 CTL_IN=""
 CTL_OUT=""
 CTL_TEXT=""
 CTL_DONE="eko-backup-control-done-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
 
 ctl_open() {
-  coproc CTL {
-    PGAPPNAME=eko-backup-control exec psql -X -q -A -t -v ON_ERROR_STOP=1 -v VERBOSITY=verbose \
-      -h "$DB_HOST" -U "$DB_USER" -d "$APP_DB" 2>&1
-  }
-  CTL_PID=$CTL_PID
-  # Own copies: bash closes a coprocess's descriptors once it ends, and its last words matter.
-  exec {CTL_IN}>&"${CTL[1]}" {CTL_OUT}<&"${CTL[0]}"
+  mkfifo -m 0600 "$RUNDIR/ctl.in" "$RUNDIR/ctl.out" || fail database
+  PGAPPNAME=eko-backup-control psql -X -q -A -t -v ON_ERROR_STOP=1 -v VERBOSITY=verbose \
+    -h "$DB_HOST" -U "$DB_USER" -d "$APP_DB" < "$RUNDIR/ctl.in" > "$RUNDIR/ctl.out" 2>&1 &
+  CTL_PROC=$!
+  # Opened in the order psql's redirections open them, so neither side blocks the other.
+  exec {CTL_IN}> "$RUNDIR/ctl.in" {CTL_OUT}< "$RUNDIR/ctl.out"
+  rm -f "$RUNDIR/ctl.in" "$RUNDIR/ctl.out"
 }
 
 # Statements on the control session, then a marker query; their output in CTL_TEXT. Non-zero
@@ -85,8 +89,9 @@ ctl_fail() { fail "$1" "$(sqlstate_of "$CTL_TEXT")"; }
 
 ctl_close() {
   (printf '\\q\n' >&"$CTL_IN") 2>/dev/null
-  wait "$CTL_PID" 2>/dev/null
-  CTL_PID=""
+  wait "$CTL_PROC" 2>/dev/null
+  CTL_PROC=""
+  exec {CTL_IN}>&- {CTL_OUT}<&-
 }
 
 # --- The destination ----------------------------------------------------------------------
@@ -97,6 +102,7 @@ DEST_HOST=""
 DEST_PORT=""
 DEST_DIR=""
 HOST_FINGERPRINT=""
+KNOWN_HOSTS=""
 
 destination_open() {
   local pattern='^sftp://([a-z_][a-z0-9_-]*)@([A-Za-z0-9.-]+):([0-9]{1,5})(/[A-Za-z0-9._/-]*[A-Za-z0-9._-])$'
@@ -107,19 +113,27 @@ destination_open() {
   read -r key_type key_body _ <<< "$BACKUP_DESTINATION_HOST_KEY"
   HOST_FINGERPRINT="$(printf '%s %s\n' "$key_type" "$key_body" \
     | ssh-keygen -l -E sha256 -f - 2>/dev/null | awk '{print $2}')"
-  HOST_FINGERPRINT="${HOST_FINGERPRINT#SHA256:}"
+  # A line ssh-keygen cannot fingerprint is no host key; the run stops before any connection.
   [ -n "$HOST_FINGERPRINT" ] || fail destination
-  # The host key is public; the known-hosts file holds nothing else. The credential reaches the
-  # client only through the agent's memory.
-  printf 'eko-destination %s %s\n' "$key_type" "$key_body" > "$RUNDIR/known_hosts"
-  eval "$(ssh-agent -s -a "$RUNDIR/agent" 2>/dev/null)" > /dev/null || fail destination
+  # The host key is public; the known-hosts file holds that one line and nothing else. Both
+  # clients check the destination against it and refuse any other key. curl reads it from
+  # $CURL_HOME/.ssh and then negotiates the configured key's type, so a destination that also
+  # offers other host keys is still checked against this one. curl's --hostpubsha256 would
+  # instead check whichever key type it negotiated first, and it skips known_hosts when given.
+  local known_host="$DEST_HOST"
+  [ "$DEST_PORT" = 22 ] || known_host="[$DEST_HOST]:$DEST_PORT"
+  mkdir -m 0700 "$RUNDIR/.ssh" || fail destination
+  printf '%s %s %s\n' "$known_host" "$key_type" "$key_body" > "$KNOWN_HOSTS" || fail destination
+  # The credential reaches the client only through the agent's memory; the agent forgets it
+  # after a day even if this run could not stop it.
+  eval "$(ssh-agent -s -t 86400 -a "$RUNDIR/agent" 2>/dev/null)" > /dev/null || fail destination
   printf '%s' "$BACKUP_DESTINATION_CREDENTIAL" | base64 -d 2>/dev/null \
     | ssh-add -q - > /dev/null 2>&1 || fail destination
 }
 
 # Streams stdin to the destination; writes the byte count it sent to stdout.
 upload() {
-  curl --silent --hostpubsha256 "$HOST_FINGERPRINT" --user "$DEST_ACCOUNT:" \
+  CURL_HOME="$RUNDIR" curl -q --silent --user "$DEST_ACCOUNT:" \
     --connect-timeout 30 --speed-limit 1 --speed-time 300 --upload-file - \
     --write-out '%{size_upload}\n' --output /dev/null \
     "sftp://$DEST_HOST:$DEST_PORT$DEST_DIR/$1" 2>/dev/null
@@ -130,7 +144,7 @@ upload() {
 remote_size() {
   printf 'ls -l %s\n' "$DEST_DIR/$1" \
     | sftp -q -b - -P "$DEST_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
-      -o HostKeyAlias=eko-destination -o UserKnownHostsFile="$RUNDIR/known_hosts" \
+      -o UserKnownHostsFile="$KNOWN_HOSTS" \
       -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=30 \
       "$DEST_ACCOUNT@$DEST_HOST" 2>/dev/null \
     | awk -v path="$DEST_DIR/$1" '$1 ~ /^-/ && $NF == path { print $5 }'
@@ -182,14 +196,19 @@ stream_object() {
   RECORD+="$name $sent $digest"$'\n'
 }
 
+# A dump that waits on a table lock longer than this fails as that dump: pg_dump bounds its
+# LOCK TABLE statements with a statement timeout, so the server reports SQLSTATE 57014,
+# before curl's 300 s stall check would break the upload and blame the destination.
+readonly DUMP_LOCK_WAIT=--lock-wait-timeout=180000
+
 dump_application() {
   PGAPPNAME=eko-backup-dump-application pg_dump --no-password -h "$DB_HOST" -U "$DB_USER" \
-    -d "$APP_DB" --format=custom --compress=none --snapshot="$SNAPSHOT"
+    -d "$APP_DB" --format=custom --compress=none --snapshot="$SNAPSHOT" "$DUMP_LOCK_WAIT"
 }
 
 dump_keycloak() {
   PGAPPNAME=eko-backup-dump-keycloak pg_dump --no-password -h "$DB_HOST" -U "$DB_USER" \
-    -d "$KEYCLOAK_DB" --format=custom --compress=none
+    -d "$KEYCLOAK_DB" --format=custom --compress=none "$DUMP_LOCK_WAIT"
 }
 
 dump_roles() {
@@ -202,10 +221,15 @@ json_safe() { [[ "$1" =~ ^[A-Za-z0-9._:/@+,-]*$ ]]; }
 
 # --- The run ------------------------------------------------------------------------------
 
+# Runs on every exit and must never stop halfway: each step stands alone, reads only variables
+# this script owns, and ignores its own failure.
 cleanup() {
-  if [ -n "$CTL_PID" ]; then kill "$CTL_PID" 2>/dev/null; fi
-  if [ -n "${SSH_AGENT_PID:-}" ]; then kill "$SSH_AGENT_PID" 2>/dev/null; fi
-  if [ -n "$RUNDIR" ]; then rm -rf "$RUNDIR"; fi
+  set +u
+  trap '' TERM INT
+  if [ -n "$CTL_PROC" ]; then kill "$CTL_PROC" 2> /dev/null; fi
+  if [ -n "$SSH_AGENT_PID" ]; then kill "$SSH_AGENT_PID" 2> /dev/null; fi
+  if [ -n "$RUNDIR" ]; then rm -rf "$RUNDIR" 2> /dev/null; fi
+  return 0
 }
 
 run_now() {
@@ -216,6 +240,7 @@ run_now() {
   export PGPASSWORD="$BACKUP_DB_PASSWORD" PGCONNECT_TIMEOUT=30
   RUNDIR="$(mktemp -d /tmp/eko-backup.XXXXXXXX)" || fail destination
   export HOME="$RUNDIR"
+  KNOWN_HOSTS="$RUNDIR/.ssh/known_hosts"
   local key="$MIGRATION_ADVISORY_LOCK_KEY"
   [[ "$key" =~ ^-?[0-9]{1,19}$ ]] || fail lock
 
@@ -225,7 +250,7 @@ run_now() {
   # Session level, before the snapshot's transaction, waiting as migrate does: no time limit.
   ctl "SELECT pg_advisory_lock(CAST($key AS bigint))" || ctl_fail lock
   # The transaction's first statement fixes and exports the snapshot; its statement time is the
-  # backup point. Both go in one message, so no marker query can come first.
+  # backup point. Both are sent before the marker query, so nothing runs between them.
   ctl "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY; SELECT pg_export_snapshot(), to_char(statement_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), to_char(statement_timestamp() AT TIME ZONE 'UTC', 'YYYYMMDD\"T\"HH24MISS.US\"Z\"')" \
     || ctl_fail dump-application
   local backup_point compact
@@ -289,6 +314,9 @@ run() {
 schedule() {
   [ "$(date +%Z)" = UTC ] || fail schedule
   [ -r "$SCHEDULE_FILE" ] || fail schedule
+  # A carriage return (a file saved with CRLF) would end up in the run command and fail every
+  # night; it is refused at start instead, where it is visible.
+  ! grep -q "$(printf '\r')" "$SCHEDULE_FILE" || fail schedule
   local entries
   entries="$(grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "$SCHEDULE_FILE")"
   [ -n "$entries" ] && [ "$(wc -l <<< "$entries")" -eq 1 ] || fail schedule

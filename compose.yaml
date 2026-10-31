@@ -273,9 +273,24 @@ configs:
       REVOKE CONNECT, TEMPORARY ON DATABASE keycloak FROM PUBLIC;
       GRANT CONNECT ON DATABASE eko TO eko_backup;
       GRANT CONNECT ON DATABASE keycloak TO eko_backup;
-      -- Reads every table of both databases, tables created later included; writes none
-      -- (ADR-0004 addendum 2026-10-30). Existing volumes: the step in backup/README.md.
-      GRANT pg_read_all_data TO eko_backup;
+      -- eko_backup reads by explicit grants in each database, never by a predefined role, so
+      -- it cannot read pg_authid; the owner's default privileges cover tables created later
+      -- (ADR-0004 addendum 2026-10-30, as amended 2026-10-31). Existing volumes: the step in
+      -- backup/README.md.
+      \connect eko
+      GRANT USAGE ON SCHEMA public TO eko_backup;
+      GRANT SELECT ON ALL TABLES IN SCHEMA public TO eko_backup;
+      GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO eko_backup;
+      ALTER DEFAULT PRIVILEGES FOR ROLE eko_app GRANT SELECT ON TABLES TO eko_backup;
+      ALTER DEFAULT PRIVILEGES FOR ROLE eko_app GRANT SELECT ON SEQUENCES TO eko_backup;
+      ALTER DEFAULT PRIVILEGES FOR ROLE eko_app GRANT USAGE ON SCHEMAS TO eko_backup;
+      \connect keycloak
+      GRANT USAGE ON SCHEMA public TO eko_backup;
+      GRANT SELECT ON ALL TABLES IN SCHEMA public TO eko_backup;
+      GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO eko_backup;
+      ALTER DEFAULT PRIVILEGES FOR ROLE eko_keycloak GRANT SELECT ON TABLES TO eko_backup;
+      ALTER DEFAULT PRIVILEGES FOR ROLE eko_keycloak GRANT SELECT ON SEQUENCES TO eko_backup;
+      ALTER DEFAULT PRIVILEGES FOR ROLE eko_keycloak GRANT USAGE ON SCHEMAS TO eko_backup;
       SQL
       # Written last: its absence marks a volume whose first initialisation did not complete.
       touch "$$PGDATA/eko-init-complete"

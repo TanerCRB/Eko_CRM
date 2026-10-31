@@ -244,3 +244,14 @@ def backup_lab(tmp_path_factory: pytest.TempPathFactory) -> Iterator["BackupLab"
     from tests.runtime.backup_lab import backup_lab_session
 
     yield from backup_lab_session(tmp_path_factory)
+
+
+@pytest.fixture(autouse=True)
+def no_scheduler_outlives_its_test(request: pytest.FixtureRequest) -> Iterator[None]:
+    """R-03: the `backup` service a test starts (its real scheduler) is stopped after that test,
+    so a session spanning 01:00 UTC never gets a real run in the middle of other tests."""
+    yield
+    if "backup_lab" in request.fixturenames:
+        backup_lab: BackupLab = request.getfixturevalue("backup_lab")
+        backup_lab.stop_scheduler()
+        assert not backup_lab.scheduler_running(), "the backup scheduler is still running"

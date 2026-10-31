@@ -250,6 +250,63 @@ class RunResult:
         return self.stdout + self.stderr
 
 
+# Every process of a container, as "<pid> <command line>", read from /proc (no procps in it).
+PROCESSES = (
+    r'for d in /proc/[0-9]*; do printf "%s %s\n" "${d#/proc/}" '
+    r'"$(tr "\0" " " < "$d/cmdline")"; done 2>/dev/null'
+)
+# The run directory backup makes for its agent socket and known_hosts file, in its container.
+RUN_DIRS = "/tmp/eko-backup."  # noqa: S108 - a path inside the backup container, never opened here
+
+
+def processes(container: str) -> list[tuple[int, str]]:
+    out = docker("exec", "-u", "0", container, "sh", "-c", PROCESSES).stdout
+    listed = (line.split(" ", 1) for line in out.splitlines() if line.strip())
+    return [(int(pid), command.strip()) for pid, command in (p for p in listed if len(p) == 2)]
+
+
+def run_leftovers(container: str) -> list[str]:
+    """What a finished run must not leave in a long-running container: an ssh-agent (it holds
+    the destination credential), a psql or dump tool, or a run directory under /tmp."""
+    left = [
+        command
+        for _, command in processes(container)
+        if re.search(r"\b(ssh-agent|psql|pg_dump|pg_dumpall|age|curl|sftp)\b", command)
+        or "eko-backup run" in command
+    ]
+    listing = docker(
+        "exec", "-u", "0", container, "sh", "-c", f"ls -d {RUN_DIRS}* 2>/dev/null; true"
+    )
+    return left + listing.stdout.split()
+
+
+class ExecRun:
+    """`eko-backup run` started with `docker compose exec` in the long-running scheduler
+    container, as an operator might, so what the run leaves behind stays observable."""
+
+    def __init__(self, composition: Composition, env: dict[str, str] | None = None) -> None:
+        options = [
+            item for name, value in (env or {}).items() for item in ("-e", f"{name}={value}")
+        ]
+        self._process = subprocess.Popen(
+            [*composition.base_args(), "exec", "-T", *options, "backup", *schedule_command()],
+            cwd=REPO_ROOT,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+
+    def running(self) -> bool:
+        return self._process.poll() is None
+
+    def wait(self, timeout: float | None = None) -> RunResult:
+        stdout, stderr = self._process.communicate(timeout=timeout or RUN_TIMEOUT_SECONDS)
+        return RunResult(self._process.returncode, stdout, stderr)
+
+
 class BackupRun:
     """One one-off container of the `backup` service, started in the background."""
 
@@ -323,6 +380,42 @@ class BackupLab:
 
     def run(self, **kwargs: Any) -> RunResult:
         return self.start_run(**kwargs).wait()
+
+    def backup_image(self) -> str:
+        """The shipped `backup` image the composition built."""
+        # Compose names a built image <project>-<service>; `config --images` lists dependencies too.
+        image = f"{self.composition.project}-backup"
+        docker("image", "inspect", image)
+        return image
+
+    def with_backup_image(self, image: str) -> Composition:
+        """The composition with `backup` running another image: for planted contrasts only."""
+        override = self.lab.workdir / f"backup-{uuid.uuid4().hex[:8]}.yaml"
+        override.write_text(
+            f"services:\n  backup:\n    image: {image}\n    pull_policy: never\n", encoding="utf-8"
+        )
+        return Composition(self.composition.project, self.composition.env_file, [override])
+
+    def scheduler(self) -> str:
+        """The `backup` service's own long-running container (its scheduler); its name."""
+        self.composition.compose("up", "-d", "--no-deps", "backup")
+        # The service container by its Compose name; one-off run containers share the service.
+        return f"{self.composition.project}-backup-1"
+
+    def stop_scheduler(self) -> None:
+        self.composition.compose("rm", "-s", "-f", "backup", check=False)
+
+    def scheduler_running(self) -> bool:
+        listed = self.composition.compose("ps", "-q", "--status", "running", "backup", check=False)
+        return bool(listed.stdout.split())
+
+    def interrupt_exec_run(self, container: str) -> None:
+        """SIGTERM to the `eko-backup run` wrapper of an exec'd run, as `docker stop` sends it."""
+        targets = [
+            pid for pid, command in processes(container) if command.endswith("eko-backup run")
+        ]
+        assert len(targets) == 1, processes(container)
+        docker("exec", "-u", "0", container, "kill", "-TERM", str(targets[0]))
 
     def on_demand(self, env: dict[str, str] | None = None) -> BackupRun:
         """The command documented in backup/README.md, as written, with `-T` for no terminal."""

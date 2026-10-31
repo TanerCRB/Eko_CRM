@@ -64,3 +64,21 @@ def test_k07_every_write_by_eko_backup_is_refused_with_42501(
 def test_k07_contrast_a_select_by_eko_backup_succeeds(backup_lab: BackupLab, database: str) -> None:
     backup_lab.at_probe_head()
     assert sqlstates(backup_lab, database, READS[database]) == []
+
+
+# B-01 = F-03 (fix round 1): explicit grants instead of pg_read_all_data; no password verifier.
+
+
+def test_b01_eko_backup_cannot_read_pg_authid(backup_lab: BackupLab) -> None:
+    for database in ("eko", "keycloak"):
+        assert sqlstates(backup_lab, database, "SELECT rolpassword FROM pg_authid") == ["42501"]
+    [[member]] = backup_lab.sql(
+        "SELECT count(*) FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.roleid "
+        "JOIN pg_roles u ON u.oid = m.member WHERE u.rolname = 'eko_backup'"
+    )
+    assert member == "0", "eko_backup belongs to a role"
+
+
+def test_b01_contrast_eko_backup_reads_pg_roles(backup_lab: BackupLab) -> None:
+    for database in ("eko", "keycloak"):
+        assert sqlstates(backup_lab, database, "SELECT rolname FROM pg_roles") == []

@@ -7,12 +7,20 @@ zone, with no network: it must refuse to start, so no table is loaded and the ch
 """
 
 import subprocess
+import time
 import uuid
 from pathlib import Path
 
 import pytest
 
-from tests.runtime.backup_lab import BackupLab, failure_fields, failure_lines, schedule_command
+from tests.runtime.backup_lab import (
+    BackupLab,
+    complete_sets,
+    failure_fields,
+    failure_lines,
+    schedule_command,
+    set_names,
+)
 from tests.runtime.lab import docker
 
 pytestmark = pytest.mark.runtime
@@ -66,8 +74,8 @@ def test_k05_the_scheduler_has_loaded_one_daily_entry_at_0100_utc(backup_lab: Ba
 
 
 def planted_image(backup_lab: BackupLab, tmp_path: Path, schedule: str) -> str:
-    base = backup_lab.composition.inspect("backup")["Config"]["Image"]
-    (tmp_path / "schedule").write_text(schedule, encoding="utf-8")
+    base = backup_lab.backup_image()
+    (tmp_path / "schedule").write_text(schedule, encoding="utf-8", newline="")
     (tmp_path / "Dockerfile").write_text(
         f"FROM {base}\nCOPY schedule /etc/eko-backup/schedule\n", encoding="utf-8"
     )
@@ -99,8 +107,9 @@ def offline_scheduler(image: str, *env: str) -> subprocess.CompletedProcess[str]
         "01:00 Europe/Warsaw eko-backup run\n",
         "01:00 UTC eko-backup run\n13:00 UTC eko-backup run\n",
         "# no entry\n",
+        "01:00 UTC eko-backup run\r\n",
     ],
-    ids=["warsaw-entry", "two-entries", "no-entry"],
+    ids=["warsaw-entry", "two-entries", "no-entry", "crlf-entry"],
 )
 def test_k05_contrast_a_planted_schedule_is_refused(
     backup_lab: BackupLab, tmp_path: Path, schedule: str
@@ -116,8 +125,67 @@ def test_k05_contrast_a_planted_schedule_is_refused(
 def test_k05_contrast_the_scheduler_refuses_the_warsaw_zone(backup_lab: BackupLab) -> None:
     composition = backup_lab.composition
     composition.compose("up", "-d", "--no-deps", "backup")
-    image = composition.inspect("backup")["Config"]["Image"]
+    image = backup_lab.backup_image()
     result = offline_scheduler(image, "TZ=Europe/Warsaw")
     assert result.returncode != 0
     [line] = failure_lines(result.stderr)
     assert failure_fields(line)["reason"] == "schedule"
+
+
+# R-03 (fix round 1): a scheduler a test starts never outlives that test, so a session that spans
+# 01:00 UTC gets no real run in the middle of other tests. The pair runs in file order.
+
+
+def test_r03_a_test_starts_the_scheduler(backup_lab: BackupLab) -> None:
+    backup_lab.scheduler()
+    assert backup_lab.scheduler_running()
+
+
+def test_r03_the_next_test_finds_no_scheduler_running(backup_lab: BackupLab) -> None:
+    assert not backup_lab.scheduler_running()
+
+
+# The scheduler loop (Reviewer, "tests I couldn't break"): the shipped scheduler with a schedule
+# file whose entry is two minutes ahead fires exactly one run, in that UTC minute. Only the data
+# file differs from the shipped image; the zone check makes local time and UTC the same clock in
+# the container, so comparing local time instead of `date -u` is an equivalent mutant.
+
+
+def test_k05_the_scheduler_fires_one_run_in_its_entrys_minute(
+    backup_lab: BackupLab, tmp_path: Path
+) -> None:
+    backup_lab.at_probe_head()
+    [[now]] = backup_lab.sql("SELECT to_char(now() AT TIME ZONE 'UTC', 'HH24:MI:SS')")
+    hour, minute, second = (int(part) for part in now.split(":"))
+    ahead = (hour * 60 + minute + (2 if second < 40 else 3)) % (24 * 60)
+    entry = f"{ahead // 60:02d}:{ahead % 60:02d}"
+    tag = planted_image(backup_lab, tmp_path, f"{entry} UTC eko-backup run\n")
+    planted = backup_lab.with_backup_image(tag)
+    before = set_names(backup_lab.double)
+    planted.compose("up", "-d", "--no-deps", "backup")
+    try:
+        deadline = time.monotonic() + 300
+        while time.monotonic() < deadline:
+            [[current]] = backup_lab.sql("SELECT to_char(now() AT TIME ZONE 'UTC', 'HH24:MI')")
+            if (
+                current not in (entry, *previous_minutes(entry))
+                and not backup_lab.backup_sessions()
+            ):
+                break
+            time.sleep(5)
+        logs = planted.compose("logs", "--no-color", "backup").stdout
+    finally:
+        planted.compose("rm", "-s", "-f", "backup", check=False)
+    succeeded = [line for line in logs.splitlines() if "eko-backup: run succeeded " in line]
+    assert len(succeeded) == 1, logs[-3000:]
+    new = set_names(backup_lab.double) - before
+    assert len(new) == 1 and new <= complete_sets(backup_lab.double)
+    [name] = new
+    assert name[13:17] == entry.replace(":", ""), (name, entry)
+
+
+def previous_minutes(entry: str) -> tuple[str, ...]:
+    """The minutes before the entry's, while the test waits for it."""
+    hour, minute = (int(part) for part in entry.split(":"))
+    total = hour * 60 + minute
+    return tuple(f"{(total - k) % 1440 // 60:02d}:{(total - k) % 60:02d}" for k in (1, 2, 3))

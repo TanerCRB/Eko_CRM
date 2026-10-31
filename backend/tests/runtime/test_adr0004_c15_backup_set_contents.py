@@ -294,16 +294,12 @@ def test_k03_8_contrast_without_read_privilege_on_the_later_table_the_run_fails(
     backup_lab.at_probe_head()
     code, logs = backup_lab.lab.run_migrate(backup_lab.lab.variant("backup_later", LATER_VARIANT))
     assert code == 0, logs
-    # pg_read_all_data cannot be revoked per table (A-03): the membership goes, and every other
-    # table of the schema is granted, so only the later table is unreadable.
-    backup_lab.sql("REVOKE pg_read_all_data FROM eko_backup")
+    # With explicit grants (B-01 A) the later table's privilege is revoked directly (A-03).
+    backup_lab.sql("REVOKE SELECT ON eko_test_backup_later FROM eko_backup")
     try:
-        backup_lab.sql("GRANT SELECT ON ALL TABLES IN SCHEMA public TO eko_backup")
-        backup_lab.sql("REVOKE SELECT ON eko_test_backup_later FROM eko_backup")
         result = backup_lab.run()
     finally:
-        backup_lab.sql("REVOKE SELECT ON ALL TABLES IN SCHEMA public FROM eko_backup")
-        backup_lab.sql("GRANT pg_read_all_data TO eko_backup")
+        backup_lab.sql("GRANT SELECT ON eko_test_backup_later TO eko_backup")
     assert result.code != 0
     [line] = failure_lines(result.stderr)
     assert failure_fields(line)["reason"] == "dump-application", line
@@ -325,6 +321,39 @@ def test_k03_9_keycloak_tables_are_in_the_keycloak_dump(
     assert listed.returncode == 0, listed.stderr
     dumped = set(re.findall(r" TABLE public (\S+) ", listed.stdout.decode()))
     assert tables <= dumped
+
+
+# B-01 (fix round 1): a run that drops --no-role-passwords cannot read pg_authid, so it fails
+# instead of putting verifiers in a set. A planted contrast: the shipped script, one flag removed.
+
+
+def test_b01_a_roles_dump_with_passwords_fails_with_42501(
+    backup_lab: BackupLab, tmp_path: Path
+) -> None:
+    backup_lab.at_probe_head()
+    base = backup_lab.backup_image()
+    script = (REPO_ROOT / "backup" / "eko-backup").read_text(encoding="utf-8")
+    assert script.count(" --no-role-passwords") == 1
+    (tmp_path / "eko-backup").write_text(
+        script.replace(" --no-role-passwords", ""), encoding="utf-8", newline="\n"
+    )
+    (tmp_path / "Dockerfile").write_text(
+        f"FROM {base}\nCOPY --chmod=0755 eko-backup /usr/local/bin/eko-backup\n",
+        encoding="utf-8",
+    )
+    tag = f"localhost/eko-crm/backup-planted:{tmp_path.name.lower()}"
+    docker("build", "-q", "-t", tag, str(tmp_path), timeout=600)
+    backup_lab.images[tag] = tag
+    planted = backup_lab.with_backup_image(tag)
+    before = set_names(backup_lab.double)
+    result = planted.compose(
+        "run", "--rm", "--no-deps", "-T", "backup", "eko-backup", "run", check=False, timeout=900
+    )
+    assert result.returncode != 0
+    [line] = failure_lines(result.stderr)
+    fields = failure_fields(line)
+    assert (fields["reason"], fields.get("sqlstate")) == ("dump-roles", "42501"), line
+    assert not (set_names(backup_lab.double) - before) & complete_sets(backup_lab.double)
 
 
 # Static and image check: no age identity in the image, the container or an environment file ---
@@ -393,10 +422,27 @@ def test_k03_contrast_a_planted_identity_is_found(backup_lab: BackupLab) -> None
 # Existing volume (DoD item 13): the previous init content, then the documented operator step ---
 
 
-def operator_step() -> str:
+def operator_step(database: str) -> str:
+    """The documented existing-volume statements for one database (backup/README.md)."""
     from tests.runtime.backup_lab import documented
 
-    return documented("existing-volume-step")
+    return documented(f"existing-volume-step-{database}")
+
+
+def run_operator_step(composition: Composition) -> None:
+    for database in ("eko", "keycloak"):
+        composition.compose(
+            "exec", "-T", "postgres", "psql", "-X", "-U", "postgres", "-d", database,
+            "-v", "ON_ERROR_STOP=1", stdin=operator_step(database) + "\n",
+        )  # fmt: skip
+
+
+def verifier_readable(composition: Composition) -> bool:
+    probe = composition.compose(
+        "exec", "-T", "postgres", "psql", "-X", "-U", "eko_backup", "-d", "eko",
+        "-c", "SELECT count(*) FROM pg_authid", check=False,
+    )  # fmt: skip
+    return probe.returncode == 0
 
 
 def test_k03_existing_volume_needs_the_documented_operator_step(
@@ -427,12 +473,17 @@ def test_k03_existing_volume_needs_the_documented_operator_step(
         [line] = failure_lines(refused.stderr)
         fields = failure_fields(line)
         assert (fields["reason"], fields.get("sqlstate")) == ("dump-application", "42501"), line
-        step = operator_step()
-        assert step == "GRANT pg_read_all_data TO eko_backup;"
+        assert "REVOKE pg_read_all_data FROM eko_backup;" in operator_step("eko")
+        # The step also brings a volume first initialised by this task's earlier init content
+        # (membership in pg_read_all_data) to the explicit grants.
         old.compose(
-            "exec", "-T", "postgres", "psql", "-U", "postgres", "-d", "postgres",
-            "-v", "ON_ERROR_STOP=1", "-c", step,
+            "exec", "-T", "postgres", "psql", "-X", "-U", "postgres", "-d", "eko",
+            "-c", "GRANT pg_read_all_data TO eko_backup",
         )  # fmt: skip
+        assert verifier_readable(old)
+        run_operator_step(old)
+        run_operator_step(old)
+        assert not verifier_readable(old)
         before = set_names(double)
         accepted = old.compose(*command, check=False, timeout=900)
         assert accepted.returncode == 0, accepted.stderr

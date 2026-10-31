@@ -3,6 +3,9 @@
 # it-destination-fragment.conf, the configuration handed to the IT department).
 Port 22
 HostKey /etc/ssh/ssh_host_ed25519_key
+# A second host key of another type, as a stock OpenSSH host offers (Reviewer R-02): the client
+# must verify the configured Ed25519 key whichever type it would prefer to negotiate.
+HostKey /etc/ssh/ssh_host_ecdsa_key
 LogLevel VERBOSE
 PermitRootLogin prohibit-password
 PasswordAuthentication no

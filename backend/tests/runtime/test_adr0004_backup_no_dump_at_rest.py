@@ -32,6 +32,7 @@ from tests.runtime.backup_lab import (
     volume_files,
 )
 from tests.runtime.lab import docker
+from tests.runtime.test_adr0004_backup_failure_line import backup_lines
 
 pytestmark = pytest.mark.runtime
 
@@ -144,7 +145,9 @@ def test_k07_g8_an_interrupted_run_writes_one_line_and_leaves_nothing(
         result = run.wait()
     try:
         assert result.code != 0
-        [line] = failure_lines(result.stderr)
+        # Fix round 1 (R-01): the whole output, not only the lines matching the pattern.
+        [line] = backup_lines(result.output)
+        assert failure_lines(line) == [line], line
         fields = failure_fields(line)
         assert fields["reason"] == "interrupted", line
         backup_lab.wait_until("the lock is released", lambda: backup_lab.backup_sessions() == [])

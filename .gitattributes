@@ -5,3 +5,8 @@
 .githooks/** text eol=lf
 scripts/*.sh text eol=lf
 *.sh text eol=lf
+# EKO-1-14: files an image or the backup test double runs or reads as LF text, without a .sh
+# suffix (a CR after the shebang stops the backup image from starting).
+backup/eko-backup text eol=lf
+backup/schedule text eol=lf
+backend/tests/runtime/destination_double/* text eol=lf

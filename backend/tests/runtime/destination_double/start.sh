@@ -4,6 +4,7 @@
 set -eu
 rm -f /etc/ssh/ssh_host_*
 ssh-keygen -q -t ed25519 -N '' -C eko-double-host -f /etc/ssh/ssh_host_ed25519_key
+ssh-keygen -q -t ecdsa -N '' -C eko-double-host -f /etc/ssh/ssh_host_ecdsa_key
 for account in eko-backup root; do
   rm -f "/keys/$account" "/keys/$account.pub"
   ssh-keygen -q -t ed25519 -N '' -C "eko-double-$account" -f "/keys/$account"
