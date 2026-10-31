@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState, type MouseEvent } from "react";
 import { AppShell } from "./components/AppShell";
 import { messages } from "./i18n/pl";
 
-const Klienci = lazy(() => import("./features/Klienci"));
+const Customers = lazy(() => import("./features/Klienci"));
 
 export function App() {
   const [path, setPath] = useState(() => window.location.pathname);
@@ -60,7 +60,7 @@ export function App() {
         </>
       ) : (
         <Suspense fallback={<p role="status">{messages.loading}</p>}>
-          <Klienci />
+          <Customers />
         </Suspense>
       )}
     </AppShell>

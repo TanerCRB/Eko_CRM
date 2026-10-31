@@ -202,6 +202,13 @@ def fresh(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Composition]:
         composition.down()
 
 
+@pytest.fixture(scope="session")
+def chromium_executable(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    from tests.support.chromium import install_chromium
+
+    return install_chromium(tmp_path_factory.mktemp("verified-chromium"))
+
+
 def random_marker() -> str:
     return "marker-" + secrets.token_hex(6)
 

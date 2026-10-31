@@ -3,7 +3,6 @@
 import re
 import shutil
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import cast
@@ -124,7 +123,10 @@ def module_import(page: Page, path: str) -> dict[str, object]:
 
 
 def test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement(
-    fresh: Composition, tmp_path: Path, request: pytest.FixtureRequest
+    fresh: Composition,
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
+    chromium_executable: Path,
 ) -> None:
     up = fresh.compose(
         "up",
@@ -143,15 +145,10 @@ def test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement(
     old_chunk = lazy_chunk(fresh)
     env = fresh.env
     app_url = f"https://{env['APP_HOST']}:{env['PROXY_HTTPS_PORT']}"
-    subprocess.run(
-        [sys.executable, "-m", "playwright", "install", "chromium"],
-        check=True,
-        capture_output=True,
-        timeout=600,
-    )
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(
+            executable_path=str(chromium_executable),
             headless=True,
             args=[f"--host-resolver-rules=MAP {env['APP_HOST']} 127.0.0.1"],
         )

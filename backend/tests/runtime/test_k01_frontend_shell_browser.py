@@ -1,8 +1,7 @@
 """K-01: real-browser shell navigation, focus, responsive and reduced-motion behaviour."""
 
 import re
-import subprocess
-import sys
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -35,20 +34,15 @@ def motion_style(page: Page, selector: str) -> dict[str, str]:
 
 
 def test_k01_shell_navigation_focus_responsive_boundary_and_reduced_motion(
-    running: Started,
+    running: Started, chromium_executable: Path
 ) -> None:
     composition = running.composition
     env = composition.env
     app_url = f"https://{env['APP_HOST']}:{env['PROXY_HTTPS_PORT']}"
-    subprocess.run(
-        [sys.executable, "-m", "playwright", "install", "chromium"],
-        check=True,
-        capture_output=True,
-        timeout=600,
-    )
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(
+            executable_path=str(chromium_executable),
             headless=True,
             args=[f"--host-resolver-rules=MAP {env['APP_HOST']} 127.0.0.1"],
         )

@@ -1,6 +1,6 @@
 import { messages } from "../i18n/pl";
 
-export default function Klienci() {
+export default function Customers() {
   return (
     <div className="page-heading">
       <h1>{messages.customers}</h1>

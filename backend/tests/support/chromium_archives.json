@@ -1,0 +1,17 @@
+{
+  "playwright": "1.64.1",
+  "chromiumRevision": "1248",
+  "browserVersion": "156.0.8078.4",
+  "platforms": {
+    "windows-x86_64": {
+      "url": "https://cdn.playwright.dev/builds/cft/156.0.8078.4/win64/chrome-win64.zip",
+      "sha256": "220021ecfdad08c116fc71a153e65e3861ba841c531afc4f7acc7bd5d44b41db",
+      "executable": "chrome-win64/chrome.exe"
+    },
+    "linux-x86_64": {
+      "url": "https://cdn.playwright.dev/builds/cft/156.0.8078.4/linux64/chrome-linux64.zip",
+      "sha256": "43fd31766c7533a02dda2ded5ad50c2f861cd5400be7509c0abad71129f79d79",
+      "executable": "chrome-linux64/chrome"
+    }
+  }
+}

@@ -5,8 +5,11 @@ import "./styles/shell.css";
 import { mount } from "./mount";
 
 window.addEventListener("vite:preloadError", (event) => {
+  if (window.location.search === "?recovery=1") {
+    return;
+  }
   event.preventDefault();
-  window.location.assign("/klienci");
+  window.location.assign("/klienci?recovery=1");
 });
 
 mount(document);

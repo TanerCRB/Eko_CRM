@@ -37,6 +37,15 @@ describe("K-05: production excludes prototype orchestration", () => {
     expect(violations).toEqual([]);
   });
 
+  it("uses English lazy-component identifiers while preserving the emitted chunk name", () => {
+    const appSource = readFileSync(join(process.cwd(), "src/App.tsx"), "utf8");
+    const featureSource = readFileSync(join(process.cwd(), "src/features/Klienci.tsx"), "utf8");
+
+    expect(appSource).toContain('const Customers = lazy(() => import("./features/Klienci"))');
+    expect(appSource).toContain("<Customers />");
+    expect(featureSource).toContain("export default function Customers()");
+  });
+
   it.each([
     ["innerHTML", "element.innerHTML = supplied;"],
     ["innerHTML", "const props = { dangerouslySetInnerHTML: supplied };"],
