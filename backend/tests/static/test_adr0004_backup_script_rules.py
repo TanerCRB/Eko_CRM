@@ -84,3 +84,35 @@ def test_naming_rule_random_part_is_16_hex_digits_from_the_kernel() -> None:
     ]
     assert r"$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')" in assignment
     assert "[0-9a-f]{16}$ ]]" in script
+
+
+# QA (fix round 1, S-01 hardening, A-18): the ssh-agent holding the destination credential is
+# started with a key lifetime of at most a day, so an agent a run could not stop forgets the key.
+# Expiry itself cannot be observed in a test; this pins that every agent start carries the limit.
+
+AGENT_START = re.compile(r"\bssh-agent\b([^)\n]*)")
+AGENT_LIFETIME = re.compile(r"(?:^|\s)-t\s+([0-9]+)(?:\s|$)")
+
+
+def agent_lifetimes(script: str) -> list[int | None]:
+    """The -t value of every ssh-agent start in the script (None for a start without one)."""
+    starts = [m.group(1) for m in AGENT_START.finditer(script) if "-s" in m.group(1).split()]
+    return [
+        int(found.group(1)) if (found := AGENT_LIFETIME.search(args)) else None for args in starts
+    ]
+
+
+def test_s01_the_agent_forgets_the_credential_within_a_day() -> None:
+    lifetimes = agent_lifetimes(SCRIPT.read_text(encoding="utf-8"))
+    assert lifetimes != [], "no ssh-agent start found"
+    assert all(t is not None and 0 < t <= 86400 for t in lifetimes), lifetimes
+
+
+@pytest.mark.parametrize(
+    "planted",
+    ['eval "$(ssh-agent -s -a "$RUNDIR/agent")"\n',
+     'eval "$(ssh-agent -s -t 172800 -a "$RUNDIR/agent")"\n'],
+)  # fmt: skip
+def test_s01_contrast_an_agent_without_the_limit_is_found(planted: str) -> None:
+    lifetimes = agent_lifetimes(SCRIPT.read_text(encoding="utf-8") + planted)
+    assert not all(t is not None and 0 < t <= 86400 for t in lifetimes), lifetimes

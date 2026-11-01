@@ -13,6 +13,7 @@ import hashlib
 import json
 import re
 import subprocess
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -445,6 +446,26 @@ def verifier_readable(composition: Composition) -> bool:
     return probe.returncode == 0
 
 
+def created_later_is_readable(composition: Composition, database: str, owner: str) -> bool:
+    """A table the database's owner role creates now: can eko_backup read it? (QA, fix round 1:
+    the operator step's default privileges must cover tables created after the step, which the
+    run right after the step never sees.)"""
+    table = f"eko_test_after_step_{uuid.uuid4().hex[:8]}"
+    composition.compose(
+        "exec", "-T", "postgres", "psql", "-X", "-U", "postgres", "-d", database,
+        "-v", "ON_ERROR_STOP=1", "-c", f"SET ROLE {owner}; CREATE TABLE {table} (id int)",
+    )  # fmt: skip
+    probe = composition.compose(
+        "exec", "-T", "postgres", "psql", "-X", "-U", "eko_backup", "-d", database,
+        "-v", "ON_ERROR_STOP=1", "-c", f"SELECT count(*) FROM {table}", check=False,  # noqa: S608 - a generated hex name
+    )  # fmt: skip
+    composition.compose(
+        "exec", "-T", "postgres", "psql", "-X", "-U", "postgres", "-d", database,
+        "-c", f"DROP TABLE {table}",
+    )  # fmt: skip
+    return probe.returncode == 0
+
+
 def test_k03_existing_volume_needs_the_documented_operator_step(
     backup_lab: BackupLab, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
@@ -473,6 +494,9 @@ def test_k03_existing_volume_needs_the_documented_operator_step(
         [line] = failure_lines(refused.stderr)
         fields = failure_fields(line)
         assert (fields["reason"], fields.get("sqlstate")) == ("dump-application", "42501"), line
+        # Contrast for the check after the step: before it, a table created now is unreadable.
+        assert not created_later_is_readable(old, "eko", "eko_app")
+        assert not created_later_is_readable(old, "keycloak", "eko_keycloak")
         assert "REVOKE pg_read_all_data FROM eko_backup;" in operator_step("eko")
         # The step also brings a volume first initialised by this task's earlier init content
         # (membership in pg_read_all_data) to the explicit grants.
@@ -484,6 +508,8 @@ def test_k03_existing_volume_needs_the_documented_operator_step(
         run_operator_step(old)
         run_operator_step(old)
         assert not verifier_readable(old)
+        assert created_later_is_readable(old, "eko", "eko_app")
+        assert created_later_is_readable(old, "keycloak", "eko_keycloak")
         before = set_names(double)
         accepted = old.compose(*command, check=False, timeout=900)
         assert accepted.returncode == 0, accepted.stderr

@@ -406,7 +406,14 @@ class BackupLab:
         self.composition.compose("rm", "-s", "-f", "backup", check=False)
 
     def scheduler_running(self) -> bool:
-        listed = self.composition.compose("ps", "-q", "--status", "running", "backup", check=False)
+        # The service's own container only: `compose ps` also lists one-off `run` containers, so
+        # a test failing while its run still ran errored at teardown as "scheduler still running".
+        listed = docker(
+            "ps", "-q",
+            "--filter", f"label=com.docker.compose.project={self.composition.project}",
+            "--filter", "label=com.docker.compose.service=backup",
+            "--filter", "label=com.docker.compose.oneoff=False",
+        )  # fmt: skip
         return bool(listed.stdout.split())
 
     def interrupt_exec_run(self, container: str) -> None:

@@ -6,8 +6,10 @@ this test cannot drift (ADR-0004 addendum 2026-10-30, *A failed run is one line*
 """
 
 import re
+import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 
@@ -18,6 +20,8 @@ from tests.runtime.backup_lab import (
     failure_lines,
     set_names,
 )
+from tests.runtime.conftest import Composition
+from tests.runtime.lab import PsqlSession, docker
 from tests.support.repo import REPO_ROOT
 
 pytestmark = pytest.mark.runtime
@@ -199,3 +203,103 @@ def test_r04_a_dump_held_on_a_lock_past_its_limit_fails_as_that_dump(
     [line] = failure_lines(result.stderr)
     fields = failure_fields(line)
     assert (fields["reason"], fields.get("sqlstate")) == ("dump-keycloak", "57014"), line
+
+
+# QA (fix round 1, R-04): the limit is on both pg_dump calls, but the test above holds only a
+# Keycloak table. The application dump reads in the control session's snapshot, whose row counts
+# already hold ACCESS SHARE on every application table, so a lock taken before the run only
+# stalls the counts. What stalls the application dump is an exclusive request queued after the
+# counts: it waits on the control transaction, the dump queues behind it, and the control session
+# waits for the dump, a wait the server cannot see as a deadlock. To reach that point the planted
+# image is the shipped script with one pause before the application dump (as the B-01 contrast
+# plants one flag); the contrast runs the same image with no request queued.
+
+APP_DUMP_LINE = "  stream_object application.dump.age dump-application dump_application\n"
+PAUSE_SECONDS = 25
+
+
+def paused_before_the_application_dump(backup_lab: BackupLab, tmp_path: Path) -> Composition:
+    script = SCRIPT.read_text(encoding="utf-8")
+    assert script.count(APP_DUMP_LINE) == 1
+    (tmp_path / "eko-backup").write_text(
+        script.replace(APP_DUMP_LINE, f"  sleep {PAUSE_SECONDS}\n{APP_DUMP_LINE}"),
+        encoding="utf-8",
+        newline="\n",
+    )
+    (tmp_path / "Dockerfile").write_text(
+        f"FROM {backup_lab.backup_image()}\n"
+        "COPY --chmod=0755 eko-backup /usr/local/bin/eko-backup\n",
+        encoding="utf-8",
+    )
+    tag = f"localhost/eko-crm/backup-planted:{tmp_path.name.lower()}"
+    docker("build", "-q", "-t", tag, str(tmp_path), timeout=600)
+    backup_lab.images[tag] = tag
+    return backup_lab.with_backup_image(tag)
+
+
+def in_the_pause(backup_lab: BackupLab) -> bool:
+    """The counts are read (the control session holds the probe table) and no dump has begun."""
+    [[held]] = backup_lab.sql(
+        "SELECT count(*) FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid "
+        "WHERE a.application_name = 'eko-backup-control' AND l.granted "
+        "AND l.relation = 'eko_test_backup_probe'::regclass"
+    )
+    return held != "0" and backup_lab.dump_sessions() == []
+
+
+def start_paused_run(planted: Composition) -> subprocess.Popen[str]:
+    return subprocess.Popen(
+        [*planted.base_args(), "run", "--rm", "--no-deps", "-T", "backup", "eko-backup", "run"],
+        cwd=REPO_ROOT,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+
+def test_r04_an_application_dump_queued_behind_a_lock_fails_as_that_dump(
+    backup_lab: BackupLab, tmp_path: Path
+) -> None:
+    backup_lab.at_probe_head()
+    limit = dump_lock_wait_seconds()
+    planted = paused_before_the_application_dump(backup_lab, tmp_path)
+    requester = PsqlSession(backup_lab.composition, name="eko-test-x-request")
+    run = start_paused_run(planted)
+    stderr = None
+    try:
+        backup_lab.wait_until("the run pauses after its counts", lambda: in_the_pause(backup_lab))
+        requester.query("BEGIN")
+        requester.send("LOCK TABLE eko_test_backup_probe IN ACCESS EXCLUSIVE MODE")
+        try:
+            _, stderr = run.communicate(timeout=PAUSE_SECONDS + limit + 240)
+        except subprocess.TimeoutExpired:
+            pass
+    finally:
+        # A run that never ends leaves its sessions and the queued request on the server; both
+        # are ended there, or the next test's reset waits behind them.
+        run.kill()
+        backup_lab.sql(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = 'eko_backup' "
+            "OR application_name = 'eko-test-x-request'"
+        )
+        requester.close()
+        planted.compose("rm", "-s", "-f", "backup", check=False)
+    assert stderr is not None, "the run was still waiting after the dump's lock wait limit"
+    assert run.returncode != 0
+    [line] = failure_lines(stderr)
+    fields = failure_fields(line)
+    assert (fields["reason"], fields.get("sqlstate")) == ("dump-application", "57014"), line
+
+
+def test_r04_contrast_the_paused_run_with_no_request_queued_succeeds(
+    backup_lab: BackupLab, tmp_path: Path
+) -> None:
+    backup_lab.at_probe_head()
+    planted = paused_before_the_application_dump(backup_lab, tmp_path)
+    run = start_paused_run(planted)
+    backup_lab.wait_until("the run pauses after its counts", lambda: in_the_pause(backup_lab))
+    _, stderr = run.communicate(timeout=900)
+    assert run.returncode == 0, stderr

@@ -113,6 +113,24 @@ def test_r01_a_control_session_refused_at_connect_writes_one_line_and_leaves_not
     assert run_leftovers(scheduler) == []
 
 
+# QA (fix round 1): every failure above happens after the ssh-agent has started, so the agent's
+# variables are always set by the time the cleanup runs. A run refused before the agent starts
+# (a host-key line ssh-keygen cannot fingerprint) is the one exit path where the cleanup reads a
+# variable the run never set: the contrast to the 28P01 run, with only the failure point moved.
+
+
+def test_r01_a_run_refused_before_the_agent_starts_writes_one_line_and_leaves_nothing(
+    backup_lab: BackupLab, scheduler: str
+) -> None:
+    backup_lab.at_probe_head()
+    unreadable = dict([("BACKUP_DESTINATION_HOST_KEY", "ssh-ed25519 AAAAsynthetic-not-a-key")])
+    result = ExecRun(backup_lab.composition, env=unreadable).wait()
+    fields = the_one_line(result)
+    assert fields["reason"] == "destination", fields
+    assert "sqlstate" not in fields, fields
+    assert run_leftovers(scheduler) == []
+
+
 def test_r01_contrast_a_successful_run_in_the_scheduler_leaves_nothing(
     backup_lab: BackupLab, scheduler: str
 ) -> None:

@@ -172,11 +172,15 @@ PLANTED_SHM = "/dev/shm/eko-test-planted"  # noqa: S108 - inside the run contain
 SEARCH = 'grep -rlsF --exclude-dir=proc --exclude-dir=sys -e "$1" / /dev/shm; true'
 
 
-def files_with(container: str, marker: str) -> list[str]:
+def files_with(container: str, marker: str) -> list[str] | None:
+    """Paths in the container holding the marker; None when no search ran (the container had
+    already stopped: docker then prints its own error, which is no path)."""
     found = subprocess.run(
         ["docker", "exec", "-u", "0", container, "sh", "-c", SEARCH, "search", marker],
         capture_output=True, timeout=120,
     )  # fmt: skip
+    if found.returncode != 0:  # SEARCH itself always exits 0
+        return None
     return sorted(set(found.stdout.decode(errors="replace").split()))
 
 
@@ -196,7 +200,12 @@ def scans_during_the_application_dump(backup_lab: BackupLab, marker: str) -> tup
         names = {s[1] for s in backup_lab.backup_sessions()}
         if "eko-backup-dump-keycloak" in names or "eko-backup-dump-roles" in names:
             break
-        found += files_with(run.container_name, marker)
+        # QA (fix round 1): the baseline run once counted docker's "cannot exec in a stopped
+        # container" text as six found files, when the run ended between the check and the exec.
+        searched = files_with(run.container_name, marker)
+        if searched is None:
+            continue
+        found += searched
         scans += 1
     result = run.wait()
     assert result.code == 0, result.stderr
