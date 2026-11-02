@@ -1,0 +1,8 @@
+{
+  "kind": "gate",
+  "task": "EKO-2-01",
+  "gate": 1,
+  "waitingSince": "2026-11-02T10:42:02Z",
+  "decidedAt": "2026-11-02T11:47:14Z",
+  "outcome": "accepted G-1 A through G-7 A; implementation blocked under G-7 A until #53 and #54 complete with foundation evidence"
+}
