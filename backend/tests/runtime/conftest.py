@@ -29,6 +29,12 @@ UP_TIMEOUT_SECONDS = 900
 PORT_VARIABLES = ("PROXY_HTTP_PORT", "PROXY_HTTPS_PORT", "PROXY_ADMIN_PORT")
 
 
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """EKO-1-13 K-07: the secret-in-logs check reads the logs every other test left behind."""
+    last = [item for item in items if "test_adr0005_no_secret_in_logs" in item.nodeid]
+    items[:] = [item for item in items if item not in last] + last
+
+
 def free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))

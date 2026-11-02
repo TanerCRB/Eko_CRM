@@ -37,7 +37,7 @@ def test_adr0004_c26_statement_timeout(lab: Lab) -> None:
         run.remove()
     elapsed = exited_at - granted_at
     assert code != 0, logs
-    assert "statement timeout" in logs, logs[-2000:]
+    assert '"cause":"psycopg.errors.QueryCanceled"' in logs, logs[-2000:]
     assert STATEMENT_TIMEOUT - TOLERANCE <= elapsed < STATEMENT_TIMEOUT + MARGIN, elapsed
     assert lab.comparison_dump() == before
 

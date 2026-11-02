@@ -6,10 +6,62 @@
 	# Caddy's own redirect targets its internal port 443 and drops the published one; the
 	# explicit redirect below names the port HTTPS is published on. ACME challenges still pass.
 	auto_https disable_redirects
+	# One field restriction on every line Caddy writes (ADR-0005 addendum 2026-11-02, C4): no
+	# header, cookie, remote address or port, protocol, TLS detail or query string. Requests for
+	# an unmapped host and every error line go through this default logger; the site access logs
+	# below use the same restriction (docs/operations/log-format.md).
+	log default {
+		output stderr
+		format filter {
+			wrap json {
+				time_format rfc3339_nano
+			}
+			fields {
+				request>remote_ip delete
+				request>remote_port delete
+				request>proto delete
+				request>headers delete
+				request>tls delete
+				request>uri regexp "\?.*$" ""
+				resp_headers delete
+				bytes_read delete
+				user_id delete
+				err_id delete
+				err_trace delete
+			}
+		}
+	}
+}
+
+# Every site's access log: exactly one line per request, under the default logger's restriction,
+# which is kept identical (a site with its own log is left out of the default logger's).
+(access_log) {
+	log {
+		output stderr
+		format filter {
+			wrap json {
+				time_format rfc3339_nano
+			}
+			fields {
+				request>remote_ip delete
+				request>remote_port delete
+				request>proto delete
+				request>headers delete
+				request>tls delete
+				request>uri regexp "\?.*$" ""
+				resp_headers delete
+				bytes_read delete
+				user_id delete
+				err_id delete
+				err_trace delete
+			}
+		}
+	}
 }
 
 # Plain HTTP serves only a redirect to the same URL over HTTPS (ADR-0004 *HTTPS exposure*).
 http://{$APP_HOST}, http://{$AUTH_HOST} {
+	import access_log
 	redir https://{host}:{$PROXY_HTTPS_PORT}{uri} 308
 }
 
@@ -29,6 +81,7 @@ http://{$APP_HOST}, http://{$AUTH_HOST} {
 # Each site is one `route`, so its rules run in the order written (Caddy otherwise sorts
 # directives, and `handle` would run before `respond`).
 {$APP_HOST} {
+	import access_log
 	header Strict-Transport-Security "max-age=31536000"
 	route {
 		import no_api_description
@@ -40,6 +93,7 @@ http://{$APP_HOST}, http://{$AUTH_HOST} {
 # Public listener for Keycloak: only the application realm's login, reset and required-action
 # pages, its OIDC endpoints and discovery document, and static resources (ADR-0004).
 {$AUTH_HOST} {
+	import access_log
 	route {
 		import no_api_description
 		import no_account_console
@@ -53,6 +107,7 @@ http://{$APP_HOST}, http://{$AUTH_HOST} {
 # The certificate for this name is provided by the IT department (EKO-1-08); until then the
 # internal issuer stands in.
 https://{$AUTH_ADMIN_HOST}:8443 {
+	import access_log
 	tls internal
 	route {
 		import no_api_description

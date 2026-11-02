@@ -664,3 +664,477 @@ split. Left unchanged, the typed-username stop rule would bind a task that no lo
 Keycloak, and the tasks that do would find nothing in this decision naming them. Approved by the
 human at gate 1 of EKO-1-06 on 2026-10-28 (G-5 B, Issue #19). This is not a deviation: no rule
 changes.
+
+### 2026-11-02 — Log settings and line forms of every service but Keycloak, the backend's correlation identifier and error handling, and `Cache-Control: no-store`
+
+**Status:** Accepted 2026-11-02 (gate 1 of EKO-1-13, Issue #54; accepted by the human in the driving session with Q-1 A, Q-2 B, Q-3 A, Q-4 A, Q-5 A, recorded on the Issue).
+
+**What it settles.** *What may appear in logs* names the fields each component may write. *The
+user's browser* has every API response carrying personal data sent with `Cache-Control: no-store`.
+The addendum of 2026-10-28 gives EKO-1-13 (#54) the log settings of every service other than
+Keycloak, PostgreSQL's error logging and `proxy`'s log included, the time-bound deletion of logs in
+the composition, the backend's log and error-handling rules with its correlation identifier, and
+`Cache-Control: no-store`. None of these says which PostgreSQL settings keep error text out, what
+form a line has, how the correlation identifier is made and where a response carries it, where the
+backend's handling is installed, or what deletes a container log after 14 days. From this date:
+
+- **PostgreSQL: where its log settings live.**
+  - They are `-c` pairs in the `command` of the `postgres` service in `compose.yaml`, beside
+    `max_connections` (ADR-0004, addendum of 2026-10-28, *What it creates*). Each is a literal,
+    with no Compose interpolation (`${…}`). None is in an environment file or its template, in the
+    init content, in `postgresql.conf`, in `ALTER SYSTEM`, or in `ALTER DATABASE … SET` or
+    `ALTER ROLE … SET`. A setting made per database or per role would leave the other database,
+    or another role, uncovered.
+  - The official image's entrypoint passes the command's arguments to the temporary server of the
+    first initialisation too, so the init content's own session runs under them. That session
+    keeps its own `SET log_statement = 'none'` and `SET log_min_error_statement = 'panic'`
+    unchanged.
+- **PostgreSQL: the values.**
+
+  | Setting | Value | What it does here |
+  |---|---|---|
+  | `log_destination` | `stderr` | the only destination |
+  | `logging_collector` | `off` | no log files, in `pgdata` or anywhere else |
+  | `log_min_messages` | `log` | writes LOG, FATAL and PANIC lines; writes no ERROR and no WARNING line <!-- GATE-1: Q-1 — no line at all for a statement error; options in EKO-1-13's impact map --> |
+  | `log_min_error_statement` | `panic` | no `STATEMENT:` line for any message the server writes |
+  | `log_error_verbosity` | `terse` | no `DETAIL:`, `HINT:`, `QUERY:` or `CONTEXT:` line |
+  | `log_statement` | `none` | no statement text |
+  | `log_duration` | `off` | no duration lines |
+  | `log_min_duration_statement` | `-1` | no statement logged for its duration |
+  | `log_min_duration_sample` | `-1` | as above, sampled |
+  | `log_transaction_sample_rate` | `0` | no transaction sampled |
+  | `log_parameter_max_length` | `0` | no bind parameter |
+  | `log_parameter_max_length_on_error` | `0` | no bind parameter on an error |
+  | `log_lock_waits` | `off` | no lock-wait lines (not in *What may appear in logs* for PostgreSQL) |
+  | `log_temp_files` | `-1` | no temporary-file lines |
+  | `log_autovacuum_min_duration` | `-1` | no autovacuum lines |
+  | `log_replication_commands` | `off` | none |
+  | `log_recovery_conflict_waits` | `off` | none |
+  | `log_checkpoints` | `on` | checkpoint messages, which *What may appear in logs* allows |
+  | `log_connections` | `receipt,authentication,authorization` | connection events (PostgreSQL 18 list form) |
+  | `log_disconnections` | `on` | disconnection events |
+  | `log_hostname` | `off` | the client address, never a resolved name |
+  | `log_timezone` | `UTC` | the time of every line |
+  | `log_line_prefix` | `%m [%p] %e %q%u@%d %h ` | time, process, SQLSTATE; for a session also role, database and client address |
+
+  The settings not listed keep the pinned image's defaults. A release that moves to another
+  PostgreSQL version keeps every value of this table, and a setting that version adds which writes
+  statement, parameter or message text is set off in the same release.
+- **PostgreSQL: what its log is, and what a line holds.**
+  - "PostgreSQL's log" is the server's standard error, which is the `postgres` container's log,
+    and nothing else. No log file exists under `pgdata` or anywhere else in the container.
+  - A failed statement writes **no line**: its ERROR is below `log_min_messages`. So for an error
+    PostgreSQL writes neither its SQLSTATE nor its position. That is within *What may appear in
+    logs* ("at most"). No line carries a position. A test treats any ERROR or WARNING line, and any
+    `STATEMENT:`, `DETAIL:`, `HINT:`, `QUERY:` or `CONTEXT:` line, as a failure.
+  - The lines that are written are connection events (receipt, authentication, authorization,
+    disconnection), the server's start, stop, checkpoint and recovery messages, and FATAL and
+    PANIC messages. Each carries the SQLSTATE through `%e` (`00000` on an ordinary LOG line).
+  - **The FATAL lines of connection start-up.** <!-- GATE-1: Q-2 (G-5) — options in EKO-1-13's
+    impact map --> A connection that fails before its session starts writes one FATAL line whose
+    message names what the client sent: `password authentication failed for user "<role>"`,
+    `database "<name>" does not exist`, `no pg_hba.conf entry for host …, user …, database …`, or
+    an invalid start-up parameter with its value. These lines are connection and authentication
+    events (the role, the database, the client address inside the composition), which *What may
+    appear in logs* allows. They are not errors of a statement. A failed authentication therefore
+    names the role the client typed, with SQLSTATE `28P01`. Only services of the composition and
+    operators can connect, because `postgres` publishes no port (ADR-0004-C3).
+  - The `authorization` event names the client's `application_name`. That is a value the client
+    sends. The composition's own clients set it to fixed names or leave it empty, and no client
+    outside the composition can connect.
+- **PostgreSQL: superuser sessions.** The settings are server-wide from the command line, so they
+  cover every session, superuser sessions and the init content's included. The three login roles
+  cannot change any of them, because each is a superuser-only setting or a server-start setting.
+  A superuser can still change them for its own session, or with `ALTER DATABASE … SET` or
+  `ALTER ROLE … SET`, which take precedence over the command line. That is an act of the IT
+  department, which holds the superuser password (ADR-0004 *Secret handling*). A test of a fresh
+  composition finds no log setting in `pg_db_role_setting`.
+- **`proxy`: one line form for every line Caddy writes.**
+  - `proxy` writes JSON, one object per line. Every logger of `proxy` uses one field restriction:
+    each site's access log and Caddy's default logger alike. Requests for a host no site maps are
+    logged by Caddy's default access logger, and errors carry the request as well, so a
+    restriction on the site loggers alone would leave both unfiltered.
+  - An access line holds exactly these keys: `ts`, `level`, `logger`, `msg`, `request` with
+    `client_ip`, `host`, `method` and `uri`, then `status`, `size` and `duration`.
+    - `ts` is RFC 3339 in UTC with nanoseconds and the suffix `Z` (Caddy's `rfc3339_nano`), never
+      local time.
+    - `request.uri` is the path with everything from the first `?` removed.
+    - `size` is the response body in bytes, and `duration` is in seconds as a number.
+    - `level`, `logger` and `msg` are Caddy's fixed labels.
+  - No other key appears. Request and response headers, `remote_ip`, `remote_port`, `proto`, `tls`,
+    `bytes_read` and `user_id` are removed. So no cookie, no `Location` header (the plain-HTTP
+    redirect's carries the query string) and no other header value is written. The host name is
+    written once, as `request.host`. A test checks the key set against this list, so a field that a
+    Caddy upgrade adds fails it.
+  - **Exactly one access line per request.** Every site block of `proxy/Caddyfile` declares its
+    access log through one shared snippet. Those blocks are the plain-HTTP block of `<app-host>`
+    and `<auth-host>`, `<app-host>`, `<auth-host>` and `<auth-admin-host>`. Caddy's default logger
+    writes no access line for a site that has its own. A request that `proxy` answers itself (a
+    redirect, a 403 or 404 from `respond`) writes its line like any other.
+  - **When an upstream fails.** <!-- GATE-1: Q-3 (G-7) — options in EKO-1-13's impact map --> A
+    request whose upstream fails (502, 504) writes its access line and at most one error line from
+    Caddy's error logger. The error line holds the keys of an access line except `size`, and its
+    `msg` is the upstream failure reason. If a test finds a request value in that `msg` (a query
+    marker, a header value), the work stops and returns here; the fallback is option B of Q-3.
+  - `proxy`'s certificate, start, stop and listener messages go to the default logger under the
+    same restriction.
+  - `proxy` carries no correlation identifier: it writes no header value other than the host name
+    (*What may appear in logs*).
+- **`frontend`.** Its Caddy site declares no access log, so `frontend` writes no per-request line.
+  Its default logger uses the same field restriction as `proxy`'s, so an error line it writes for a
+  request follows the entry point's rule.
+- **`backend`, `migrate` and `worker`: one line form.**
+  - Each line is one JSON object on standard error, in UTF-8 with every character outside ASCII
+    escaped. So no value can split or forge a line. The lines of uvicorn's loggers are included.
+  - The keys come in this order:
+    - `ts`: RFC 3339 in UTC with microseconds and `Z`, taken from the log record's creation time;
+    - `level`;
+    - `process`: `backend`, `migrate` or `worker`;
+    - `logger`;
+    - `event`: `request`, `error` or `message`;
+    - then the keys of that event:
+      - **request:** `method`, `route`, `status`, `duration_ms` and `correlation_id`;
+      - **error:** `error` (the exception's type), `at` (its code location), optionally `cause`
+        (the type of its cause), and `correlation_id` when it was raised while a request was
+        handled;
+      - **message:** `msg`, plus `correlation_id` while a request is handled.
+  - `method` is one of the standard methods (`GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`,
+    `OPTIONS`, `TRACE`, `CONNECT`), otherwise `OTHER`. A method a client invents is never written.
+  - Later fields that *What may appear in logs* allows (the subject identifier, record
+    identifiers) are added by the task that introduces them, as further keys of this addendum's
+    documented form.
+  - **Two plain-text forms stay as they are.** The configuration-error line
+    (`configuration error: …`, ADR-0004-C10) and the refusal lines of ADR-0004's addendum of
+    2026-10-29 (`<process> refused to start: …`, `migrate refused: …`) are unchanged. They are the
+    message of `SystemExit`, which the interpreter writes. `backup`'s lines are unchanged, and
+    `backup/README.md` stays their one place (ADR-0004, addendum of 2026-10-30).
+- **`backend`: an exception is written as its type and location only.**
+  - No line holds an exception's message, its arguments, its notes or a traceback. This is so
+    whether the exception reaches a log record as `exc_info`, as `stack_info` or as an argument of
+    the message.
+  - Each such exception is written as `error`, `at` and optionally `cause`.
+  - `error` is the type's module and qualified name (`psycopg.errors.UniqueViolation`).
+  - `cause` is the type of its explicit cause, otherwise of its implicit context unless that is
+    suppressed. Only one level is written. An exception group is written as the group's own type.
+  - **Code location** is `<module>:<function>:<line>`. `<module>` is the dotted module name for code
+    under `backend/app/`. For code under `backend/migrations/`, it is the file's path relative to
+    `backend/` (`migrations/env.py`). The frame is the **innermost frame of the application's own
+    code**: under `backend/app/` or `backend/migrations/`, which is where the application called
+    into the library that raised. When the traceback holds no such frame, it is the innermost frame
+    of the traceback.
+- **Lines of other libraries.** <!-- GATE-1: Q-5 — options in EKO-1-13's impact map -->
+  - A record from a logger outside `app` and `app.*` is written with its format string as `msg`.
+    Its arguments are never interpolated. Uvicorn's `uvicorn.error` logger, for example, writes a
+    WebSocket request's path with its query string as an INFO argument, and its factory-load
+    failure as `%s` of the exception.
+  - Exceptions in such records follow the rule above.
+  - Loggers outside `app` are at `WARNING`, except `uvicorn.error` at `INFO`.
+  - Application code logs through `app.*` loggers, with only values this decision allows.
+  - `env.py` writes migration progress through its own `app.*` logger, naming revision identifiers
+    only.
+  - The logging configuration names no SQLAlchemy logger, because ADR-0002-C4 (as restated on
+    2026-10-29) allows the text `sqlalchemy` only under `backend/app/data/`. SQLAlchemy's `echo`
+    and `echo_pool` stay off.
+- **Time values in a line.** `ts` comes from the log record, which the logging library stamps.
+  `duration_ms` is measured with a monotonic counter (`time.perf_counter_ns` or
+  `time.monotonic_ns`). Neither is "now" or "today" under ADR-0002 *Now, today*: the line's time is
+  not application code reading the clock, and a monotonic counter holds no instant. No log setting
+  is read from the environment (ADR-0001-C10, *Cloud-agnostic constraints* item 2: the same in
+  every environment). No file under `backend/app/` or `backend/migrations/` calls `print`.
+- **The request line.**
+  - Every request that `backend` receives writes exactly one line, once its response has ended or
+    failed. That covers every path (`/openapi.json` inside the network included) and the container
+    healthcheck's requests (G-6 A). Uvicorn's access log stays off (`serve.py`, A-14 of #57).
+  - `route` is the matched route's template (`/api/health`, `/api/customers/{customer_id}`).
+  - When no route matched (404, a trailing-slash redirect), `route` is the request's decoded path
+    with each segment replaced by `*`, unless one of two things holds. The segment equals a fixed
+    (non-parameter) segment of a route in the application's route table, or it is a canonical UUID
+    in lower case. Such a segment is written as itself. The value is cut at 256 characters.
+    So `/api/<marker>` is written `/api/*`.
+  - ADR-0002 fixes no key type. A task whose identifiers are not UUIDs changes this rule first,
+    since a decimal number (a NIP, a phone number) is never opaque.
+  - The query string is never written.
+- **The correlation identifier.**
+  - `backend` generates one per request: 32 lower-case hexadecimal digits, from 128 bits read from
+    the operating system's random source (`secrets.token_hex(16)`).
+  - It is never taken from, derived from or compared with any request header or value. No header
+    is read for it: `X-Request-ID`, `X-Correlation-ID` and `traceparent` are not consulted. It is
+    not a counter, a time or a process identifier, so it is unique across uvicorn's worker
+    processes without coordination. A collision is possible only by chance at that size.
+  - It is set before anything inside the application can produce a response. It is bound to the
+    request's context, so every line written while the request is handled carries it (the threads
+    a request's synchronous code runs in included). It is cleared when the request ends.
+  - **Where a response carries it.** <!-- GATE-1: Q-4 — options in EKO-1-13's impact map --> It
+    travels in the response header `Eko-Correlation-Id`, on **every** response `backend` sends:
+    success and error, every status (404, 405, 422 and 500 included) and every path. No response
+    body changes, so `/api/health`'s body stays status-only and the OpenAPI document is unchanged.
+    A response that `proxy` generates itself carries none.
+- **`Cache-Control: no-store` (G-2 A).**
+  - Every response `backend` sends to a request whose path is `/api` or begins with `/api/`
+    carries exactly `Cache-Control: no-store`. It replaces any `Cache-Control` set inside the
+    application.
+  - It is set by the same outermost layer that sets the identifier, on the response's start. So it
+    also covers the 500 of Starlette's server-error middleware, the router's 404, 405 and
+    redirects, and the 422 of request validation, none of which pass through per-route code or
+    through middleware added inside the server-error middleware.
+  - `proxy` passes it through unchanged. `proxy/Caddyfile` sets and strips no `Cache-Control` for
+    `/api/`.
+  - No other response is claimed either way.
+- **The single entries that install it.**
+  - **The process half** is `install_process_logging(process)` in **`backend/app/core/logs.py`**,
+    a new module of the `core` layer using only the standard library. It installs the line form
+    above and the hooks: `sys.excepthook`, `threading.excepthook`, `sys.unraisablehook` and
+    `logging.captureWarnings(True)`.
+  - The same module provides the logging configuration that `serve.py` passes to `uvicorn.run` as
+    `log_config`. Uvicorn applies it in each worker process it starts, before that process imports
+    and calls the factory.
+  - **The request half** is `install_request_handling(app)` in **`backend/app/main.py`**, where
+    ADR-0001 places error handling and *Where personal data is held* places "error handling of
+    requests whose bodies carry personal data".
+    - It installs one ASGI layer outside Starlette's server-error middleware. That layer sets the
+      identifier, adds `Eko-Correlation-Id` and `no-store`, writes the request line, and writes the
+      error line for an unhandled exception exactly once, with the identifier.
+    - Once the 500 has been sent, it does not pass the exception on to the server.
+    - It also installs the exception handlers. None writes a message or input.
+    - `create_app()` calls it, and still returns the `FastAPI` instance whose route table the
+      existing tests read.
+  - **A fixture uses the same entries.** A fixture app under `backend/tests/` is `create_app()` with
+    test-only routes added, or a bare `FastAPI()` passed to `install_request_handling`. A unit
+    check shows that `create_app()` calls `install_request_handling`. A fixture that wires its own
+    handlers is a planted contrast, and a claim is never proven on it.
+  - **Under `serve.py`'s process configuration.**
+    - `serve.main` takes the factory's import string as an optional parameter, whose default is
+      `app.main:create_app`. No environment variable and no argument of the shipped command sets
+      it.
+    - The runtime fixture runs in a test variant image built `FROM` the shipped image that only
+      adds the fixture module (ADR-0004, addendum of 2026-10-29, *Test-only revisions*). Its
+      command calls the shipped `serve.main` with the fixture factory.
+    - So the settings check, the revision check, `log_config`, `access_log=False` and the worker
+      count are those that ship, and no fixture route ships.
+- **An error outside a request.**
+  - The line is the error event above without `correlation_id`: `ts`, `level` `ERROR`, `process`,
+    `logger`, `event` `error`, `error`, `at` and optionally `cause`. The process then exits
+    non-zero.
+  - **`migrate`.** *Amended at implementation of EKO-1-13, 2026-11-02 (developer stops S-2, S-3;
+    decided by the human on Issue #54).*
+    - `backend/migrations/env.py` calls `install_process_logging("migrate")` in place of
+      `fileConfig`, so `alembic.ini`'s logging sections are no longer used.
+    - It wraps its top-level dispatch. Any exception that is not `SystemExit` writes the error
+      line and becomes `SystemExit(1)`.
+    - The logging installation and the wrap apply only when Alembic runs with a configuration
+      file (`context.config.config_file_name is not None`), the condition under which the
+      replaced `fileConfig` call ran. The shipped `migrate` always runs with `alembic.ini`, so it
+      is always covered.
+    - Programmatic use of Alembic without a configuration file keeps Alembic's own behaviour: no
+      line form is installed and no exception is wrapped, so an exception propagates to the
+      caller with its message. That use is test-only (EKO-1-11's dispatch contrasts); nothing
+      that ships runs Alembic that way. It is left unguarded by this rule.
+    - The handling must sit there. Alembic's command line catches every `Exception` and prints
+      `FAILED: <message>`, and a SQLAlchemy error's message holds `[SQL: …]`, `[parameters: …]`
+      and the driver's text naming host and role. So an interpreter-level hook never sees it.
+    - `migrate`'s command stays `alembic upgrade head` (ADR-0004-C11).
+    - Alembic's own messages before `env.py` runs (configuration, script directory) hold no
+      database value.
+  - **`backend`, main process.** `install_process_logging("backend")` is the first statement of
+    `serve.main`. A driver error while the revision check reads the database writes the error
+    line, then the unchanged refusal line.
+  - **`backend`, uvicorn's worker processes.** *Amended at implementation of EKO-1-13, 2026-11-02
+    (developer stops S-2, S-3; decided by the human on Issue #54).*
+    - Logging of uvicorn's own records comes from the `log_config` that `serve.py` passes, with
+      the format string as `msg` (Q-5 A). That covers uvicorn's factory-load record, which
+      uvicorn's `Config.load` writes only for a `TypeError` from the factory.
+    - Any other exception raised while building `create_app()` is not caught by uvicorn. It
+      propagates into `multiprocessing`'s process bootstrap, which prints the traceback, message
+      included, on standard error, bypassing `log_config` and `sys.excepthook`.
+    - So a guard inside `create_app()`, in `backend/app/main.py` beside
+      `install_request_handling`, catches such an exception, writes the error line (`error`, `at`,
+      optionally `cause`) and raises `SystemExit(1)`. `multiprocessing` writes nothing for an
+      integer exit code.
+    - How the container exits is unchanged. Uvicorn restarts a worker that exits, so the line
+      repeats on each restart.
+  - **`worker`.** `install_process_logging("worker")` is the first statement of `worker.main`, in
+    place of `logging.basicConfig`. A driver error in its revision check is handled as in
+    `backend`'s main process.
+  - A failure while a module is being imported, before `main` runs, is outside this rule. No module
+    of the image reads the database or the environment when it is imported.
+- **The one place it is documented** is **`docs/operations/log-format.md`**. It holds:
+  - the backend's keys and events, with one example line each;
+  - the two plain-text forms;
+  - `proxy`'s and `frontend`'s keys and time format;
+  - PostgreSQL's prefix and which lines it writes;
+  - a pointer to `backup/README.md` for `backup`.
+
+  The tests read the key sets from it, and the IT department's monitoring is connected to it at
+  EKO-1-08 (#36). A change to a line's form is a change to this addendum.
+- **The 14-day deletion of container logs (ADR-0005-C6, composition half) is not settled here.**
+  No mechanism declared in the rendered composition meets *Retention* within ADR-0004-C1 and C4.
+  The work stops on that point and returns to the human. <!-- GATE-1: Q-7 — STOP; deviation
+  options in the next addendum and in EKO-1-13's impact map --> The options are drafted as the
+  separate addendum below. This addendum applies whichever option is chosen.
+
+Every other rule and control of this decision is unchanged. ADR-0004 is unchanged: no service, no
+volume and no mount is added, and `postgres` stays the pinned image (ADR-0004-C1, C4, C28).
+`create_app()`'s route table and the OpenAPI document are unchanged.
+
+**What this does not bound (stated costs).**
+
+- PostgreSQL's log shows nothing about a failed statement. The backend's error line, with its
+  type, is the only trace of it (Q-1).
+- A superuser can lower the PostgreSQL settings for its own session, a database or a role.
+- A failed connection names the role, database or start-up value the client typed (Q-2).
+- An import-time failure before `main` is written by Python's default hook.
+- An exception inside the outermost layer itself reaches uvicorn, which answers 500 with no
+  identifier and no `no-store`.
+- `worker` jobs carry no correlation identifier until the first job exists (EKO-5).
+
+**Consequence for EKO-1-13's Story.**
+
+- **DoD 1, K-01.**
+  - "At most its SQLSTATE and position" is met by writing no line for a statement error. "What
+    position looks like" is answered: no line carries one.
+  - Under Q-2 B, the failed-authentication edge reads: the marker role appears only in that
+    connection's FATAL authentication line, with SQLSTATE `28P01`.
+  - "PostgreSQL's log" is standard error alone, and the test asserts `logging_collector` off.
+- **K-02.** It parses the JSON keys above. The upstream-failure line follows Q-3.
+- **K-03.**
+  - The identifier is read from `Eko-Correlation-Id`.
+  - An unmatched path is written with `*` segments.
+  - Healthcheck requests write lines (G-6 A).
+- **K-04.** It uses the two entries and the code-location rule above. The runtime fixture runs
+  through `serve.main` in a variant image.
+- **K-05.** It asserts the error line above for each process, where this addendum places the
+  handling.
+- **K-06.** It waits for Q-7 and is rewritten against the option accepted.
+- **K-07.** The header is set by the outermost layer, and `proxy` passes it through unchanged.
+- **DoD 12.** The format is documented in `docs/operations/log-format.md`.
+
+**Options considered for this addendum.**
+
+| Question | Option | Cost | Closes off |
+|---|---|---|---|
+| PostgreSQL statement errors (Q-1) | **A. `log_min_messages = log`: no ERROR or WARNING line at all** (proposed) | PostgreSQL's log shows nothing of a failed statement; the backend's error type is the only trace | nothing; *What may appear in logs* allows "at most" |
+| | B. A filter that the repository ships in `postgres`'s entrypoint, rewriting each ERROR line to its SQLSTATE and position | a program of the release in the server's output path: the container's main process and its signal handling change, and a filter that fails either leaks the line or loses the log; every PostgreSQL message format must be parsed | nothing, but at a high cost for one field |
+| Connection start-up FATAL lines (Q-2, G-5) | A. The typed role is never written | PostgreSQL has no setting that drops a message while keeping its line: it needs Q-1 B's filter, or `log_min_messages = panic`, which also drops the connection events that *What may appear in logs* allows and that K-01's non-vacuity needs | the connection events |
+| | **B. Written, as connection and authentication events** (proposed) | an operator's mistyped role (or a password typed into the role field) inside the composition network reaches the log; no client outside the composition can connect | nothing. The human confirms at gate 1 that "connection and authentication events (the role, the database, …)" covers these lines. If the human reads them as errors, B narrows "no error message text", and choosing B is then a declared deviation |
+| Upstream failure in `proxy` (Q-3, G-7) | **A. At most one error line, with C4's fields and the failure reason** (proposed) | a reason text from Caddy that a test must show free of request values; stops if it is not | nothing |
+| | B. The error logger is excluded; the access line's 502 or 504 is all | the IT department sees no cause of a 502 | diagnosing an upstream failure from the log |
+| Where the identifier travels (Q-4) | **A. The `Eko-Correlation-Id` header on every response** (proposed) | none; a random value on every response | nothing |
+| | B. The header on error responses only | a status-dependent rule, which a missed status fails silently | correlating a successful request with its lines |
+| | C. The header and a field in error bodies | every error body changes shape; the 422 schema in the OpenAPI document changes, against DoD 13 | an unchanged OpenAPI document |
+| Lines of other libraries (Q-5) | **A. The format string, with arguments never interpolated** (proposed) | uvicorn's start lines lose their process number and port | nothing |
+| | B. Arguments interpolated for allow-listed loggers at INFO | `uvicorn.error` writes a WebSocket path with its query string at INFO; the allow list must follow every library upgrade | keeping query strings out by construction |
+| | C. Lines of other libraries dropped below ERROR | no uvicorn start or stop lines | the start and stop lines *What may appear in logs* allows |
+
+**Why.** Each rule here decides something *What may appear in logs*, *The user's browser* and the
+addendum of 2026-10-28 leave open. The task cannot be built without these decisions, and the IT
+department reads a fixed form only once one is written. PostgreSQL cannot drop a message's text
+while keeping its line, so the only way within its own settings is to write no line for a statement
+error. A restriction applied to every logger of Caddy is the only one that also covers unmapped
+hosts and error lines. An identifier and a header set outside the server-error middleware are the
+only ones a 500 also carries. `migrate`'s handling sits in `env.py` because Alembic's command line
+swallows every exception before an interpreter hook sees it. This is not a deviation from ADR-0005,
+ADR-0004, ADR-0002 or ADR-0001: it decides what they leave open, subject to the human's reading
+under Q-2. To be approved by the human at gate 1 of EKO-1-13 (G-1 A, Issue #54).
+
+### 2026-11-02 — DEVIATION OPTION for the human (Q-7): ADR-0005-C6 restated, with the 14-day log bound held by each host's container runtime
+
+**Status:** Accepted 2026-11-02 (gate 1 of EKO-1-13, Issue #54; the human chose Q-7 H). **A declared deviation**:
+it restates an accepted control (ADR-0005-C6). It takes effect only if the human chooses Q-7 H.
+Under any other option it is withdrawn, and the option chosen is drafted in its place. Choosing
+any option puts the `adr-deviation` label on Issue #54.
+
+**The stop.** EKO-1-13 must make the rendered composition delete each service's container log by
+time, no later than 14 days after each line was written (ADR-0005-C6, its composition half;
+*Retention*; addendum of 2026-10-28). What was examined:
+
+1. **`json-file` and `local`**, Docker's drivers that keep logs on the host for
+   `docker compose logs`, rotate by size only (`max-size`, `max-file`). No option deletes by age,
+   and a small log is never rotated. *Retention* rejects rotation by size alone.
+2. **`journald` and `syslog`** delete by time only through the host's journal or syslog
+   configuration, which the composition cannot declare.
+   - `journald` needs systemd-journald on the host. That is a host-OS feature, and *Cloud-agnostic
+     constraints* item 1 keeps services from relying on one.
+   - Declared in `compose.yaml`, it stops the development profile on Docker Desktop, which runs it
+     on Windows, and whose VM has no journald.
+   - A driver for one profile only needs a second composition file (ADR-0004 *Container runtime*:
+     one file), or a variable from the environment file (no log setting comes from it).
+3. **Forwarding drivers** (`fluentd`, `gelf`) need a receiving service, which would be a further
+   shared service (ADR-0004-C1). Cloud providers' drivers are excluded (ADR-0004-C4).
+4. **A pruning service, or an existing service given the runtime's socket or the host's
+   container-log directory**, needs one of two things, and each breaks a rule:
+   - an added service (ADR-0004-C1);
+   - rights equivalent to root over the runtime in a container, writing to a host path
+     (*Cloud-agnostic constraints* item 3), and editing files the daemon is still writing. ADR-0004's
+     addendum of 2026-10-30 already keeps the socket from `backup`.
+5. **A destination inside each container** does not work, for four reasons:
+   - The official `postgres` and `keycloak` images run unchanged.
+   - Caddy rolls its log files by size only.
+   - A time-rotating handler rotates only when a line is written, so a quiet service keeps its old
+     file. The file sits in the container's writable layer, which survives restarts until the
+     container is recreated.
+   - `docker compose logs` would show nothing, while *Who reads logs* reads container logs.
+6. **Recreating every container within the bound** deletes `json-file` and `local` logs with each
+   container, but it has three costs:
+   - It needs a host job, because nothing inside the composition may drive the runtime.
+   - It interrupts service outside a deployment. ADR-0004 accepts an interruption only during one.
+   - Each recreation deletes the logs of the whole bound at once.
+
+No mechanism declared in the rendered composition deletes by time within ADR-0004-C1 and C4.
+Bending either rule is not proposed.
+
+**What it restates, under option H.** From this date:
+
+- **ADR-0005-C6 reads:** No service in the rendered composition of either profile declares a
+  `logging` key. Every container log therefore uses the log driver that its host's container
+  runtime is configured with, and none uses a cloud provider's logging driver. Each shared host's
+  container runtime deletes every container log line no later than 14 days after it was written.
+  It deletes by time, also when the log is small and also for exited containers, with the
+  interval of its deletion counted within the bound. This is recorded with the date of the check,
+  the mechanism and its values. By review of each shared host, no container log line older than
+  14 days exists (recorded with the date of the check).
+- **The mechanism on each shared host** is the IT department's, chosen and recorded at EKO-1-08
+  (#36) under *Retention*: by time, the interval counted within the bound, and no cloud driver.
+  One candidate it evaluates there is the runtime's default driver set to `journald`, with
+  journald's retention and file-rotation settings. EKO-1-08 shows whether a given setting,
+  including how often its deletion runs, meets the bound.
+- **Developer and CI hosts** are not shared environments, and this decision does not bound their
+  logs. They hold only invented staff accounts and synthetic customer data (*Synthetic customer
+  data until the impact assessment*).
+- *Forward references*, "EKO-1-08 (#36) receives": "proving in production … the log bound" reads
+  "configuring each shared host's container runtime to delete container logs by time within 14
+  days, and proving it".
+- ADR-0004 is unchanged. No service, volume or mount is added, and C1, C4 and the *Cloud-agnostic
+  constraints* hold. The host's runtime configuration belongs to production provisioning, which
+  ADR-0004 already forwards to EKO-1-08.
+
+**Consequence for EKO-1-13's Story, under option H.**
+
+- DoD 9 and K-06: the static half fails when any service of either rendered profile declares a
+  `logging` key. Its fixtures are size-only rotation, a time option above 14 days, a cloud driver,
+  and any driver at all.
+- The runtime demonstration and the dated review move to EKO-1-08 (#36).
+- The capability register's "does not prove" names that no environment yet deletes logs by time.
+
+**What this costs.**
+
+- Until EKO-1-08, no environment deletes logs by time. No shared environment exists yet, so no
+  real staff data is in any log.
+- The bound depends on a host setting that the repository cannot check. A host rebuilt without it
+  keeps logs until the dated review finds it.
+
+**Options considered (Q-7).**
+
+| Option | Cost | Closes off |
+|---|---|---|
+| **H. No `logging` key in the composition; each host's runtime deletes by time; C6 restated** (recommended) | no proof of the bound before EKO-1-08; developer and CI logs unbounded; a declared deviation from ADR-0005 (a control restated) | proving the bound in this repository's CI |
+| J. `driver: journald` declared on every service; the bound in the host's journald | the development profile no longer starts on Docker Desktop (Windows); a deviation from ADR-0004 *Cloud-agnostic constraints* item 1 (a host-OS feature); the bound is still the host's, so C6 is restated as well | running the composition on a host without systemd-journald |
+| R. `local` driver with a size cap, and every container recreated at most every 13 days by a host job | a deviation from ADR-0004 (an interruption outside a deployment, a new operator duty); each recreation deletes all logs at once, recent incident evidence included; C6 is restated as well | continuous service between deployments |
+| N. An added log-retention service with the runtime's socket | a deviation from ADR-0004-C1; root-equivalent rights in a container on the composition network | the service list of ADR-0004-C1 |
+| X. A log file in each container | does not meet *Retention* for a quiet service; `docker compose logs` shows nothing; official images unchanged cannot do it | reading container logs (*Who reads logs*) |
+
+**Why.** EKO-1-13's Story (DoD 9) and the human's G-1 A require a C6 mechanism that does not fit
+C1 and C4 to return here as an addendum with the deviation label, before any code depends on it.
+Option H changes only where the mechanism lives. The rule of *Retention* (by time, within 14 days,
+also for a small log, no cloud driver) is unchanged. Restating an accepted control is a declared
+deviation, as in ADR-0002's addenda of 2026-10-28 and 2026-10-29. To be approved, or replaced by
+another option, by the human at gate 1 of EKO-1-13 (Issue #54).
