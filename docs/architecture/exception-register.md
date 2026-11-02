@@ -72,3 +72,10 @@ Accepted at gate 2 of EKO-1-10 in [PR #65](https://github.com/TanerCRB/Eko_CRM/p
 
 - Exception EKO-1-10/weakening-1 — owner: @TanerCRB — reason: the seven noqa strings are test data of the rule-19 suppression check and suppress nothing — blocks again: 2026-11-30
 - Exception EKO-1-10/weakening-2 — owner: @TanerCRB — reason: the type ignore makes the rule-9 fixture's bare dict return possible, which is the violation under test — blocks again: 2026-11-30
+
+Accepted at gate 2 of EKO-1-14 in [PR #77](https://github.com/TanerCRB/Eko_CRM/pull/77) (decided by the human on 2026-10-31 and 2026-11-02, recorded on #55):
+
+- Exception EKO-1-14/weakening-1 — owner: @TanerCRB — reason: `# noqa: S108` on a path QA plants inside the run container as the at-rest scan's contrast (`test_adr0004_backup_no_dump_at_rest.py`), not a temporary file of the test — blocks again: 2027-05-02
+- Exception EKO-1-14/weakening-2 — owner: @TanerCRB — reason: `# noqa: S108` on the run-directory pattern the cleanup tests look for inside the backup container (`backup_lab.py`), never opened by the test — blocks again: 2027-05-02
+- Exception EKO-1-14/weakening-3 — owner: @TanerCRB — reason: `# noqa: S608` on test SQL whose table name is a hex value the test generates (`test_adr0004_c15_backup_set_contents.py`) — blocks again: 2027-05-02
+- Exception EKO-1-14/M12 — owner: @TanerCRB — reason: a backup point read milliseconds after the snapshot export cannot be told apart by any test without a hold point inside the shipped image, which the addendum forbids; the code reads the export statement's own time — blocks again: 2027-05-02
