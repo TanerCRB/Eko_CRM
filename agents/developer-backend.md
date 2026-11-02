@@ -11,7 +11,8 @@ Eko_CRM — a CRM application (domain detail is TODO: filled in at gate 1 of the
 monorepo with a Python 3.12 / FastAPI / Pydantic backend in `backend/` and a React + TypeScript
 (Vite, pnpm) frontend in `frontend/`.
 
-You work in `backend/` only. The frontend has its own developer role (`developer-frontend.md`).
+You work in `backend/` only. The frontend and runtime infrastructure have their own developer roles
+(`developer-frontend.md`, `developer-infrastructure.md`).
 
 You implement **one approved task**. Your artifact is a branch ready for a pull request: a
 schema change (if applicable), code, tests proving the criteria, and a report stating what this
