@@ -8,7 +8,7 @@ import threading
 import zipfile
 from collections.abc import Iterator
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -81,3 +81,31 @@ def test_tampered_archive_is_refused_before_an_executable_is_extracted(
         chromium().prepare_chromium(archive_url, expected, destination, "browser/chrome")
 
     assert not (destination / "browser" / "chrome").exists()
+
+
+def test_posix_zip_restores_executable_bits_for_browser_and_helpers(
+    tmp_path: Path, archive_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    archive_path = tmp_path / "chromium.zip"
+    members = {
+        "browser/chrome": 0o100755,
+        "browser/chrome_crashpad_handler": 0o100755,
+        "browser/data.txt": 0o100644,
+    }
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        for name, mode in members.items():
+            member = zipfile.ZipInfo(name)
+            member.create_system = 3
+            member.external_attr = mode << 16
+            archive.writestr(member, b"synthetic")
+    digest = hashlib.sha256(archive_path.read_bytes()).hexdigest()
+    chmod_calls: dict[str, int] = {}
+
+    def record_chmod(path: Path, mode: int) -> None:
+        chmod_calls[path.name] = mode & 0o111
+
+    monkeypatch.setattr(chromium(), "os", SimpleNamespace(name="posix"))
+    monkeypatch.setattr(Path, "chmod", record_chmod)
+    chromium().prepare_chromium(archive_url, digest, tmp_path / "installed", "browser/chrome")
+
+    assert chmod_calls == {"chrome": 0o111, "chrome_crashpad_handler": 0o111}

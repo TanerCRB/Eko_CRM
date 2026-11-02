@@ -68,15 +68,20 @@ def prepare_chromium(
             )
         archive_file.seek(0)
         with zipfile.ZipFile(archive_file) as archive:
-            for member in archive.infolist():
+            members = archive.infolist()
+            for member in members:
                 checked_member_destination(destination, member.filename)
             archive.extractall(destination)
+            if os.name != "nt":
+                for member in members:
+                    executable_bits = (member.external_attr >> 16) & 0o111
+                    if executable_bits and not member.is_dir():
+                        extracted = checked_member_destination(destination, member.filename)
+                        extracted.chmod(extracted.stat().st_mode | executable_bits)
 
     executable = checked_member_destination(destination, executable_relative)
     if not executable.is_file():
         raise ValueError(f"authenticated Chromium archive has no {executable_relative}")
-    if os.name != "nt":
-        executable.chmod(executable.stat().st_mode | 0o111)
     return executable
 
 
