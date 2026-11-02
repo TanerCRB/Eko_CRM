@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-02",
+  "task": "EKO-1-07",
+  "phase": "pr",
+  "role": "developer-backend",
+  "model": "no data",
+  "invocation": "general-purpose",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "agent-3",
+  "tokens": "no data",
+  "tokenSplit": "no data",
+  "tokensSource": "no data",
+  "measured": "by hand",
+  "toolCalls": "no data",
+  "seconds": "no data",
+  "fixRound": 1,
+  "reworkCause": "Linux CI exposed non-executable Chromium helper files after ZIP extraction; the backend Developer had not exercised Linux installation and launch",
+  "notes": "provider 429 before edits or a final report; partial output unverified; boundary-check: clean; no cost-capture record was available"
+}

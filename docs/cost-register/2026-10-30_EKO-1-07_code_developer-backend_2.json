@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-30",
+  "task": "EKO-1-07",
+  "phase": "code",
+  "role": "developer-backend",
+  "model": "no data",
+  "invocation": "general-purpose",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "agent-3",
+  "tokens": "no data",
+  "tokenSplit": "no data",
+  "tokensSource": "no data",
+  "measured": "by hand",
+  "toolCalls": "no data",
+  "seconds": "no data",
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "boundary-check: clean; additional K-01 browser proof; no cost-capture record was written for agent-3, so measured fields are unavailable"
+}

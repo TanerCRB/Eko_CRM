@@ -7,6 +7,7 @@ export default defineConfig({
   build: { assetsInlineLimit: 0 },
   test: {
     environment: "jsdom",
+    css: true,
     include: ["tests/**/*.test.{ts,tsx}"],
     setupFiles: ["tests/setup.ts"],
   },

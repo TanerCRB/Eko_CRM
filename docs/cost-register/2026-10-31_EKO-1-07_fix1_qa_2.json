@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-31",
+  "task": "EKO-1-07",
+  "phase": "verification",
+  "role": "qa",
+  "model": "no data",
+  "invocation": "general-purpose",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "agent-6",
+  "tokens": "no data",
+  "tokenSplit": "no data",
+  "tokensSource": "no data",
+  "measured": "by hand",
+  "toolCalls": "no data",
+  "seconds": "no data",
+  "fixRound": 1,
+  "reworkCause": "R-01 and B-01 STOP findings required re-verification of the changed recovery and archive-verification mechanisms",
+  "notes": "boundary-check: clean; PROOF HOLDS; double-failure browser proof and three fix mutations killed; no cost-capture record was available"
+}

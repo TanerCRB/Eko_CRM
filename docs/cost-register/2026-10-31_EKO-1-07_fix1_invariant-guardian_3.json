@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-31",
+  "task": "EKO-1-07",
+  "phase": "fix1",
+  "role": "invariant-guardian",
+  "model": "no data",
+  "invocation": "general-purpose",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "agent-7",
+  "tokens": "no data",
+  "tokenSplit": "no data",
+  "tokensSource": "no data",
+  "measured": "by hand",
+  "toolCalls": "no data",
+  "seconds": "no data",
+  "fixRound": 1,
+  "reworkCause": "S-01 and S-02 required Guardian re-evaluation after the fix; the initial Guardian raised both findings",
+  "notes": "provider 429 before a final verdict; partial output is unverified; boundary-check: clean; no cost-capture record was available"
+}

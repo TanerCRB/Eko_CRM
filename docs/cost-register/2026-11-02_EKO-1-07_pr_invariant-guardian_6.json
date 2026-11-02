@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-02",
+  "task": "EKO-1-07",
+  "phase": "pr",
+  "role": "invariant-guardian",
+  "model": "no data",
+  "invocation": "general-purpose",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Low",
+  "agentId": "agent-7",
+  "tokens": "no data",
+  "tokenSplit": "no data",
+  "tokensSource": "no data",
+  "measured": "by hand",
+  "toolCalls": "no data",
+  "seconds": "no data",
+  "fixRound": 1,
+  "reworkCause": "Linux CI Chromium permission correction required Guardian re-verification on the new VERIFIED",
+  "notes": "boundary-check: clean; PASS; no invariant or mutation-applicability issue; no cost-capture record was available"
+}

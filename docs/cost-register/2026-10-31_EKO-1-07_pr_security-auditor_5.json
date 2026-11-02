@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-31",
+  "task": "EKO-1-07",
+  "phase": "pr",
+  "role": "security-auditor",
+  "model": "no data",
+  "invocation": "general-purpose",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Low",
+  "agentId": "agent-9",
+  "tokens": "no data",
+  "tokenSplit": "no data",
+  "tokensSource": "no data",
+  "measured": "by hand",
+  "toolCalls": "no data",
+  "seconds": "no data",
+  "fixRound": 1,
+  "reworkCause": "Verdict validation rejected STOP without a critical/high finding; the Security Auditor could have applied the target-SHA and verdict rules",
+  "notes": "boundary-check: clean; PASS; B-01 remains resolved; report-format correction only; no cost-capture record was available"
+}

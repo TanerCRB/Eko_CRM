@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-31",
+  "task": "EKO-1-07",
+  "phase": "pr",
+  "role": "qa",
+  "model": "no data",
+  "invocation": "general-purpose",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "Medium",
+  "agentId": "agent-6",
+  "tokens": "no data",
+  "tokenSplit": "no data",
+  "tokensSource": "no data",
+  "measured": "by hand",
+  "toolCalls": "no data",
+  "seconds": "no data",
+  "fixRound": 1,
+  "reworkCause": "CI formatting correction touched the Chromium installer and K-06/R-01 tests, so prior proof required re-verification",
+  "notes": "boundary-check: clean; PROOF HOLDS; AST-identical formatting only; full backend and focused browser proofs green; no cost-capture record was available"
+}
