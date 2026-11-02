@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from tests.runtime.backup_lab import BackupLab, SessionSampler
 from tests.runtime.conftest import Composition, Started, read_env, write_env
 from tests.runtime.test_k04_c28_failed_first_init import databases_on_volume
 from tests.support.openapi import openapi_3_errors
@@ -185,3 +186,63 @@ def test_k04_c28_empty_role_password_stops_first_init_and_creates_neither_databa
 def test_k04_c28_contrast_with_every_password_set_both_databases_exist(running: Started) -> None:
     databases = {row[0] for row in running.composition.sql("SELECT datname FROM pg_database")}
     assert {"eko", "keycloak"} <= databases
+
+
+# ADR-0004-C10 for backup's four variables (EKO-1-14 K-06): refused before any connection -------
+
+BACKUP_VARIABLES = (
+    "BACKUP_DESTINATION_CREDENTIAL",
+    "BACKUP_ENCRYPTION_PUBLIC_KEY",
+    "BACKUP_DESTINATION",
+    "BACKUP_DESTINATION_HOST_KEY",
+)
+
+
+@pytest.mark.parametrize("value", ["", "   "], ids=["empty", "whitespace"])
+@pytest.mark.parametrize("variable", BACKUP_VARIABLES)
+def test_k06_c10_empty_backup_variable_stops_backup_before_it_connects(
+    backup_lab: BackupLab, variable: str, value: str
+) -> None:
+    logged = backup_lab.connections_logged()
+    attempts = len(backup_lab.double.records())
+    with SessionSampler(backup_lab.composition) as sampler:
+        result = backup_lab.run(env={variable: value})
+    assert result.code != 0
+    refusal = f"configuration error: missing or empty environment variable: {variable}"
+    assert refusal in result.stderr
+    assert sampler.maximum == 0
+    assert backup_lab.connections_logged() == logged
+    assert len(backup_lab.double.records()) == attempts
+
+
+@pytest.mark.parametrize("variable", BACKUP_VARIABLES)
+def test_k06_c10_unset_backup_variable_stops_the_composition_naming_it(
+    backup_lab: BackupLab, variable: str
+) -> None:
+    composition = backup_lab.composition
+    values = read_env(composition.env_file)
+    del values[variable]
+    unset_env = composition.env_file.parent / f"unset-{variable}.env"
+    write_env(unset_env, values)
+    unset = Composition(project=composition.project + "-unset", env_file=unset_env)
+    try:
+        result = unset.compose("up", "--no-build", "-d", "backup", check=False, timeout=180)
+        assert result.returncode != 0
+        assert variable in result.stderr
+        assert unset.compose("ps", "-a", "-q", check=False).stdout.split() == []
+    finally:
+        unset.down()
+
+
+def test_k06_c10_contrast_with_every_variable_set_backup_connects_and_reaches_the_double(
+    backup_lab: BackupLab,
+) -> None:
+    backup_lab.at_probe_head()
+    logged = backup_lab.connections_logged()
+    attempts = len(backup_lab.double.records())
+    with SessionSampler(backup_lab.composition) as sampler:
+        result = backup_lab.run()
+    assert result.code == 0, result.stderr
+    assert sampler.maximum > 0
+    assert backup_lab.connections_logged() > logged
+    assert len(backup_lab.double.records()) > attempts

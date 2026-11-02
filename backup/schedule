@@ -1,0 +1,3 @@
+# backup's schedule (ADR-0004 addendum 2026-10-30): exactly one entry, the time, the zone, which
+# must be UTC, and the run command. The scheduler refuses to start on anything else.
+01:00 UTC eko-backup run

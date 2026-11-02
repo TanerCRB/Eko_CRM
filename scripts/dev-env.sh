@@ -29,6 +29,8 @@ dev_value() {
     PROXY_HTTPS_PORT) echo "8443" ;;
     PROXY_ADMIN_PORT) echo "9443" ;;
     BACKEND_IMAGE_TAG) echo "0.1.0-$CHECKOUT_ID" ;;
+    # Under G-2 A no destination exists in development: the scheduled run fails visibly.
+    BACKUP_DESTINATION) echo "sftp://eko-backup@destination.invalid:22/incoming" ;;
     *) return 1 ;;
   esac
 }

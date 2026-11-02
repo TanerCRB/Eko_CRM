@@ -8,9 +8,10 @@ from typing import Any
 import pytest
 import yaml
 
+from tests.support import backup_checks as bc
 from tests.support import repo_checks as rc
 from tests.support.image_refs import image_ref_violations, postgres_text_references
-from tests.support.repo import REPO_ROOT
+from tests.support.repo import REPO_ROOT, write_synthetic_env
 
 FIXTURES = Path(__file__).parent / "fixtures"
 Rendered = dict[str, Any]
@@ -169,3 +170,28 @@ def test_k04_adr0001_c3_fails_on_strict_false_even_with_comments() -> None:
     loose = strict.replace('"strict": true', '"strict": false')
     assert rc.adr0001_c3_strict({"frontend/tsconfig.app.json": loose}) != []
     assert rc.adr0001_c3_strict({"frontend/tsconfig.json": '{"files": []}'}) != []
+
+
+# ADR-0004-C9 for backup's variables (EKO-1-14 K-06, gate 1 developer stop 3 A) ----------------
+
+
+def test_k06_c9_dev_env_writes_only_synthetic_backup_values(tmp_path: Path) -> None:
+    target = write_synthetic_env(tmp_path / "synthetic.env")
+    pairs = (line.split("=", 1) for line in target.read_text(encoding="utf-8").splitlines())
+    assert bc.dev_env_backup_violations(dict(pairs)) == []
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("BACKUP_ENCRYPTION_PUBLIC_KEY", "age1" + "q" * 58),
+        ("BACKUP_DESTINATION_CREDENTIAL", "b3BlbnNzaC1rZXktdjEAAAAA"),
+        ("BACKUP_DESTINATION", "sftp://eko-backup@backup.example.com:22/incoming"),
+    ],
+)
+def test_k06_c9_dev_env_check_fails_on_a_real_looking_value(name: str, value: str) -> None:
+    names = (*bc.SECRET_VARIABLES, "BACKUP_DESTINATION_HOST_KEY")
+    values = {name: "synthetic-" + letter * 48 for name, letter in zip(names, "abc", strict=True)}
+    values["BACKUP_DESTINATION"] = bc.DEVELOPMENT_DESTINATION
+    assert bc.dev_env_backup_violations(values) == []
+    assert bc.dev_env_backup_violations({**values, name: value}) != []

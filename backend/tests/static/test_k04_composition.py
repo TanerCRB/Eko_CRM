@@ -4,12 +4,14 @@ ADR-0004-C1, C2, C3, C4, C11, the static half of C28, ADR-0003-C3 and the compos
 ADR-0006-C13. The fixtures are compose.yaml with one case of fixtures/composition_cases.yaml.
 """
 
+import copy
 from collections.abc import Callable
 from typing import Any
 
 import pytest
 
 from tests.static.conftest import COMPOSE, composition_cases
+from tests.support import backup_checks as bc
 from tests.support import compose_checks as cc
 from tests.support.repo import REPO_ROOT
 
@@ -261,3 +263,52 @@ def backend_sources() -> dict[str, str]:
         if path.suffix in {".py", ".sh"} or path.name.startswith("Dockerfile"):
             sources[f"backend/{relative}"] = path.read_text(encoding="utf-8")
     return sources
+
+
+# ADR-0004-C9 and C10 for backup's variables (EKO-1-14 K-06) ----------------------------------
+
+
+def test_k06_c9_backup_variables_are_required_with_no_default(
+    compose_source: dict[str, Any], secret_inventory: set[str]
+) -> None:
+    assert bc.backup_variable_violations(compose_source) == []
+    assert set(bc.SECRET_VARIABLES) <= secret_inventory
+
+
+@pytest.mark.parametrize("variable", [*bc.SECRET_VARIABLES, *bc.VALUE_VARIABLES])
+@pytest.mark.parametrize("planted", ["${{{name}:-x}}", "synthetic-value", "${{{name}}}"])
+def test_k06_c9_fails_on_a_backup_variable_with_a_default_or_value(
+    compose_source: dict[str, Any], variable: str, planted: str
+) -> None:
+    source = copy.deepcopy(compose_source)
+    source["services"]["backup"].setdefault("environment", {})[variable] = planted.format(
+        name=variable
+    )
+    assert bc.backup_variable_violations(source) != []
+
+
+# ADR-0004 addendum 2026-10-30, *The manifest*: image references by YAML reference -------------
+
+
+def test_k03_manifest_images_are_references_to_the_services_images() -> None:
+    assert bc.manifest_image_violations(COMPOSE.read_text(encoding="utf-8")) == []
+
+
+def test_k03_manifest_image_check_fails_on_a_literal_equal_to_the_image() -> None:
+    text = COMPOSE.read_text(encoding="utf-8")
+    old = "BACKUP_MANIFEST_POSTGRES_IMAGE: *postgres-image"
+    assert text.count(old) == 1
+    planted = text.replace(old, "BACKUP_MANIFEST_POSTGRES_IMAGE: postgres:18.6-trixie")
+    assert bc.manifest_image_violations(planted) != []
+
+
+def test_k07_backup_dockerfile_is_from_the_postgres_image(rendered_shared: Rendered) -> None:
+    dockerfile = (REPO_ROOT / "backup" / "Dockerfile").read_text(encoding="utf-8")
+    bases = [line.split()[1] for line in dockerfile.splitlines() if line.startswith("FROM ")]
+    assert bases == [rendered_shared["services"]["postgres"]["image"]] == ["postgres:18.6-trixie"]
+
+
+def test_k06_backup_receives_no_other_services_environment_file(rendered_dev: Rendered) -> None:
+    backup = rendered_dev["services"]["backup"]
+    assert "env_file" not in backup
+    assert not [name for name in backup.get("environment", {}) if name.startswith("APP_")]

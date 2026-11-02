@@ -37,13 +37,13 @@ def test_adr0004_c26_lock_key_recorded_once_ignores_tests_and_longer_numbers() -
 
 def test_adr0004_c26_lock_key_recorded_once_fails_when_migrate_repeats_the_value() -> None:
     key = mc.lock_key(COMPOSE_TEXT)
-    lines = [
-        line
-        for line in COMPOSE_TEXT.splitlines()
-        if line.strip().startswith(mc.LOCK_VARIABLE + ":")
-    ]
-    assert len(lines) == 1
-    planted = COMPOSE_TEXT.replace(lines[0], f'      {mc.LOCK_VARIABLE}: "{key}"')
+    # migrate's line, picked by its YAML node: backup's environment holds the same key line
+    # (EKO-1-14, gate 1, developer stop 1 A).
+    lines = COMPOSE_TEXT.splitlines()
+    index = mc.environment_key_line(COMPOSE_TEXT, "migrate", mc.LOCK_VARIABLE)
+    assert lines[index].strip().startswith(mc.LOCK_VARIABLE + ":")
+    lines[index] = f'      {mc.LOCK_VARIABLE}: "{key}"'
+    planted = "\n".join(lines) + "\n"
     assert mc.lock_reference_violations(planted) != []
 
 

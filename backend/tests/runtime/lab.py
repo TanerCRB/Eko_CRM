@@ -120,11 +120,17 @@ class PsqlSession:
     is the time the statement finished.
     """
 
-    def __init__(self, composition: Composition, role: str = "postgres", name: str = "") -> None:
+    def __init__(
+        self,
+        composition: Composition,
+        role: str = "postgres",
+        name: str = "",
+        database: str = "eko",
+    ) -> None:
         app_name = name or f"eko-test-{uuid.uuid4().hex[:6]}"
         args = [
             *composition.base_args(), "exec", "-T", "-e", f"PGAPPNAME={app_name}",
-            "postgres", "psql", "-U", role, "-d", "eko", "-AtXq", "-F", "\t",
+            "postgres", "psql", "-U", role, "-d", database, "-AtXq", "-F", "\t",
         ]  # fmt: skip
         self.application_name = app_name
         self._process = subprocess.Popen(
