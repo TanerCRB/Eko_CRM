@@ -2,8 +2,9 @@
 
 **Scope of applicability: `Eko_CRM`** — one monorepo with `backend/` (Python, FastAPI) and
 `frontend/` (React + TypeScript). The repository also carries its own process: the role
-definitions live in `agents/`, one set for the whole repository, with two developer roles
-(`developer-backend`, `developer-frontend`) that differ in what they guard and where they write.
+definitions live in `agents/`, one set for the whole repository, with three developer variants
+(`developer-backend`, `developer-frontend`, `developer-infrastructure`) that differ in what they
+guard and where they write.
 
 This document is the source of truth for who does what and who decides on what. The role
 definitions in `agents/` refer to it; in case of discrepancy, this document governs.
@@ -27,7 +28,7 @@ A second principle, binding on every role:
 
 ## 2. Roles
 
-Nine definitions (eight roles, the Developer split per stack). Four **evaluating** (Guardian, Reviewer, Security
+Ten definitions (eight roles, the Developer split per stack and infrastructure). Four **evaluating** (Guardian, Reviewer, Security
 Auditor, QA — their only output is a verdict on someone else's work, so they are calibrated before
 anyone trusts that verdict, see `calibration/README.md`) and four **producing** (Product Owner,
 Analyst, Architect, Developer — their work is judged downstream; whether they keep their own rules
@@ -41,7 +42,7 @@ under pressure is checked with pressure scenarios, Method 4 of the same document
 | **Security Auditor** | Threat audit, run conditionally from a trigger list | `Read, Grep, Glob, Bash` (read-only) | Write. **Print out values that look like a secret.** |
 | **Product Owner** | *Story* Issue with an observable *Definition of done* and an explicit *Out of scope* | `Read, Grep, Glob, Bash` (`gh` and reads) | Write code or technical documentation. Apply the gate-1 label. |
 | **Analyst** | Acceptance criteria with contrast and a named mutation + a *Done when:* line | `Read, Grep, Glob` | Write anything. Design solutions — it describes *what*, not *how*. |
-| **Developer** (`developer-backend` writes only under `backend/`, `developer-frontend` only under `frontend/`) | Branch ready for PR: schema change (if applicable) + code + tests, each test seen failing before its code, full test suite green | full, in the product repository | Commit. Check off tasks or raise statuses. Weaken tests that have started failing. Fix what it hasn't reproduced. Lower a finding's severity. |
+| **Developer** (`developer-backend` writes only under `backend/`, `developer-frontend` only under `frontend/`, `developer-infrastructure` only under the approved runtime composition, identity, proxy, bootstrap, test and evidence paths) | Branch ready for PR: schema change (if applicable) + code/configuration + tests, each test seen failing before its implementation, full relevant suite green | full, in the product repository, subject to each variant's path boundary | Commit. Check off tasks or raise statuses. Weaken tests that have started failing. Fix what it hasn't reproduced. Lower a finding's severity. |
 | **QA** | Contrast test, executed mutation with a result, proposed row for the capability register | full, but **writes only into the test directories** (`backend/tests/`, `frontend/tests/`; `tests/doc-checks/` for a decision task's document checks) | **Writing to production code** — otherwise it fixes instead of detecting. |
 
 ### 2a. Where a tool declaration isn't enough
@@ -56,6 +57,7 @@ itself:
 | Architect | writes restricted to the architecture decisions directory | **Mechanically, around the call:** `boundary-check.sh` compares HEAD, the index and the working tree; any change outside that directory is an automatic `STOP`. Gate 1 is the backstop, not the check. |
 | Any role called through a general-purpose mechanism | the `tools` field isn't applied at all — the pasted definition only asks | **Mechanically, around every call:** `boundary-check.sh` with the role's allowed paths, `--none` for a read-only role. The invocation mode is recorded with the cost row; calibration holds per mode. |
 | Developer | never weakens or removes a test — no tool declaration can express "don't delete this assertion" | **Mechanically, on the checkpoint:** `weakening-check.sh` reads the task's diff; a removed test or assertion, a new skip or suppression, or a lowered threshold is an automatic `STOP` until the human sends it back or records an exception. |
+| Infrastructure Developer | writes restricted to the approved infrastructure, test and evidence paths | **Mechanically, around every call:** `boundary-check.sh` with exactly the prefixes allowed by the impact map; any other changed path is an automatic `STOP`. |
 | QA | writes restricted to the test directory | **Mechanically, right after the call:** the same check with the test directory; any change outside it — including an un-reverted mutation — is an automatic `STOP`. Gate 2 is the backstop. |
 
 What the agent environment *can* enforce, enforce there instead of by rule. In Claude Code, the
