@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-02",
+  "task": "EKO-2-01",
+  "phase": "analysis",
+  "role": "analyst",
+  "model": "no data",
+  "invocation": "general-purpose",
+  "roles": "211ca571c99b7a42625929f9e0e603a1da24f114",
+  "complexity": "High",
+  "agentId": "agent-11",
+  "tokens": "no data",
+  "tokenSplit": "no data",
+  "tokensSource": "no data",
+  "measured": "by hand",
+  "toolCalls": "no data",
+  "seconds": "no data",
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "No cost-capture record was written for agent-11; measured fields were not estimated. boundary-check: clean"
+}
