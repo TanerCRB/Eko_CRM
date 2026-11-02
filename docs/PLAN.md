@@ -123,7 +123,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   `postgres` and `keycloak` (EKO-1-15, #56); sensitive-path rows for `backup/**` and
   `backend/app/serve.py` (#61).
 
-- [ ] **EKO-1-07** — Build the frontend shell and shared UI components from the chosen prototype.
+- [x] **EKO-1-07** — Build the frontend shell and shared UI components from the chosen prototype.
   *Done when:* the app shell (navigation, header, responsive collapse) and the shared components
   Button, IconButton, StatusBadge, Field, ConfirmDialog, EmptyState and Toast exist in
   `frontend/` with the prototype's design tokens; component tests prove StatusBadge always renders
@@ -131,6 +131,14 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   is Polish.
   **Out of scope (explicit):** feature screens; the prototypes' global state, innerHTML rendering
   and persona switch.
+  **Done 2026-11-02:** P2 shell and seven primitives, Polish built-in copy, non-colour status
+  communication, exact dialog consequences, and one-deployment lazy-chunk recovery merged in
+  [PR #75](https://github.com/TanerCRB/Eko_CRM/pull/75), verified at `418a378`. All 18 executed
+  mutations were killed; 1145 backend and 73 frontend tests passed, and composition CI passed all
+  202 runtime tests on Linux. Gate-2 assumptions A-01–A-07 were accepted and recorded as K-01/K-06
+  amendments, with scope re-locked at `d959a406`. Feature screens, old/new API compatibility,
+  concurrent deployments, formal accessibility audits and native-dialog/screen-reader proof remain
+  outside this claim.
 
 - [ ] **EKO-1-08** — Provision the production server and prove a restore before go-live.
   *Done when:* the company IT department has provisioned the production server as ADR-0004
