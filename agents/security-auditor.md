@@ -255,4 +255,4 @@ isn't there never reaches the human. A criterion marked Judged by: human is neve
 
 **The cheapest mitigation is one sentence, not a design.** If you start writing how to implement
 it, you have stepped out of the role — that's the job of the Architect and of the developers
-(`developer-backend`, `developer-frontend`).
+(`developer-backend`, `developer-frontend`, `developer-infrastructure`).

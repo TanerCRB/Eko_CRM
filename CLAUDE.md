@@ -22,11 +22,11 @@ This repo is also the source of its own process: a monorepo instantiation of **N
 
 ## Roles and gates
 
-Nine role definitions in `agents/`, synced to `.claude/agents/` with `node tools/sync-agents.mjs`
+Ten role definitions in `agents/`, synced to `.claude/agents/` with `node tools/sync-agents.mjs`
 (that directory is git-ignored — run the sync after editing a role, `--check` for drift). Four
-evaluate (`invariant-guardian`, `reviewer`, `security-auditor`, `qa`), five produce
-(`product-owner`, `analyst`, `architect`, `developer-backend`, `developer-frontend`). A role never
-evaluates its own output. `/task #N` drives one task end to end (`.claude/commands/task.md`);
+evaluate (`invariant-guardian`, `reviewer`, `security-auditor`, `qa`), six produce
+(`product-owner`, `analyst`, `architect`, `developer-backend`, `developer-frontend`,
+`developer-infrastructure`). A role never evaluates its own output. `/task #N` drives one task end to end (`.claude/commands/task.md`);
 `/task-status #N` is the read-only report.
 
 Three human gates, never crossed by an agent: **1** scope/architecture before code, **2** merge
@@ -58,6 +58,7 @@ label:waiting-on-human` finds everything waiting on the human.
 | Labels | `process/labels.json`, applied with `node tools/sync-github.mjs --labels \| bash` |
 | Registers | `docs/PLAN.md`, `docs/architecture/{capabilities,architecture-sensitive-paths,layer-dependencies,exception-register}.md`, `docs/cost-register/` |
 | Tests | `backend/tests/`, `frontend/tests/` (mirrors `frontend/src/`) — never next to the code, so QA's write boundary is one prefix per side; a decision task's document checks in `tests/doc-checks/<identifier>.sh` |
+| Dated infrastructure runtime evidence | `docs/evidence/<identifier>/` — synthetic values only; local proof never claims production behavior |
 | Task worktrees | `../Eko_CRM-<identifier>`, branch `<identifier>-<slug>` |
 
 `docs/architecture/layer-dependencies.md` and `architecture-sensitive-paths.md` follow the layout

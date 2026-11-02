@@ -53,8 +53,8 @@ currently stands.
 
 ## How you call a role
 
-Roles (`analyst`, `architect`, `developer-backend`, `developer-frontend`, `qa`, `invariant-guardian`, `reviewer`,
-`security-auditor`, `product-owner`) **may not be a registered subagent type** in the session you
+Roles (`analyst`, `architect`, `developer-backend`, `developer-frontend`, `developer-infrastructure`, `qa`,
+`invariant-guardian`, `reviewer`, `security-auditor`, `product-owner`) **may not be a registered subagent type** in the session you
 launch this command from — the agent environment reads the role-definition directory from the
 current session's working directory, and the session may have started somewhere else (see
 `FrameworkDoc.md`, section 4). Check this before the first call; if the subagent type doesn't
@@ -521,8 +521,10 @@ missing = go back to the `analysis` phase; a broken lock = back to gate 1.
    configuration) hands back a green check that checked nothing (see `FrameworkDoc.md`, section
    9).
 7. **Developer role** — `developer-backend` for a change under `backend/`, `developer-frontend`
-   for a change under `frontend/`; a task that touches both calls both, backend first (the API
-   contract is the backend's), each with the Issue, impact map, and criteria. It follows this
+   for a change under `frontend/`, and `developer-infrastructure` for approved runtime composition,
+   identity, proxy and bootstrap paths. A task that touches both application sides calls both,
+   backend first (the API contract is the backend's); infrastructure enters before application code
+   that depends on it. Every developer gets the Issue, impact map and criteria. Each follows this
    order:
    - a schema change before code, backward compatible, in stages (expand → deploy code →
      contract), only through the migration tool the first architecture decision adopts;
@@ -538,6 +540,9 @@ missing = go back to the `analysis` phase; a broken lock = back to gate 1.
      the team contract, "How to write" section);
    - a new configuration threshold / new rule comes with an entry in the relevant register.
    - TODO (domain, gate 1 of the first Story): the domain rules this order must follow.
+
+   For `developer-infrastructure`, run the write-boundary check around the call even when the role
+   is registered: allow only the infrastructure, test and evidence prefixes named by the impact map.
 8. **Tests per criterion, each written before the code it proves and seen failing first** (see
    the role's definition file, Method, section 3), against real infrastructure wherever a fake
    has no credible equivalent. The test count before and after the change belongs in the report;
@@ -547,6 +552,7 @@ missing = go back to the `analysis` phase; a broken lock = back to gate 1.
    ```bash
    (cd backend && ruff check . && mypy . && pytest)
    (cd frontend && pnpm lint && pnpm typecheck && pnpm test --run && pnpm build)
+   bash tests/doc-checks/<identifier>.sh       # if the task adds this document check
    node tools/check-links.mjs                 # if any Markdown was touched
    ```
    If the full test run sometimes gets killed in the background before the result is written —
