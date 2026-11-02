@@ -231,12 +231,31 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** Keycloak's log (EKO-1-12); C6 on a shared host (EKO-1-08). After
   EKO-1-06; before EKO-2-01.
 
-- [ ] **EKO-1-14** — Build the backup service against a destination test double (#55).
+- [x] **EKO-1-14** — Build the backup service against a destination test double (#55).
   *Done when:* a nightly run under the backup role's connection limit completes (ADR-0004-C19);
   backup and migrate exclude each other (C26's backup half); C15 and C16 pass against a local
   append-only destination double.
   **Out of scope (explicit):** the real destination and the C17 off-server alert (EKO-1-08). After
   EKO-1-11; before EKO-1-08.
+  **Done 2026-11-02:** built as the ADR-0004 addendum of 2026-10-30 decides (accepted at gate 1;
+  amended at gate 1 in its destination-double bullet and in fix round 1 in its read-privileges
+  bullet): one control session holding the advisory lock shared with `migrate` and an exported
+  snapshot, the dumps streamed through `age` to an append-only SFTP destination, a manifest and a
+  plaintext completion record, a UTC scheduler, one documented failure line, and explicit read
+  grants instead of `pg_read_all_data`. Merged in [PR #77](https://github.com/TanerCRB/Eko_CRM/pull/77),
+  verified at `ce9ddfc` after one fix round, proven by `backend/tests/runtime/test_adr0004_c19_backup_run_within_limit.py`,
+  `test_adr0004_c26_backup_excludes_migrate.py`, `test_adr0004_c15_backup_set_contents.py`,
+  `test_adr0004_c15_backup_sets_coexist.py`, `test_adr0004_c16_backup_cannot_delete_or_overwrite.py`,
+  `test_adr0004_backup_schedule_utc.py`, `test_adr0004_backup_on_demand.py`,
+  `test_adr0004_backup_failure_line.py`, `test_adr0004_backup_no_dump_at_rest.py`,
+  `test_adr0004_backup_cleanup.py`, `test_adr0004_c28_backup_read_only.py`,
+  `test_adr0005_backup_log_content.py` and `backend/tests/static/test_adr0004_c26_backup_lock_by_reference.py`,
+  `test_adr0004_backup_script_rules.py` (rows in `architecture/capabilities.md`); every mutation of a
+  criterion's mechanism killed except M12 (recorded exception); four recorded exceptions
+  (`architecture/exception-register.md`). Forwarded: the real destination, C15's 7 days, C16 and
+  C17 there, and the IT department's acceptance of SFTP and age (EKO-1-08, #36, noted there);
+  manifest digests (EKO-1-15, #56); product-table counts (EKO-3-01); the control session's unbounded
+  table-lock wait (#76).
 
 - [ ] **EKO-1-15** — Build the release pipeline that publishes images by digest (#56).
   *Done when:* a release tag makes CI build the backend, frontend and backup images and push them
