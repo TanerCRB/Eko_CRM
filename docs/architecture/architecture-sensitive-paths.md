@@ -15,7 +15,7 @@ that task edits its own rows.
 |---|---|---|---|
 | `backend/app/data/**` | schema, personal-data, auth | ADR-0002, ADR-0003, ADR-0005 | persistence of contacts and customer records; server-side sessions holding encrypted tokens |
 | `backend/migrations/**` | schema, personal-data | ADR-0002, ADR-0005 | expand → deploy → contract; defines the tables and columns holding personal data, and a data migration processes it |
-| `backend/alembic.ini` | schema | ADR-0002 | migration tool configuration, where revisions are found |
+| `backend/alembic.ini` | schema, personal-data | ADR-0002, ADR-0005 | migration tool configuration, where revisions are found; `migrate`'s log form is set in code, and a logging section here would reconfigure it |
 | `backend/app/auth/**` | auth, personal-data | ADR-0003, ADR-0005 | authentication, the browser session, the shared access dependency, permissions; the session, subject and display name |
 | `backend/app/api/**` | auth, personal-data | ADR-0001, ADR-0003, ADR-0005 | every endpoint is an access decision over personal data |
 | `backend/app/main.py` | auth, personal-data | ADR-0001, ADR-0003, ADR-0005 | wires the app-wide access dependency and the error handling of requests carrying personal data |
@@ -23,9 +23,10 @@ that task edits its own rows.
 | `backend/app/services/**` | personal-data | ADR-0001, ADR-0005 | every read and write of contacts goes through here |
 | `frontend/src/**` | personal-data | ADR-0001, ADR-0003, ADR-0005 | renders contacts; holds no token (ADR-0003: HttpOnly session cookie, one origin) |
 | `backend/app/core/settings.py` | secrets | ADR-0001, ADR-0004 | the one place configuration and secrets are read |
+| `backend/app/core/logs.py` | personal-data, secrets | ADR-0005, ADR-0004 | the one line form of `backend`, `migrate` and `worker`: decides that an exception or warning is written as type and location only, never its message, arguments or values |
 | `backend/app/core/**` | secrets | ADR-0001, ADR-0004 | configuration code beside settings.py |
 | `backend/app/integrations/**` | external, personal-data | ADR-0001, ADR-0005, ADR-0006 | adapters to external systems receive personal data |
-| `backend/app/serve.py` | schema, secrets | ADR-0001, ADR-0004 | the backend entry point: reads the settings before uvicorn and refuses a schema revision other than its code's head or a recorded descendant |
+| `backend/app/serve.py` | schema, secrets, personal-data | ADR-0001, ADR-0004, ADR-0005 | the backend entry point: reads the settings before uvicorn and refuses a schema revision other than its code's head or a recorded descendant; installs the log form and keeps uvicorn's access log off |
 | `backend/app/worker.py` | schema, external, personal-data, secrets | ADR-0001, ADR-0004, ADR-0005, ADR-0006 | the worker's entry point: refuses an older schema and never migrates, drives the Google sync jobs carrying customer data, reads the Google secrets through settings |
 | `backup/**` | personal-data, secrets, external | ADR-0004, ADR-0005 | the backup service: reads both databases in full, holds the destination write credential and the encryption public key, encrypts and ships every set, and documents the failure line IT monitoring reads; a change here can leave a dump unencrypted or at rest, leak a secret into a log, or weaken the write-only use of the destination |
 | `backend/pyproject.toml` | dependencies | ADR-0001 | backend package manifest |
@@ -40,11 +41,11 @@ that task edits its own rows.
 | `**/.gitignore` | secrets | ADR-0004 | a nested `.gitignore` can re-include a `.env*` file below it |
 | `**/Dockerfile*` | dependencies | ADR-0001, ADR-0004 | container images |
 | `Dockerfile*` | dependencies | ADR-0001, ADR-0004 | container images at the repository root (`**/Dockerfile*` needs a slash) |
-| `*compose*.y*ml` | dependencies, schema, auth, secrets | ADR-0002, ADR-0003, ADR-0004 | container composition; holds the PostgreSQL init content (roles, limits, privileges, the ICU application database) and the services' required secrets |
+| `*compose*.y*ml` | dependencies, schema, auth, secrets, personal-data | ADR-0002, ADR-0003, ADR-0004, ADR-0005 | container composition; holds the PostgreSQL init content (roles, limits, privileges, the ICU application database), the services' required secrets and PostgreSQL's log settings; a `logging` key would override the host runtime's log deletion |
 | `.dockerignore` | secrets | ADR-0001, ADR-0004 | what enters the image build context at the root (`**/.dockerignore` needs a slash) |
 | `**/.dockerignore` | secrets | ADR-0001, ADR-0004 | what enters the image build context; a dropped `.env` line bakes secrets into an image |
-| `Caddyfile*` | auth, secrets | ADR-0004 | entry-point routing at the repository root (`**/Caddyfile*` needs a slash): HTTPS, the public/admin split of Keycloak's pages, which paths the internet reaches |
-| `**/Caddyfile*` | auth, secrets | ADR-0004 | entry-point and static-file-server configuration: a dropped refusal rule exposes Keycloak's admin console or account console to the internet |
+| `Caddyfile*` | auth, secrets, personal-data | ADR-0004, ADR-0005 | entry-point routing at the repository root (`**/Caddyfile*` needs a slash): HTTPS, the public/admin split of Keycloak's pages, which paths the internet reaches |
+| `**/Caddyfile*` | auth, secrets, personal-data | ADR-0004, ADR-0005 | entry-point and static-file-server configuration: a dropped refusal rule exposes Keycloak's admin console or account console to the internet; a dropped log filter writes queries, headers or client addresses |
 | `frontend/index.html` | dependencies, personal-data | ADR-0001, ADR-0003, ADR-0005 | a script tag here runs in the SPA beside personal data and same-origin requests carrying the session cookie |
 | `frontend/public/**` | dependencies, personal-data | ADR-0001, ADR-0003, ADR-0005 | static files served unbundled from the SPA's origin, the origin the session cookie belongs to |
 | `identity/**` | auth, secrets | ADR-0003, ADR-0004 | realm export: roles, registration off, token lifespans, client and scope settings, SMTP settings |
@@ -59,6 +60,7 @@ that task edits its own rows.
 | `.ruff.toml` | pipeline | ADR-0001 | ruff config at the repository root; takes precedence over `ruff.toml` in its directory |
 | `**/.ruff.toml` | pipeline | ADR-0001 | ruff config; takes precedence over `ruff.toml` and `pyproject.toml` in its directory |
 | `frontend/tsconfig*.json` | pipeline | ADR-0001 | `strict` (ADR-0001-C3) |
+| `docs/operations/**` | personal-data | ADR-0005 | the documented log form the IT department's monitoring reads; the tests read its key-set table |
 | `.github/workflows/**` | pipeline | — | who runs what, with which secrets |
 | `.githooks/**` | pipeline | — | the pre-push guard on `main` |
 | `scripts/**` | pipeline | — | the process checks the task command and CI rely on |

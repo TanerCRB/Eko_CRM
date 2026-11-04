@@ -79,3 +79,10 @@ Accepted at gate 2 of EKO-1-14 in [PR #77](https://github.com/TanerCRB/Eko_CRM/p
 - Exception EKO-1-14/weakening-2 — owner: @TanerCRB — reason: `# noqa: S108` on the run-directory pattern the cleanup tests look for inside the backup container (`backup_lab.py`), never opened by the test — blocks again: 2027-05-02
 - Exception EKO-1-14/weakening-3 — owner: @TanerCRB — reason: `# noqa: S608` on test SQL whose table name is a hex value the test generates (`test_adr0004_c15_backup_set_contents.py`) — blocks again: 2027-05-02
 - Exception EKO-1-14/M12 — owner: @TanerCRB — reason: a backup point read milliseconds after the snapshot export cannot be told apart by any test without a hold point inside the shipped image, which the addendum forbids; the code reads the export statement's own time — blocks again: 2027-05-02
+
+Accepted at gate 2 of EKO-1-13 in [PR #81](https://github.com/TanerCRB/Eko_CRM/pull/81) (decided by the human on 2026-11-02 and 2026-11-04, recorded on #54):
+
+- Exception EKO-1-13/weakening-1 — owner: @TanerCRB — reason: `# type: ignore[method-assign]` on the `build_middleware_stack` override that places the request layer outside ServerErrorMiddleware, as the accepted ADR-0005 addendum requires (`backend/app/main.py`) — blocks again: 2027-05-04
+- Exception EKO-1-13/weakening-2 — owner: @TanerCRB — reason: `# type: ignore[method-assign]` on a planted `Database.from_settings` failure in test support (`backend/tests/support/fixture_app.py`) — blocks again: 2027-05-04
+- Exception EKO-1-13/weakening-3 — owner: @TanerCRB — reason: `# noqa: S608` on a test statement built from a synthetic marker identifier (`backend/tests/runtime/test_adr0005_c3_postgres_error_log.py`) — blocks again: 2027-05-04
+- Exception EKO-1-13/weakening-4 — owner: @TanerCRB — reason: `# noqa: S102` on test-only `exec` of a constant probe compiled under an `app/` file name, the only kill of M61/M62 (`backend/tests/unit/test_adr0005_qa_warning_location.py`) — blocks again: 2027-05-04
