@@ -139,10 +139,10 @@ def dispatch() -> None:
         run_upgrade()
 
 
-# Alembic's command line catches every Exception and prints its message, which for a database
-# error holds `[SQL: …]`, `[parameters: …]`, host and role; so the handling sits here, not in an
-# interpreter hook. Without a configuration file (Alembic as a library, in a test) Alembic's own
-# behaviour stays: nothing is installed and nothing wrapped (ADR-0005 amendment, S-3).
+# Two guards, neither standing in for the other: this wrap writes the error line for any exception
+# but SystemExit, including a CommandError, which Alembic's command line would print with its
+# message; the hook catches what reaches the interpreter. Without a configuration file (Alembic as
+# a library, in a test) nothing is installed and nothing wrapped (ADR-0005 amendments, S-3, QA).
 if config.config_file_name is None:
     dispatch()
 else:

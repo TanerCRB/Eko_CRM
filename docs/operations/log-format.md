@@ -72,8 +72,20 @@ An unhandled exception in a request is answered `500` with the body `Internal Se
 writes exactly one such line. An error outside a request writes the line without
 `correlation_id`, and the process exits non-zero.
 
+A database error is SQLAlchemy's wrapper in `error` and the driver's type in `cause`; a rule that
+looks for a PostgreSQL condition matches `cause`. In the example the request's own code is not
+under `app/`, so `at` is the request handling's frame; a query in `app/data/` names that module.
+
 ```json
-{"ts":"2026-11-02T10:15:31.000001Z","level":"ERROR","process":"backend","logger":"app.main","event":"error","error":"psycopg.errors.UniqueViolation","at":"app.main:handle:142","cause":"psycopg.errors.UniqueViolation","correlation_id":"0b7d5e3f2a1c4b6d8e9f0a1b2c3d4e5f"}
+{"ts":"2026-11-02T10:15:31.000001Z","level":"ERROR","process":"backend","logger":"app.main","event":"error","error":"sqlalchemy.exc.IntegrityError","at":"app.main:RequestHandling.__call__:105","cause":"psycopg.errors.UniqueViolation","correlation_id":"0b7d5e3f2a1c4b6d8e9f0a1b2c3d4e5f"}
+```
+
+A warning is written in the same form with `level` `WARNING` and `logger` `py.warnings`: `error`
+is the warning's category and `at` where it was raised, with no `cause` and none of the warning's
+text, so a monitoring rule tells a warning from an error by `level`.
+
+```json
+{"ts":"2026-11-02T10:15:32.000002Z","level":"WARNING","process":"backend","logger":"py.warnings","event":"error","error":"builtins.UserWarning","at":"app.api.health:health:38","correlation_id":"0b7d5e3f2a1c4b6d8e9f0a1b2c3d4e5f"}
 ```
 
 ### `message`: any other line

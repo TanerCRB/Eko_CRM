@@ -24,7 +24,7 @@ from starlette.exceptions import HTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.health import router as health_router
-from app.core.logs import RequestLine, correlation_id
+from app.core.logs import RequestLine, correlation_id, install_interpreter_hooks
 from app.core.settings import Settings, load_settings
 from app.data.database import Database
 
@@ -162,6 +162,9 @@ def install_request_handling(app: FastAPI) -> None:
 
 
 def create_app() -> FastAPI:
+    # Uvicorn's worker processes are fresh interpreters that apply only `log_config`; this is the
+    # one place a serving process gets the hooks (ADR-0005 amendment at verification, R-01).
+    install_interpreter_hooks()
     try:
         settings = load_settings(Settings)
         database = Database.from_settings(settings)

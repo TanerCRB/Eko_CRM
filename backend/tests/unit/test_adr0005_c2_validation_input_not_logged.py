@@ -31,6 +31,8 @@ from tests.support.fixture_app import (
 from tests.support.fixture_app import restored_process_state as restored
 
 Output = Callable[[], str]
+# Read at import, before any test installs the repository's printer in this process.
+PYTHON_SHOWWARNING = warnings.showwarning
 MARKERS = {"plain": MARKER, "non-ascii": NON_ASCII_MARKER, "long": LONG_MARKER}
 
 
@@ -68,11 +70,21 @@ def test_adr0005_c2_validation_input_not_logged_on_every_body_route(
 ) -> None:
     app = create_app()
     routes = body_routes(app)
-    warnings.warn(
-        f"ADR-0005-C2: create_app() declares {len(routes)} route(s) that accept a body"
-        + ("; the check is vacuous until the first one (EKO-2-01 or later)" if not routes else ""),
-        stacklevel=1,
-    )
+    # Through Python's own printer, so pytest records the text: the repository's printer, which
+    # create_app() installs, writes a warning's category only (ADR-0005 amendment, S-5).
+    installed, warnings.showwarning = warnings.showwarning, PYTHON_SHOWWARNING
+    try:
+        warnings.warn(
+            f"ADR-0005-C2: create_app() declares {len(routes)} route(s) that accept a body"
+            + (
+                "; the check is vacuous until the first one (EKO-2-01 or later)"
+                if not routes
+                else ""
+            ),
+            stacklevel=1,
+        )
+    finally:
+        warnings.showwarning = installed
     assert c2_problems(app, routes, output) == []
 
 

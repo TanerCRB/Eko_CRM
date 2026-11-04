@@ -12,6 +12,7 @@ marker is therefore fixed, so the test process knows the value the container rai
 import logging
 import sys
 import threading
+import warnings
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
@@ -70,6 +71,11 @@ def _raise_with_marker() -> None:
         raise ValueError(f"inner {MARKER}", MARKER)
     except ValueError as inner:
         raise RuntimeError(f"outer {MARKER} {NON_ASCII_MARKER}", MARKER) from inner
+
+
+class RaisingFinalizer:
+    def __del__(self) -> None:
+        raise RuntimeError(f"finalizer {MARKER} {DRIVER_HOST} {DRIVER_ROLE}")
 
 
 class RaisingMiddleware:
@@ -131,6 +137,30 @@ def add_fixture_routes(app: FastAPI) -> FastAPI:
             )
         return Accepted(accepted=True)
 
+    @app.get("/api/fixture/warn")
+    def warn() -> Accepted:
+        """As a serializer warning carrying an input value (Reviewer R-01)."""
+        warnings.warn(f"serialized value may not be as expected [input_value={MARKER}]",
+                      UserWarning, stacklevel=1)  # fmt: skip
+        return Accepted(accepted=True)
+
+    @app.get("/api/fixture/unraisable")
+    def unraisable() -> Accepted:
+        """A finalizer that raises, as a driver object's cleanup naming host and role."""
+        doomed = RaisingFinalizer()
+        del doomed
+        return Accepted(accepted=True)
+
+    @app.get("/api/fixture/thread-error")
+    def thread_error() -> Accepted:
+        def fail() -> None:
+            raise RuntimeError(f"in a thread {MARKER} {DRIVER_URL}")
+
+        worker = threading.Thread(target=fail)
+        worker.start()
+        worker.join()
+        return Accepted(accepted=True)
+
     @app.get("/api/fixture/log-sync")
     def log_sync() -> Accepted:
         log.info("fixture line from a thread")
@@ -162,6 +192,7 @@ def restored_process_state() -> Iterator[None]:
     loggers = [logging.getLogger(name) for name in names]
     saved = [(lg, lg.level, list(lg.handlers), lg.propagate, lg.disabled) for lg in loggers]
     hooks = (sys.excepthook, threading.excepthook, sys.unraisablehook, logging.raiseExceptions)
+    printer = warnings.showwarning
     try:
         yield
     finally:
@@ -172,6 +203,7 @@ def restored_process_state() -> Iterator[None]:
             lg.propagate = propagate
             lg.disabled = disabled
         sys.excepthook, threading.excepthook, sys.unraisablehook, logging.raiseExceptions = hooks
+        warnings.showwarning = printer
 
 
 def create() -> FastAPI:

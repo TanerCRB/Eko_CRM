@@ -56,18 +56,22 @@ def json_result(result: subprocess.CompletedProcess[str]) -> Any:
     return json.loads(lines[-1])
 
 
-def fixture_image(lab: Lab) -> str:
-    """The shipped backend image plus the fixture module, and nothing else."""
-    name = "eko113_fixture"
+def fixture_image(lab: Lab, replace: dict[str, str] | None = None, name: str = "") -> str:
+    """The shipped backend image plus the fixture module, and nothing else.
+
+    `replace` (path in the image -> content) is for a planted contrast only, under its own name.
+    """
+    name = name or "eko113_fixture"
     if name in lab.images:
         return lab.images[name]
     context = lab.workdir / "variants" / name
     context.mkdir(parents=True)
     (context / f"{FIXTURE_IMPORT}.py").write_bytes(FIXTURE_MODULE.read_bytes())
-    (context / "Dockerfile").write_text(
-        f"FROM {lab.shipped_image}\nCOPY {FIXTURE_IMPORT}.py /app/{FIXTURE_IMPORT}.py\n",
-        encoding="utf-8",
-    )
+    lines = [f"FROM {lab.shipped_image}", f"COPY {FIXTURE_IMPORT}.py /app/{FIXTURE_IMPORT}.py"]
+    for index, (target, content) in enumerate(sorted((replace or {}).items())):
+        (context / f"replaced-{index}").write_text(content, encoding="utf-8")
+        lines.append(f"COPY replaced-{index} {target}")
+    (context / "Dockerfile").write_text("\n".join(lines) + "\n", encoding="utf-8")
     tag = f"localhost/eko-crm/backend-variant:{lab.composition.project}-{name}"
     docker("build", "-q", "-t", tag, str(context), timeout=600)
     lab.images[name] = tag

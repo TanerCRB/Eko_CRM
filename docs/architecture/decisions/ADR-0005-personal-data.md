@@ -888,6 +888,41 @@ backend's handling is installed, or what deletes a container log after 14 days. 
   - The same module provides the logging configuration that `serve.py` passes to `uvicorn.run` as
     `log_config`. Uvicorn applies it in each worker process it starts, before that process imports
     and calls the factory.
+  - *Amended at verification of EKO-1-13, 2026-11-02 (Reviewer R-01, Security Auditor B-01;
+    decided by the human on Issue #54, re-verification round 1).* The two bullets above leave the
+    hooks out of every process that serves requests.
+    - In `backend`, `install_process_logging` runs only in uvicorn's supervisor (`serve.main`).
+    - With more than one worker (`WEB_CONCURRENCY: "2"` in `compose.yaml`), uvicorn 0.54 starts
+      each serving process as a fresh interpreter (`multiprocessing` spawn). That process applies
+      only `log_config` (`dictConfig`) before it imports and calls the factory.
+    - So in the processes that handle requests, `sys.excepthook`, `threading.excepthook`,
+      `sys.unraisablehook`, `logging.captureWarnings(True)` and `logging.raiseExceptions = False`
+      (which `install_process_logging` also sets) stay at Python's defaults.
+    - **From this date, the hook half** (those five settings) **is installed in every process that
+      serves requests, as the first step of `create_app()`** in `backend/app/main.py`. The line
+      form in those processes still comes from `log_config`.
+    - `serve.main`'s call of `install_process_logging("backend")` is unchanged and still covers the
+      supervisor. `migrate` and `worker` are unchanged.
+  - *Amended at verification of EKO-1-13, 2026-11-04 (developer stop S-5; decided by the human on
+    Issue #54).* This replaces `logging.captureWarnings(True)` in the process half above and in the
+    hook half's five settings named in the note of 2026-11-02.
+    - **Why.** Python 3.12's `logging._showwarning` logs `str(s)`, the whole formatted warning, as
+      the record's format string. Under `captureWarnings(True)`, *Lines of other libraries* (Q-5 A:
+      the format string as `msg`) therefore writes the full warning text into `py.warnings`, values
+      and file path included. This holds in every process where the hook half is installed: the
+      supervisor (`serve.main`), the serving processes (`create_app()`), `worker` and `migrate`.
+    - **From this date** (option B), a `warnings.showwarning` owned by the repository replaces
+      `logging.captureWarnings(True)` in the hook half. `captureWarnings` is not called. The hook
+      half's other four settings are unchanged.
+    - It writes one line per warning shown. That line carries only the warning category's type
+      (module and qualified name) and its code location `<module>:<function>:<line>`, the same way
+      as an exception (*`backend`: an exception is written as its type and location only*). It
+      writes no message text, no arguments, no source line and no file path.
+    - **Cost.** A warning's message is not in the log. Only its category and where it was raised
+      can be seen there.
+    - Options not chosen: (A) a fixed `msg` for `py.warnings` records, kept under
+      `captureWarnings(True)`; (C) warnings dropped, with nothing left for diagnosis
+      (`.task/handoff/7-developer-backend-4.md`).
   - **The request half** is `install_request_handling(app)` in **`backend/app/main.py`**, where
     ADR-0001 places error handling and *Where personal data is held* places "error handling of
     requests whose bodies carry personal data".
@@ -932,6 +967,20 @@ backend's handling is installed, or what deletes a container log after 14 days. 
     - The handling must sit there. Alembic's command line catches every `Exception` and prints
       `FAILED: <message>`, and a SQLAlchemy error's message holds `[SQL: …]`, `[parameters: …]`
       and the driver's text naming host and role. So an interpreter-level hook never sees it.
+    - *Amended at verification of EKO-1-13, 2026-11-02 (QA, `11-qa-1` *Findings to report*, low;
+      corrects the rationale only, the rule is unchanged).* The bullet above is wrong for the
+      locked Alembic 1.20.1 (`backend/uv.lock`).
+      - `CommandLine.run_cmd` catches only `alembic.util.CommandError` (`alembic/config.py:968`),
+        and prints `FAILED: <message>` for it.
+      - Every other exception propagates and reaches `sys.excepthook`, which
+        `install_process_logging("migrate")` installs.
+      - The handling stays in `env.py` as stated above. `migrate` has two guards, and neither stands
+        in for the other:
+        - **The wrap in `env.py`** writes the error line for any exception that is not
+          `SystemExit`. That includes a `CommandError` raised inside `env.py`, which `run_cmd`
+          would otherwise print with its message before any hook sees it. It also holds if a later
+          Alembic version catches more.
+        - **The hook** writes the error line for an exception that reaches the interpreter.
     - `migrate`'s command stays `alembic upgrade head` (ADR-0004-C11).
     - Alembic's own messages before `env.py` runs (configuration, script directory) hold no
       database value.
@@ -952,6 +1001,10 @@ backend's handling is installed, or what deletes a container log after 14 days. 
       integer exit code.
     - How the container exits is unchanged. Uvicorn restarts a worker that exits, so the line
       repeats on each restart.
+    - *Amended at verification of EKO-1-13, 2026-11-02 (Reviewer R-01, Security Auditor B-01;
+      decided by the human on Issue #54, re-verification round 1).* These processes also get the
+      hook half, as the first step of `create_app()` (*The single entries that install it*,
+      amendment of this date).
   - **`worker`.** `install_process_logging("worker")` is the first statement of `worker.main`, in
     place of `logging.basicConfig`. A driver error in its revision check is handled as in
     `backend`'s main process.
@@ -1035,6 +1088,12 @@ only ones a 500 also carries. `migrate`'s handling sits in `env.py` because Alem
 swallows every exception before an interpreter hook sees it. This is not a deviation from ADR-0005,
 ADR-0004, ADR-0002 or ADR-0001: it decides what they leave open, subject to the human's reading
 under Q-2. To be approved by the human at gate 1 of EKO-1-13 (G-1 A, Issue #54).
+
+*Amended at verification of EKO-1-13, 2026-11-02 (QA, `11-qa-1` *Findings to report*, low).* The
+sentence above on Alembic's command line is wrong for Alembic 1.20.1. It catches only
+`CommandError`, and every other exception reaches `sys.excepthook`. The corrected rationale is under
+*An error outside a request*, `migrate`: the wrap in `env.py` and the hook are two guards. The
+handling stays in `env.py`.
 
 ### 2026-11-02 — DEVIATION OPTION for the human (Q-7): ADR-0005-C6 restated, with the 14-day log bound held by each host's container runtime
 

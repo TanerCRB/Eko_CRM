@@ -15,11 +15,12 @@ import logging
 import logging.config
 import sys
 import threading
+import warnings
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from types import TracebackType
+from types import FrameType, TracebackType
 from typing import Any
 
 PROCESSES = ("backend", "migrate", "worker")
@@ -67,6 +68,11 @@ def code_location(traceback: TracebackType | None) -> str:
     while traceback is not None:
         frames.append((traceback.tb_frame, traceback.tb_lineno))
         traceback = traceback.tb_next
+    return _location(frames)
+
+
+def _location(frames: list[tuple[FrameType, int]]) -> str:
+    """The code-location rule over frames ordered outermost first."""
     if not frames:
         return "unknown"
     for frame, line in reversed(frames):
@@ -75,6 +81,31 @@ def code_location(traceback: TracebackType | None) -> str:
             return f"{module}:{frame.f_code.co_qualname}:{line}"
     frame, line = frames[-1]
     return f"{frame.f_globals.get('__name__', '?')}:{frame.f_code.co_qualname}:{line}"
+
+
+@dataclass(frozen=True)
+class WarningLine:
+    """A warning, as its category and code location only (ADR-0005 amendment of 2026-11-04)."""
+
+    category: type[Warning]
+    at: str
+
+
+def _warning_location(filename: str, lineno: int) -> str:
+    """The code-location rule over the stack down to the frame the warning names; when no frame
+    matches (a warning given an explicit location), the stack outside the warning machinery."""
+    frames: list[tuple[FrameType, int]] = []
+    frame: FrameType | None = sys._getframe(1)
+    while frame is not None:
+        frames.append((frame, frame.f_lineno))
+        frame = frame.f_back
+    frames.reverse()
+    for index in range(len(frames) - 1, -1, -1):
+        candidate, line = frames[index]
+        if candidate.f_code.co_filename == filename and line == lineno:
+            return _location(frames[: index + 1])
+    machinery = {__file__, warnings.__file__}
+    return _location([f for f in frames if f[0].f_code.co_filename not in machinery])
 
 
 def error_fields(info: ExcInfo) -> dict[str, str]:
@@ -137,6 +168,7 @@ class LineFormatter(logging.Formatter):
             "logger": record.name,
         }
         request = getattr(record, "eko_request", None)
+        warned = getattr(record, "eko_warning", None)
         info = _exception_of(record)
         current = correlation_id.get()
         if isinstance(request, RequestLine):
@@ -148,6 +180,11 @@ class LineFormatter(logging.Formatter):
                 duration_ms=request.duration_ms,
                 correlation_id=request.correlation_id,
             )
+        elif isinstance(warned, WarningLine):
+            line["event"] = "error"
+            line.update(error=type_name(warned.category), at=warned.at)
+            if current is not None:
+                line["correlation_id"] = current
         elif info is not None:
             line["event"] = "error"
             line.update(error_fields(info))
@@ -210,12 +247,37 @@ def _unraisablehook(unraisable: "sys.UnraisableHookArgs") -> None:
     _unhandled.error("unraisable exception", extra={"eko_exc": hooked})
 
 
-def install_process_logging(process: str) -> None:
-    """The process half of the line form: the configuration and the interpreter's hooks."""
-    logging.config.dictConfig(log_config(process))
+_warnings_logger = logging.getLogger("py.warnings")
+
+
+def _showwarning(
+    message: Warning | str,
+    category: type[Warning],
+    filename: str,
+    lineno: int,
+    file: object = None,
+    line: str | None = None,
+) -> None:
+    """Replaces Python's warning printer: no message text, source line or file path is written,
+    also when a caller names a file, which Python's printer would write the text to."""
+    at = _warning_location(filename, lineno)
+    _warnings_logger.warning("warning", extra={"eko_warning": WarningLine(category, at)})
+
+
+def install_interpreter_hooks() -> None:
+    """The hook half: Python's own printers (exception, thread exception, unraisable exception,
+    warning, handler failure) write through the line form instead of printing text. Warnings get
+    the repository's printer, not `logging.captureWarnings`, which logs the warning's whole text
+    as its format string on Python 3.12 (ADR-0005 amendment of 2026-11-04, S-5)."""
     # A failing handler would otherwise print the record's message and arguments.
     logging.raiseExceptions = False
     sys.excepthook = _excepthook
     threading.excepthook = _thread_excepthook
     sys.unraisablehook = _unraisablehook
-    logging.captureWarnings(True)
+    warnings.showwarning = _showwarning
+
+
+def install_process_logging(process: str) -> None:
+    """The process half of the line form: the configuration and the interpreter's hooks."""
+    logging.config.dictConfig(log_config(process))
+    install_interpreter_hooks()
