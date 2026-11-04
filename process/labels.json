@@ -39,6 +39,7 @@
       { "name": "role:architect", "color": "d4d4d4", "description": "Architect - impact map for architectural decisions" },
       { "name": "role:backend", "color": "d4d4d4", "description": "Backend developer" },
       { "name": "role:frontend", "color": "d4d4d4", "description": "Frontend developer" },
+      { "name": "role:infrastructure", "color": "d4d4d4", "description": "Infrastructure developer" },
       { "name": "role:qa", "color": "d4d4d4", "description": "QA - negative, contrast tests, mutations" },
       { "name": "role:invariant-guardian", "color": "d4d4d4", "description": "Invariant Guardian - diff audit" },
       { "name": "role:reviewer", "color": "d4d4d4", "description": "Reviewer - design flaws outside the rule list" },
