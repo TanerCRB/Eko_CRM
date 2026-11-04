@@ -11,6 +11,7 @@ import sys
 import threading
 from types import FrameType
 
+from app.core.logs import install_process_logging
 from app.core.settings import Settings, load_settings
 from app.data.schema_revision import refuse_unless_servable
 
@@ -26,7 +27,7 @@ def run(stop: threading.Event) -> int:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    install_process_logging("worker")
     refuse_unless_servable(load_settings(Settings), "worker")
     stop = threading.Event()
 

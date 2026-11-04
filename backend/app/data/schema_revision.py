@@ -207,6 +207,8 @@ def refuse_unless_servable(settings: Settings, process: str) -> None:
             database = read_database_revision(connection)
         check_servable(database, code_tree())
     except SQLAlchemyError as exc:
+        # Type and location only under the process's line form (ADR-0005 addendum 2026-11-02).
+        logger.error("the database revision could not be read", exc_info=True)
         # The type only: driver messages name hosts and roles.
         raise SystemExit(
             f"{process} refused to start: the database revision could not be read "
