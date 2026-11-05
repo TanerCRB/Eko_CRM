@@ -4,6 +4,11 @@ ADR-0004 (forward to EKO-1-10) and its addendum of 2026-10-29: EKO-1-10 builds t
 which release is previous, and how CI obtains its document, is EKO-1-15's (#56).
 
     uv run python -m tests.support.openapi_compat [--previous FILE] [--current FILE]
+    uv run python -m tests.support.openapi_compat --from-record [--exclude TAG]
+
+With `--from-record` the previous document is the one the previous published release's backend,
+started by digest, serves directly (EKO-1-15, #56; tests/support/releases.py selects it); no
+release reachable from `main` is "compared nothing", and a release that cannot be obtained is 2.
 
 Without `--current`, the document is generated in-process from `create_app()`, never through
 `proxy` (ADR-0003). Exit contract: 0 = compatible, or nothing compared; 1 = breaking changes;
@@ -17,11 +22,22 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal, TextIO
 
 from tests.support.api_surface import operations, real_app, resolve
 from tests.support.openapi import openapi_3_errors
+from tests.support.release_backend import served_document
+from tests.support.releases import (
+    CannotTell,
+    Reachability,
+    Record,
+    Release,
+    previous_release,
+    reach_from_environment,
+    record_from_environment,
+)
 
 Document = dict[str, Any]
 Direction = Literal["request", "response"]
@@ -356,22 +372,58 @@ def report(out: TextIO, line: str) -> None:
     out.write(line + "\n")
 
 
-def main(argv: list[str], out: TextIO = sys.stdout) -> int:
+def validated(document: Any, where: str) -> Document:
+    errors = openapi_3_errors(document)
+    if errors or not isinstance(document, dict):
+        raise CheckFailed(f"{where}: not a valid OpenAPI 3.x document ({errors[:1]})")
+    return document
+
+
+def main(
+    argv: list[str],
+    out: TextIO = sys.stdout,
+    record: Record | None = None,
+    reach: Reachability | None = None,
+    served: Callable[[Release], Any] | None = None,
+) -> int:
     parser = argparse.ArgumentParser(prog="python -m tests.support.openapi_compat")
-    parser.add_argument("--previous", help="the previous release's OpenAPI document (JSON)")
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--previous", help="the previous release's OpenAPI document (JSON)")
+    source.add_argument(
+        "--from-record",
+        action="store_true",
+        help="the previous published release's document, as its backend serves it (EKO-1-15)",
+    )
+    parser.add_argument("--exclude", help="with --from-record: the release being built")
     parser.add_argument("--current", help="default: generated in-process from create_app()")
     args = parser.parse_args(argv)
+    if args.exclude and not args.from_record:
+        parser.error("--exclude needs --from-record")
     try:
         current = load(args.current) if args.current else real_app().openapi()
-        if args.previous is None:
+        if args.from_record:
+            found = previous_release(
+                record or record_from_environment(), reach or reach_from_environment(), args.exclude
+            )
+            if found is None:
+                report(
+                    out,
+                    f"{PREFIX} no published release is reachable from main, so it compared "
+                    "nothing.",
+                )
+                return 0
+            report(out, f"{PREFIX} previous release {found.tag} at {found.commit}")
+            previous = validated((served or served_document)(found), found.tag)
+        elif args.previous is None:
             report(
                 out,
                 f"{PREFIX} no previous release document was supplied, so it compared nothing. "
                 "Which release is previous, and how CI obtains its document, is EKO-1-15's (#56).",
             )
             return 0
-        previous = load(args.previous)
-    except CheckFailed as exc:
+        else:
+            previous = load(args.previous)
+    except (CheckFailed, CannotTell) as exc:
         report(out, f"{PREFIX} the check itself failed: {exc}")
         return 2
     problems = breaking_changes(previous, current)

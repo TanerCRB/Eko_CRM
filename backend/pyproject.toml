@@ -33,8 +33,13 @@ package = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # Runtime tests start the whole composition; CI runs them in their own job with `-m runtime`.
-addopts = "-m 'not runtime' --strict-markers"
-markers = ["runtime: starts containers with docker compose"]
+# previous_release: runtime tests on a published release; they need the release record's read
+# token and a registry login, granted in the release workflow's runtime job (EKO-1-15).
+addopts = "-m 'not runtime and not previous_release' --strict-markers"
+markers = [
+    "runtime: starts containers with docker compose",
+    "previous_release: runtime tests that pull the previous published release (EKO-1-15)",
+]
 
 [tool.ruff]
 line-length = 100

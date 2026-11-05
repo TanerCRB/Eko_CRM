@@ -41,13 +41,29 @@ def actions_pinned(workflow: Workflow) -> list[str]:
     ]
 
 
+RECORD_TOKEN = "RELEASE_RECORD_TOKEN"
+# The closed list of ci.yml jobs that may read the release record (EKO-1-15 C-3, C-7, C-8);
+# K-07's check on ci.yml uses the same list.
+RECORD_JOBS = ("backend", "runtime")
+
+
+def reads_release_record(job: dict[str, Any]) -> bool:
+    """EKO-1-15: a job reads the release record when one of its steps is given the record token."""
+    return any(RECORD_TOKEN in (step.get("env") or {}) for step in job.get("steps", []))
+
+
 def read_only_token(workflow: Workflow) -> list[str]:
+    """Read-only token: `contents: read`, plus `packages: read` only on a job of RECORD_JOBS that
+    reads the release record (EKO-1-15 C-3, C-8, exception EKO-1-15/weakening-1)."""
     problems = []
     if workflow.get("permissions") != {"contents": "read"}:
         problems.append(f"workflow permissions {workflow.get('permissions')!r}")
     for job_id, job in workflow.get("jobs", {}).items():
         permissions = job.get("permissions")
-        if permissions is not None and permissions != {"contents": "read"}:
+        allowed = [{"contents": "read"}]
+        if job_id in RECORD_JOBS and reads_release_record(job):
+            allowed.append({"contents": "read", "packages": "read"})
+        if permissions is not None and permissions not in allowed:
             problems.append(f"{job_id}: permissions {permissions!r}")
     return problems
 

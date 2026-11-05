@@ -59,11 +59,22 @@ jobs:
     name: backend unit tests and static checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Reads the release record for the API-compatibility step (EKO-1-15 K-06, C-3, C-7, C-8).
+    permissions:
+      contents: read
+      packages: read
     steps:
+      # Full history: the previous release counts only when its commit is reachable from main.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Registry login, read only (pulls the previous release's backend)
+        shell: bash
+        env:
+          TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: printf '%s' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.11.21"
@@ -85,11 +96,13 @@ jobs:
         env:
           CHANGESET_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: uv run pytest -v
-      # Until EKO-1-15 (#56) supplies the previous release's document, this says it compared
-      # nothing (ADR-0004 addendum of 2026-10-29); it is not red for that.
+      # The previous published release reachable from main, as its backend serves it (EKO-1-15
+      # K-06); with none it says it compared nothing, and one it cannot obtain is red (exit 2).
       - name: API compatibility with the previous release (ADR-0004)
         working-directory: backend
-        run: uv run python -m tests.support.openapi_compat
+        env:
+          RELEASE_RECORD_TOKEN: ${{ github.token }}
+        run: uv run python -m tests.support.openapi_compat --from-record
 
   frontend:
     name: frontend unit tests
@@ -149,10 +162,22 @@ jobs:
     if: needs.changes.outputs.runtime == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # Reads the release record for ADR-0004-C13's previous-release half (EKO-1-15 K-06, C-3, C-4).
+    permissions:
+      contents: read
+      packages: read
     steps:
+      # Full history: the previous release counts only when its commit is reachable from main.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: Registry login, read only (pulls the previous release's backend)
+        shell: bash
+        env:
+          TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: printf '%s' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.11.21"
@@ -162,4 +187,6 @@ jobs:
         run: uv sync --locked
       - name: Runtime tests (K-01, K-02, K-03, K-04)
         working-directory: backend
-        run: uv run pytest -m runtime tests/runtime -v
+        env:
+          RELEASE_RECORD_TOKEN: ${{ github.token }}
+        run: uv run pytest -m "runtime or previous_release" tests/runtime -v
