@@ -5,6 +5,7 @@ release (ADR-0004 addendum 2026-11-04; EKO-1-15, #56).
     uv run python -m tests.support.releases previous [--exclude TAG]
     uv run python -m tests.support.releases published TAG         # exit 0 only if not published
     uv run python -m tests.support.releases publish --tag T --commit C --composition FILE
+    uv run python -m tests.support.releases tag-commit --tag T --commit C   # exit 0: T names C
 
 The record is the OCI artifact repository `ghcr.io/tanercrb/eko-crm/release`: one artifact per
 release tag, holding the release composition and the tagged commit. A tag the record holds is a
@@ -386,6 +387,63 @@ class GhcrRecord:
         return "sha256:" + hashlib.sha256(body).hexdigest()
 
 
+# The tag in the repository, over the GitHub REST API -------------------------------------------
+
+GITHUB_API = "https://api.github.com"
+REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+# An annotated tag may point at another tag object; a chain this long is not a release tag.
+MAX_TAG_OBJECTS = 5
+
+
+class GitHubTags:
+    """What a tag names in the repository now: a partial re-run keeps the commit its first
+    attempt was started on (GITHUB_SHA), while the tag may since name another commit or none."""
+
+    def __init__(self, token: str, repository: str, transport: Transport = https_transport) -> None:
+        self._token = token
+        self.repository = repository
+        self._transport = transport
+
+    def _object(self, path: str, tag: str) -> dict[str, str] | None:
+        headers = {
+            "Authorization": f"Bearer {self._token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "eko-crm-release-run",
+        }
+        answer = self._transport("GET", GITHUB_API + path, headers, None)
+        if answer.status == 404:
+            return None
+        if answer.status != 200:
+            raise CannotTell(f"{tag}: the tag cannot be read ({answer.status})")
+        try:
+            found = json.loads(answer.body)["object"]
+            return {"type": str(found["type"]), "sha": str(found["sha"])}
+        except (ValueError, KeyError, TypeError):
+            raise CannotTell(f"{tag}: the tag answer is unreadable") from None
+
+    def commit_of(self, tag: str) -> str | None:
+        """The commit `tag` names, or None when the repository holds no such tag."""
+        if not self._token or not REPOSITORY.fullmatch(self.repository):
+            raise CannotTell("no token or repository to read the tag")
+        if version(tag) is None:
+            raise CannotTell(f"{tag}: not a release tag")
+        found = self._object(f"/repos/{self.repository}/git/ref/tags/{tag}", tag)
+        for _ in range(MAX_TAG_OBJECTS):
+            if found is None:
+                return None
+            if not COMMIT.fullmatch(found["sha"]):
+                raise CannotTell(f"{tag}: the tag names no full object name")
+            if found["type"] == "commit":
+                return found["sha"]
+            if found["type"] != "tag":
+                raise CannotTell(f"{tag}: the tag names a {found['type']}, not a commit")
+            found = self._object(f"/repos/{self.repository}/git/tags/{found['sha']}", tag)
+            if found is None:
+                raise CannotTell(f"{tag}: its tag object cannot be obtained")
+        raise CannotTell(f"{tag}: more than {MAX_TAG_OBJECTS} tag objects")
+
+
 # Command line ---------------------------------------------------------------------------------
 
 
@@ -412,15 +470,25 @@ def event_from_environment() -> Event:
     )
 
 
+def tags_from_environment() -> GitHubTags:
+    return GitHubTags(
+        os.environ.get("RELEASE_REPO_TOKEN", ""), os.environ.get("GITHUB_REPOSITORY", "")
+    )
+
+
 def main(
     argv: list[str],
     out: TextIO = sys.stdout,
     record: Record | None = None,
     reach: Reachability | None = None,
+    tags: GitHubTags | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(prog="python -m tests.support.releases")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("admit")
+    tag_commit = commands.add_parser("tag-commit")
+    tag_commit.add_argument("--tag", required=True)
+    tag_commit.add_argument("--commit", required=True)
     previous = commands.add_parser("previous")
     previous.add_argument("--exclude")
     publish = commands.add_parser("publish")
@@ -434,6 +502,13 @@ def main(
             text = Path(args.composition).read_text(encoding="utf-8")
             digest = record_from_environment().publish(args.tag, args.commit, text)
             report(out, f"{prefix} published {args.tag} as {digest}")
+            return 0
+        if args.command == "tag-commit":
+            named = (tags or tags_from_environment()).commit_of(args.tag)
+            if named != args.commit:
+                report(out, f"{prefix} {args.tag} no longer names {args.commit}")
+                return 1
+            report(out, f"{prefix} {args.tag} names {args.commit}")
             return 0
         record = record or record_from_environment()
         reach = reach or reach_from_environment()

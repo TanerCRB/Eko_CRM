@@ -215,6 +215,54 @@ def third_party_digest_violations(flow: Workflow) -> list[str]:
     return problems
 
 
+# R-01 (K-04, K-05): a partial re-run reuses the admission job's outputs, so publish decides again
+
+READMIT = "uv run python -m tests.support.releases admit"
+READMIT_TAG = 'grep -qxF "tag=$RELEASE_TAG"'
+TAG_COMMIT = (
+    'uv run python -m tests.support.releases tag-commit --tag "$RELEASE_TAG" --commit "$GITHUB_SHA"'
+)
+READMIT_ENV = {
+    RECORD_TOKEN: "${{ github.token }}",
+    "RELEASE_REPO_TOKEN": "${{ github.token }}",
+    "RELEASE_TAG": "${{ needs.admission.outputs.tag }}",
+}
+
+
+def publish_readmission_violations(flow: Workflow) -> list[str]:
+    """Before the registry login and the push, the publish job runs the admission again and
+    checks that the tag still names this run's commit; the step cannot be skipped or ignored."""
+    steps = _steps_of(flow, PUBLISH_JOB)
+    found = [i for i, s in enumerate(steps) if READMIT in str(s.get("run", ""))]
+    if len(found) != 1:
+        return [f"{PUBLISH_JOB}: does not decide the admission again"]
+    index, step = found[0], steps[found[0]]
+    problems = []
+    run = str(step.get("run", ""))
+    if READMIT_TAG not in run:
+        problems.append(f"{PUBLISH_JOB}: the admission decided again is not compared by tag")
+    if TAG_COMMIT not in run:
+        problems.append(f"{PUBLISH_JOB}: does not check the tag still names this run's commit")
+    if step.get("shell") != "bash":
+        problems.append(f"{PUBLISH_JOB}: the admission step does not stop on a failed command")
+    if "if" in step or "continue-on-error" in step:
+        problems.append(f"{PUBLISH_JOB}: the admission step can be skipped or ignored")
+    env = step.get("env") or {}
+    if any(env.get(k) != v for k, v in READMIT_ENV.items()):
+        problems.append(f"{PUBLISH_JOB}: the admission step is not given {sorted(READMIT_ENV)}")
+    pushes = [
+        i
+        for i, s in enumerate(steps)
+        if LOGIN.search(str(s.get("run", ""))) or PUSH in str(s.get("run", ""))
+    ]
+    if not pushes or min(pushes) < index:
+        problems.append(f"{PUBLISH_JOB}: logs in or pushes before deciding the admission again")
+    checkout = [s for s in steps if str(s.get("uses", "")).startswith("actions/checkout@")]
+    if not checkout or (checkout[0].get("with") or {}).get("fetch-depth") != 0:
+        problems.append(f"{PUBLISH_JOB}: its checkout has no full history for reachability")
+    return problems
+
+
 # K-03: publishing only after every check, none of which can pass without running ---------------
 
 
@@ -278,7 +326,8 @@ FULL_HISTORY_JOBS = ("runtime",)
 
 
 def _revert_allowed(name: str, job: dict[str, Any]) -> dict[str, Any]:
-    """The head job with each allowed difference undone, for comparison with the base job."""
+    """The job with each allowed difference undone. Both sides are undone, so the comparison
+    holds while this change is the change set and once it is on the base (QA F-1)."""
     reverted = copy.deepcopy({k: v for k, v in job.items() if k != "permissions"})
     if name not in RECORD_JOBS:
         return reverted
@@ -319,8 +368,7 @@ def ci_unchanged_violations(base: Workflow, head: Workflow) -> list[str]:
         if now is None:
             problems.append(f"job {name} removed")
             continue
-        rest = {k: v for k, v in job.items() if k != "permissions"}
-        if rest != _revert_allowed(name, now):
+        if _revert_allowed(name, job) != _revert_allowed(name, now):
             problems.append(f"job {name}: changed")
         before, after = effective_permissions(base, job), effective_permissions(head, now)
         allowed = [before]

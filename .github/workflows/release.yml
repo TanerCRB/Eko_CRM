@@ -244,6 +244,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -266,6 +267,20 @@ jobs:
       - name: Install
         working-directory: backend
         run: uv sync --locked
+      # A partial re-run ("Re-run failed jobs") reuses the admission job's outputs from its first
+      # attempt, so the admission is decided again here, before any login or push: account
+      # (pusher and re-runner), order, not yet published, and the tag still naming this commit.
+      - name: Admission decided again before any push (ADR-0004-C30, C31)
+        working-directory: backend
+        shell: bash
+        env:
+          RELEASE_RECORD_TOKEN: ${{ github.token }}
+          RELEASE_REPO_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.admission.outputs.tag }}
+        run: |
+          uv run python -m tests.support.releases admit | tee "$RUNNER_TEMP/readmission"
+          grep -qxF "tag=$RELEASE_TAG" "$RUNNER_TEMP/readmission"
+          uv run python -m tests.support.releases tag-commit --tag "$RELEASE_TAG" --commit "$GITHUB_SHA"
       - name: Registry login with this run's token
         shell: bash
         env:
