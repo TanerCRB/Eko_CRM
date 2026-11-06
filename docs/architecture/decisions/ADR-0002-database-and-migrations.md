@@ -343,3 +343,62 @@ does not depend on the zone of the container, the process or the database sessio
 in a model does. Restating an accepted control and widening its rule's scope is a declared
 deviation. It follows the precedent of this decision's addendum of 2026-10-28 on ADR-0002-C12.
 Approved by the human at gate 1 of EKO-1-10 on 2026-10-29 (G-4 A, Issue #51).
+
+### 2026-11-02 — Pool checkout is bounded so that refresh can meet ADR-0003-C18
+
+**Status:** Accepted 2026-11-02, as a declared deviation (gate 1 of EKO-2-01, Issue #21, G-6 A).
+
+**What it changes.** The addendum of 2026-10-28 on the synchronous data layer leaves
+`create_app_engine` without a `pool_timeout`, and therefore leaves SQLAlchemy's default checkout
+wait of 30 seconds as a stated cost. It also says that setting `pool_timeout` is a change to this
+decision, recorded as an addendum. ADR-0003-C18 requires every one of at least ten concurrent
+requests on one expired-token session to receive 503 within 6 seconds when Keycloak accepts the
+refresh connection but never answers. A 30-second checkout before session, token or refresh-lock
+access can defeat that bound. Issue #21's comment of 2026-10-29 requires either proof that the
+refresh path never waits on checkout, or a bounded `pool_timeout` or separate refresh pool recorded
+here. Server-side sessions and tokens in the application database, and the cross-process refresh
+lock, make the no-checkout alternative unavailable.
+
+From approval of this addendum:
+
+- **`create_app_engine` sets `pool_timeout` to 0.5 seconds.** This applies to every application
+  engine that function builds. Pool size and overflow are unchanged: each backend process still has
+  5 + 5 connections, there is no second pool, and ADR-0003-C19's recorded connection budget is
+  unchanged.
+- The 0.5 seconds is the total wait for one pool checkout, including a checkout needed for session
+  lookup, token storage or refresh-lock work. A refresh-path checkout that times out answers 503,
+  keeps the session and does not start another refresh. It never turns into a 401 or serves an
+  expired access token. Other database request paths use the same bounded engine and the common
+  error mapping; no error response or log exposes a connection string, driver message or secret.
+- The five-second wait for another request's refresh in ADR-0003 remains unchanged and starts only
+  once that wait exists. The 0.5-second checkout bound leaves the remaining 0.5 seconds of C18's
+  six-second response bound for request scheduling and database work. C18 latency is measured from
+  each request's send time and therefore includes pool checkout; configuration of the timeout alone
+  is not proof of C18.
+- A separate refresh pool is not introduced. It would still need its own checkout bound and would
+  consume part of the application role's fixed connection budget, while adding a second engine and
+  pool lifecycle to test. The shared 0.5-second bound is sufficient as an architectural bound; its
+  timing claim is limited to the recorded test host and composition.
+
+**New control.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0002-C16 | A test runs at least ten concurrent requests across the running backend processes on one expired-token session with the application pool exhausted after the one refresh holder has acquired its connection and lock. With responsive Keycloak, exactly one refresh occurs and, after the test releases only its connection blockers, every request reaches its authenticated result. With Keycloak accepting the connection but never answering and the blockers still held, Keycloak receives exactly one refresh, every request gets 503 within 6 seconds of its own send time, no waiter refreshes, and the session remains. Repeating the hanging carrier with the 0.5-second setting removed and SQLAlchemy's default restored produces late or default-checkout error responses beyond that bound; removing the setting as a mutation fails the bounded case. The lock's database transaction is not open across the Keycloak call. |
+
+Every other rule and control of this decision is unchanged. ADR-0003-C18 remains unchanged; this
+control supplies its pool-exhausted carrier, opposite case and mutation for EKO-2-01.
+
+**Options considered.**
+
+| Option | Cost | Closes off |
+|---|---|---|
+| **A. Shared-pool `pool_timeout` of 0.5 seconds** (chosen) | Under a sustained database burst, requests fail fast instead of waiting for capacity; the test must show that 0.5 seconds of scheduling and database margin is enough on the recorded host. | Claiming the 30-second default is compatible with C18. |
+| B. A separate refresh/session pool with its own 0.5-second bound | A second engine and pool lifecycle; its reserved connections must be added to the ADR-0003-C19 budget and can be exhausted independently. It does not remove checkout waits. | The single application engine and its existing budget accounting. |
+| C. Assert that refresh never checks out a pooled connection | Incompatible with ADR-0003's database-held sessions and tokens and with a cross-process database lock; no honest pool-exhaustion test could show it. | Server-side database-backed session refresh. |
+| D. Shared-pool `pool_timeout` of 1 second | Leaves no time beyond the five-second refresh wait inside C18's six-second bound. | A scheduling and database margin within C18. |
+
+**Why.** The accepted 30-second cost predates the first access path that has a six-second
+availability deadline. The Issue's forwarded entry condition makes this a declared deviation from
+the synchronous-data-layer addendum's stated cost, not a silent configuration change. The human
+approved the 0.5-second bound at gate 1 of EKO-2-01 on 2026-11-02 (G-6 A, Issue #21).
