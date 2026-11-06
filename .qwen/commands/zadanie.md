@@ -48,10 +48,14 @@ checked nothing.
 `bash scripts/<name>.sh`. Read exit 2 as "the check could not run", never as "clean".
 
 **Journal and cost numbers.** Read `.task/journal.md` yourself as the first act of step 0 on a
-resumed task, whether or not the SessionStart hook is registered in `.qwen/settings.json`. Take
-the cost-register numbers from the `SubagentStop` record only once `scripts/cost-capture.mjs` has
-been verified against this environment's transcript format; until then write `"no data"` and
-`"measured": "by hand"` with the reason — never a guessed number.
+resumed task, whether or not the SessionStart hook is registered in `.qwen/settings.json`. Write
+every cost-register row as `"measured": "by hand"`, with `"no data"` in the measured columns and
+the reason `"cost-capture.mjs cannot parse this environment's transcript"` — never a guessed
+number. Measured on 0.26.8: entries here carry usage under `usageMetadata` in this environment's
+own field names, with no `message.id` to deduplicate on, so the hook returns `"no data"`. Do not
+substitute the numbers from `~/.qwen/usage/` — that ledger keys its rows by session and carries no
+agent identifier, while the canonical mechanism looks a record up by the agent id returned at
+launch, so no row there can be attributed to one role call.
 
 **No TODO tool.** Keep the one-entry-per-step list in `.task/journal.md` instead.
 
