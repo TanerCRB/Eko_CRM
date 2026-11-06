@@ -383,6 +383,9 @@ K-01 @@ deny @@ Bash @@ gh release -R TanerCRB/Eko_CRM create v1.0.0
 K-01 @@ deny @@ Bash @@ cd ../Eko_CRM-EKO-1-18 && gh release create v1.0.0
 K-01 @@ deny @@ Bash @@ gh release edit v1.0.0 --draft=false
 K-01 @@ deny @@ Bash @@ gh release -R TanerCRB/Eko_CRM edit probe --draft=false
+# QA contrast (EKO-1-18-M-09): no arguments with a repository flag before the subcommand; only
+# Bash(gh release * create) stops it.
+K-01 @@ deny @@ Bash @@ gh release -R TanerCRB/Eko_CRM create
 K-01 @@ clear @@ Bash @@ gh release view v1.0.0
 K-01 @@ clear @@ Bash @@ gh release list
 # K-02 — gh api writes to git refs, git tags and releases; GraphQL ref mutations (G-5 A).
@@ -404,6 +407,10 @@ K-02 @@ deny @@ Bash @@ gh api repos/{owner}/{repo}/git/refs --field ref=refs/ta
 K-02 @@ deny @@ Bash @@ gh api repos/{owner}/{repo}/git/refs --input ref.json
 K-02 @@ deny @@ Bash @@ gh api repos/tanercrb/eko_crm/releases -f tag_name=probe
 K-02 @@ deny @@ Bash @@ gh api -iXPOST repos/{owner}/{repo}/git/refs -f ref=refs/tags/probe -f sha=0123456789abcdef0123456789abcdef01234567
+# QA contrasts (EKO-1-18-M-11, M-13): every flag before the endpoint, nothing after it; only the
+# Bash(gh api* -*/git/*) and Bash(gh api* -*/releases*) rules stop these.
+K-02 @@ deny @@ Bash @@ gh api -X POST -f ref=refs/tags/probe -f sha=0123456789abcdef0123456789abcdef01234567 repos/{owner}/{repo}/git/refs
+K-02 @@ deny @@ Bash @@ gh api -F draft=false -X PATCH repos/{owner}/{repo}/releases/123
 K-02 @@ clear @@ Bash @@ gh api repos/{owner}/{repo}/releases/latest
 K-02 @@ clear @@ Bash @@ gh api repos/{owner}/{repo}/git/refs/tags/v1.0.0
 K-02 @@ clear @@ Bash @@ gh api user --jq .login
