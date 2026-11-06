@@ -1,0 +1,316 @@
+# Release run (EKO-1-15, #56; ADR-0004 addendum 2026-11-04, controls C29..C31). A tag
+# v<major>.<minor>.<patch> on a commit of main, pushed by TanerCRB, is admitted; the four checks
+# then run on the tagged commit, each project image is built once and the checked images are
+# pushed to ghcr.io/tanercrb/eko-crm/*, and the release composition naming their digests is
+# published as an OCI artifact. Only the publish job holds packages: write; it runs only when the
+# admission and every check succeeded. No stored secret: every registry call uses this run's own
+# GITHUB_TOKEN. A failed run publishes nothing; images pushed by a run that failed afterwards are
+# not a release (G-9 A).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+# Runs of one tag queue, never run side by side: the second one finds the tag published.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  admission:
+    name: release admission
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      admitted: ${{ steps.admit.outputs.admitted }}
+      tag: ${{ steps.admit.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.21"
+          python-version: "3.12"
+      - name: Install
+        working-directory: backend
+        run: uv sync --locked
+      # Tag form, account (pusher and re-runner), commit on main, not already published, not
+      # lower than a published release. Exit 1 refuses, exit 2 cannot tell: both stop the run.
+      - name: Admission (ADR-0004-C30, C31)
+        id: admit
+        working-directory: backend
+        shell: bash
+        env:
+          RELEASE_RECORD_TOKEN: ${{ github.token }}
+        run: |
+          uv run python -m tests.support.releases admit | tee "$RUNNER_TEMP/admission"
+          grep -E '^tag=v[0-9]+\.[0-9]+\.[0-9]+$' "$RUNNER_TEMP/admission" >> "$GITHUB_OUTPUT"
+          echo "admitted=true" >> "$GITHUB_OUTPUT"
+
+  backend:
+    name: backend unit tests and static checks
+    needs: admission
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.21"
+          python-version: "3.12"
+      - name: Lock file is current (ADR-0001-C1)
+        working-directory: backend
+        run: uv lock --locked
+      - name: Install
+        working-directory: backend
+        run: uv sync --locked
+      - name: Lint and types
+        working-directory: backend
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy .
+      - name: Unit tests and static checks
+        working-directory: backend
+        env:
+          CHANGESET_BASE: origin/main
+        run: uv run pytest -v
+      - name: Registry login, read only (pulls the previous release's backend)
+        shell: bash
+        env:
+          TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: printf '%s' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+      # The previous release is the newest published one reachable from main, other than this
+      # tag; its document is served by its own backend, started by digest (K-06).
+      - name: API compatibility with the previous release (ADR-0004)
+        working-directory: backend
+        env:
+          RELEASE_RECORD_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.admission.outputs.tag }}
+        run: uv run python -m tests.support.openapi_compat --from-record --exclude "$RELEASE_TAG"
+
+  frontend:
+    name: frontend unit tests
+    needs: admission
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Install (ADR-0001-C2)
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Lint (ADR-0001-C13)
+        working-directory: frontend
+        run: pnpm lint
+      - name: Unit tests
+        working-directory: frontend
+        run: pnpm test
+      - name: Type check and build
+        working-directory: frontend
+        run: pnpm run build
+
+  # The one build of the project images (ADR-0004-C31). ADR-0001-C4: Docker only, no Python or
+  # Node.js on the runner. The image IDs are this run's identity of each image from here on.
+  images:
+    name: image builds and image checks
+    needs: admission
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      backend-id: ${{ steps.ids.outputs.backend }}
+      frontend-id: ${{ steps.ids.outputs.frontend }}
+      proxy-id: ${{ steps.ids.outputs.proxy }}
+      backup-id: ${{ steps.ids.outputs.backup }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build images
+        run: |
+          docker build -t eko-crm/backend:checked backend
+          docker build -t eko-crm/frontend:checked frontend
+          docker build -t eko-crm/proxy:checked proxy
+          docker build -t eko-crm/backup:checked backup
+      - name: Image checks (ADR-0001-C5, ADR-0004-C9)
+        run: bash scripts/image-check.sh --frontend eko-crm/frontend:checked eko-crm/backend:checked eko-crm/frontend:checked eko-crm/proxy:checked eko-crm/backup:checked
+      - name: Record image IDs
+        id: ids
+        shell: bash
+        run: |
+          for name in backend frontend proxy backup; do
+            echo "$name=$(docker image inspect --format '{{.Id}}' "eko-crm/$name:checked")" >> "$GITHUB_OUTPUT"
+          done
+      - name: Save the checked images
+        run: docker save -o "$RUNNER_TEMP/checked-images.tar" eko-crm/backend:checked eko-crm/frontend:checked eko-crm/proxy:checked eko-crm/backup:checked
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: checked-images
+          path: ${{ runner.temp }}/checked-images.tar
+          retention-days: 1
+          if-no-files-found: error
+
+  # The runtime tests run on the checked images, loaded, never rebuilt: EKO_CHECKED_IMAGES makes
+  # the harness use them in place of every build of the repository composition (K-02).
+  runtime:
+    name: runtime tests on the composition
+    needs: [admission, images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      postgres: ${{ steps.pulled-digests.outputs.postgres }}
+      keycloak: ${{ steps.pulled-digests.outputs.keycloak }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: checked-images
+          path: ${{ runner.temp }}
+      - name: Load the checked images and check their identity
+        id: check-identity
+        shell: bash
+        env:
+          BACKEND_ID: ${{ needs.images.outputs.backend-id }}
+          FRONTEND_ID: ${{ needs.images.outputs.frontend-id }}
+          PROXY_ID: ${{ needs.images.outputs.proxy-id }}
+          BACKUP_ID: ${{ needs.images.outputs.backup-id }}
+        run: |
+          docker load -i "$RUNNER_TEMP/checked-images.tar"
+          bash scripts/release-images.sh check-identity
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.21"
+          python-version: "3.12"
+      - name: Install
+        working-directory: backend
+        run: uv sync --locked
+      - name: Registry login, read only (pulls the previous release's backend for C13)
+        shell: bash
+        env:
+          TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: printf '%s' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+      - name: Runtime tests on the checked images
+        working-directory: backend
+        env:
+          EKO_CHECKED_IMAGES: "backend=eko-crm/backend:checked frontend=eko-crm/frontend:checked proxy=eko-crm/proxy:checked backup=eko-crm/backup:checked"
+          RELEASE_RECORD_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.admission.outputs.tag }}
+        run: uv run pytest -m "runtime or previous_release" tests/runtime -v
+      # The postgres and keycloak the runtime tests pulled by tag: the release names these digests.
+      - name: Record the third-party digests the runtime tests ran
+        id: pulled-digests
+        shell: bash
+        run: bash scripts/release-images.sh pulled-digests >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: publish the release
+    needs: [admission, backend, frontend, images, runtime]
+    if: needs.admission.outputs.admitted == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: checked-images
+          path: ${{ runner.temp }}
+      - name: Load the checked images and check their identity
+        shell: bash
+        env:
+          BACKEND_ID: ${{ needs.images.outputs.backend-id }}
+          FRONTEND_ID: ${{ needs.images.outputs.frontend-id }}
+          PROXY_ID: ${{ needs.images.outputs.proxy-id }}
+          BACKUP_ID: ${{ needs.images.outputs.backup-id }}
+        run: |
+          docker load -i "$RUNNER_TEMP/checked-images.tar"
+          bash scripts/release-images.sh check-identity
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.21"
+          python-version: "3.12"
+      - name: Install
+        working-directory: backend
+        run: uv sync --locked
+      # A partial re-run ("Re-run failed jobs") reuses the admission job's outputs from its first
+      # attempt, so the admission is decided again here, before any login or push: account
+      # (pusher and re-runner), order, not yet published, and the tag still naming this commit.
+      - name: Admission decided again before any push (ADR-0004-C30, C31)
+        working-directory: backend
+        shell: bash
+        env:
+          RELEASE_RECORD_TOKEN: ${{ github.token }}
+          RELEASE_REPO_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.admission.outputs.tag }}
+        run: |
+          uv run python -m tests.support.releases admit | tee "$RUNNER_TEMP/readmission"
+          grep -qxF "tag=$RELEASE_TAG" "$RUNNER_TEMP/readmission"
+          uv run python -m tests.support.releases tag-commit --tag "$RELEASE_TAG" --commit "$GITHUB_SHA"
+      - name: Registry login with this run's token
+        shell: bash
+        env:
+          TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: printf '%s' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+      # Push the loaded images under the release tag; the digests are the registry's answer.
+      - name: Push the checked images
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.admission.outputs.tag }}
+          BACKEND_ID: ${{ needs.images.outputs.backend-id }}
+          FRONTEND_ID: ${{ needs.images.outputs.frontend-id }}
+          PROXY_ID: ${{ needs.images.outputs.proxy-id }}
+          BACKUP_ID: ${{ needs.images.outputs.backup-id }}
+        run: bash scripts/release-images.sh push "$RELEASE_TAG" > "$RUNNER_TEMP/digests.env"
+      - name: Render and check the release composition (ADR-0004-C29)
+        working-directory: backend
+        env:
+          RELEASE_TAG: ${{ needs.admission.outputs.tag }}
+          POSTGRES_DIGEST: ${{ needs.runtime.outputs.postgres }}
+          KEYCLOAK_DIGEST: ${{ needs.runtime.outputs.keycloak }}
+        run: |
+          uv run python -m tests.support.release_composition render --tag "$RELEASE_TAG" --digests "$RUNNER_TEMP/digests.env" --postgres "$POSTGRES_DIGEST" --keycloak "$KEYCLOAK_DIGEST" --out "$RUNNER_TEMP/compose.release.yaml"
+          uv run python -m tests.support.release_composition check --composition "$RUNNER_TEMP/compose.release.yaml"
+      # The release exists from this step on; publish refuses a tag the record already holds.
+      - name: Publish the release composition
+        working-directory: backend
+        env:
+          RELEASE_RECORD_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.admission.outputs.tag }}
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: uv run python -m tests.support.releases publish --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --composition "$RUNNER_TEMP/compose.release.yaml"

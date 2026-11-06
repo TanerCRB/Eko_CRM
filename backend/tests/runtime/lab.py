@@ -22,7 +22,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from tests.runtime.conftest import Composition
+from tests.runtime.conftest import BUILT_SERVICES, Composition
 from tests.support.repo import REPO_ROOT
 
 REVISIONS = Path(__file__).parent / "revisions"
@@ -359,7 +359,11 @@ class Lab:
         if image is None:
             return self.composition
         override = self.workdir / f"{service}-{uuid.uuid4().hex[:8]}.yaml"
-        override.write_text(f"services:\n  {service}:\n    image: {image}\n", encoding="utf-8")
+        # A built service (`backend`: pull_policy: build) would rebuild the head under this name.
+        lines = ["services:", f"  {service}:", f"    image: {image}", "    pull_policy: never"]
+        if service in BUILT_SERVICES:
+            lines.append("    build: !reset null")
+        override.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return Composition(
             project=self.composition.project,
             env_file=self.composition.env_file,

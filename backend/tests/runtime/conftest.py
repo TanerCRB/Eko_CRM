@@ -4,11 +4,14 @@ Each composition gets its own project name, a fresh synthetic environment file o
 repository and free host ports, and is removed with its volumes afterwards.
 """
 
+import functools
 import json
+import os
 import re
 import secrets
 import socket
 import subprocess
+import tempfile
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -69,6 +72,45 @@ def parse_instant(value: str) -> datetime:
     return datetime.fromisoformat(trimmed)
 
 
+# EKO-1-15 K-02 (ADR-0004-C31): in a release run the runtime tests run the images built once and
+# checked, loaded under the names EKO_CHECKED_IMAGES gives, and never rebuild them.
+CHECKED_SERVICES = {
+    "proxy": "proxy",
+    "frontend": "frontend",
+    "backup": "backup",
+    "backend": "backend",
+    "migrate": "backend",
+    "worker": "backend",
+}
+BUILT_SERVICES = ("proxy", "frontend", "backup", "backend")
+
+
+@functools.cache
+def checked_images_override() -> Path | None:
+    """A composition override naming the checked images, or None outside a release run."""
+    given = os.environ.get("EKO_CHECKED_IMAGES", "").split()
+    if not given:
+        return None
+    images = dict(item.split("=", 1) for item in given if "=" in item)
+    missing = sorted(set(CHECKED_SERVICES.values()) - set(images))
+    if missing:
+        raise ValueError(f"EKO_CHECKED_IMAGES names no image for {', '.join(missing)}")
+    lines = ["services:"]
+    for service, name in CHECKED_SERVICES.items():
+        lines += [f"  {service}:", f"    image: {images[name]}", "    pull_policy: never"]
+        if service in BUILT_SERVICES:
+            lines.append("    build: !reset null")
+        if service == "backup":
+            # The manifest names the backend image the composition runs, as the anchor does.
+            lines += [
+                "    environment:",
+                f"      BACKUP_MANIFEST_BACKEND_IMAGE: {images['backend']}",
+            ]
+    override = Path(tempfile.mkdtemp(prefix="eko-checked-")) / "checked-images.yaml"
+    override.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return override
+
+
 @dataclass
 class Composition:
     project: str
@@ -81,9 +123,11 @@ class Composition:
 
     def base_args(self) -> list[str]:
         args = ["docker", "compose"]
-        if self.extra_files:
+        checked = checked_images_override()
+        extra_files = ([checked] if checked else []) + self.extra_files
+        if extra_files:
             args += ["-f", str(REPO_ROOT / "compose.yaml")]
-            for extra in self.extra_files:
+            for extra in extra_files:
                 args += ["-f", str(extra)]
         return args + ["-p", self.project, "--env-file", str(self.env_file), "--profile", "dev"]
 

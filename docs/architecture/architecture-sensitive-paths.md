@@ -61,7 +61,12 @@ that task edits its own rows.
 | `**/.ruff.toml` | pipeline | ADR-0001 | ruff config; takes precedence over `ruff.toml` and `pyproject.toml` in its directory |
 | `frontend/tsconfig*.json` | pipeline | ADR-0001 | `strict` (ADR-0001-C3) |
 | `docs/operations/**` | personal-data | ADR-0005 | the documented log form the IT department's monitoring reads; the tests read its key-set table |
-| `.github/workflows/**` | pipeline | — | who runs what, with which secrets |
+| `.github/workflows/**` | pipeline, secrets, dependencies | ADR-0004 | who runs what, with which secrets; the release workflow alone holds `packages: write`, pushes the images by digest and publishes the release composition (ADR-0004-C29..C31), and any workflow on any pushed ref can request that permission |
+| `backend/tests/support/release_composition.py` | pipeline, dependencies, secrets | ADR-0004 | renders the release composition the shared environments run: a tag-only reference, a kept `build:` or a substituted environment value ships in the release (ADR-0004-C29, C9) |
+| `backend/tests/support/openapi_compat.py` | pipeline | ADR-0004 | the API-compatibility step: a pull request runs its own copy, so a weakened comparison or document source passes that pull request (DoD 7 narrowing of EKO-1-15) |
+| `backend/tests/support/releases.py` | pipeline | ADR-0004 | release admission and the previous-release selection: tag form, order, account, reachability from `main` and "cannot tell" decide what is published and what the compatibility and C13 checks compare against |
+| `backend/tests/support/release_backend.py` | pipeline | ADR-0004 | obtains the previous release's OpenAPI document from its own backend started by digest; a document taken from elsewhere, or a failure read as "no release", empties the compatibility check |
+| `backend/tests/support/release_workflow.py` | pipeline | ADR-0004 | the static checks of the release path and of `ci.yml` (C30, C31, K-07's listed differences); a widened allowance lets a registry write or a changed check through |
 | `.githooks/**` | pipeline | — | the pre-push guard on `main` |
 | `scripts/**` | pipeline | — | the process checks the task command and CI rely on |
 | `docs/architecture/layer-dependencies.md` | pipeline | ADR-0001, ADR-0003, ADR-0006 | the layer table the CI layer check and the ruff bans read (ADR-0001-C9, C11); an emptied row drops a ban |
