@@ -1,0 +1,25 @@
+{
+	admin off
+	auto_https disable_redirects
+}
+
+(no_api_description) {
+	@api_description path_regexp api_description (?i)(^|/)(openapi[^/]*|docs|redoc)(/|$)
+	respond @api_description 404
+}
+
+(no_account_console) {
+	@account_console path_regexp account_console (?i)^/realms/[^/]+/account(/|$)
+	respond @account_console 403
+}
+
+https://{$AUTH_ADMIN_HOST}:8443 {
+	tls internal
+	route {
+		import no_api_description
+		import no_account_console
+		@outside_company_network not remote_ip {$COMPANY_NETWORK_CIDRS}
+		respond @outside_company_network 403
+		reverse_proxy keycloak:8080
+	}
+}

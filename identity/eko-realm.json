@@ -1,0 +1,310 @@
+{
+  "realm": "eko",
+  "enabled": true,
+  "adminPermissionsEnabled": true,
+  "displayName": "Eko CRM",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "verifyEmail": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "bruteForceProtected": true,
+  "failureFactor": 30,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "permanentLockout": false,
+  "accessTokenLifespan": 240,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
+  "eventsEnabled": true,
+  "eventsExpiration": 2592000,
+  "eventsListeners": [],
+  "enabledEventTypes": [
+    "LOGIN",
+    "LOGIN_ERROR",
+    "LOGOUT",
+    "UPDATE_PASSWORD",
+    "UPDATE_PASSWORD_ERROR",
+    "RESET_PASSWORD",
+    "RESET_PASSWORD_ERROR",
+    "SEND_RESET_PASSWORD",
+    "REFRESH_TOKEN_ERROR",
+    "USER_DISABLED_BY_BRUTE_FORCE"
+  ],
+  "identityProviders": [],
+  "groups": [],
+  "defaultRole": {
+    "name": "default-roles-eko"
+  },
+  "roles": {
+    "realm": [
+      {
+        "name": "default-roles-eko",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "offline_access",
+            "uma_authorization"
+          ],
+          "client": {
+            "account": []
+          }
+        }
+      },
+      {
+        "name": "offline_access"
+      },
+      {
+        "name": "uma_authorization"
+      }
+    ],
+    "client": {
+      "account": [
+        {
+          "name": "manage-account"
+        },
+        {
+          "name": "view-profile"
+        }
+      ],
+      "realm-management": [
+        {
+          "name": "manage-users"
+        },
+        {
+          "name": "view-users"
+        },
+        {
+          "name": "query-users"
+        },
+        {
+          "name": "query-groups"
+        },
+        {
+          "name": "query-clients"
+        },
+        {
+          "name": "realm-admin"
+        },
+        {
+          "name": "impersonation"
+        },
+        {
+          "name": "manage-realm"
+        },
+        {
+          "name": "manage-clients"
+        },
+        {
+          "name": "manage-events"
+        },
+        {
+          "name": "manage-identity-providers"
+        },
+        {
+          "name": "manage-authorization"
+        },
+        {
+          "name": "create-client"
+        },
+        {
+          "name": "view-realm"
+        },
+        {
+          "name": "view-clients"
+        },
+        {
+          "name": "view-events"
+        },
+        {
+          "name": "view-identity-providers"
+        },
+        {
+          "name": "view-authorization"
+        }
+      ],
+      "eko-backend": [
+        {
+          "name": "rep"
+        },
+        {
+          "name": "manager"
+        },
+        {
+          "name": "administrator",
+          "composite": true,
+          "composites": {
+            "client": {
+              "realm-management": [
+                "manage-users",
+                "view-users",
+                "query-users",
+                "query-groups",
+                "query-clients",
+                "view-clients"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  "clients": [
+    {
+      "clientId": "account",
+      "name": "Account console",
+      "publicClient": true,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "baseUrl": "/realms/eko/account/",
+      "redirectUris": [
+        "/realms/eko/account/*"
+      ],
+      "defaultClientScopes": [],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "account-console",
+      "name": "Account console frontend",
+      "publicClient": true,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "baseUrl": "/realms/eko/account/",
+      "redirectUris": [
+        "/realms/eko/account/*"
+      ],
+      "defaultClientScopes": [],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "admin-cli",
+      "name": "Admin CLI",
+      "publicClient": true,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "defaultClientScopes": [],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "broker",
+      "name": "Broker",
+      "publicClient": false,
+      "bearerOnly": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "defaultClientScopes": [],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "realm-management",
+      "name": "Realm management",
+      "publicClient": false,
+      "bearerOnly": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "defaultClientScopes": [],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "security-admin-console",
+      "name": "Security admin console",
+      "publicClient": true,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "defaultClientScopes": [],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "eko-backend",
+      "name": "Eko CRM backend",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "secret": "${OIDC_CLIENT_SECRET}",
+      "redirectUris": [
+        "https://eko112.invalid/callback"
+      ],
+      "webOrigins": [],
+      "defaultClientScopes": [
+        "basic",
+        "web-origins",
+        "roles",
+        "acr"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "given name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "firstName",
+            "claim.name": "given_name",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "family name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "lastName",
+            "claim.name": "family_name",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "full name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-full-name-mapper",
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "attributes": {
+    "adminEventsExpiration": "7776000",
+    "userProfile": "{\"attributes\":[{\"name\":\"username\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]}},{\"name\":\"email\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]}},{\"name\":\"firstName\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]}},{\"name\":\"lastName\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]}}]}"
+  },
+  "smtpServer": {}
+}

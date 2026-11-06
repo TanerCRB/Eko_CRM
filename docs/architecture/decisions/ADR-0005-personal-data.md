@@ -664,3 +664,284 @@ split. Left unchanged, the typed-username stop rule would bind a task that no lo
 Keycloak, and the tasks that do would find nothing in this decision naming them. Approved by the
 human at gate 1 of EKO-1-06 on 2026-10-28 (G-5 B, Issue #19). This is not a deviation: no rule
 changes.
+
+### 2026-11-04 — Off-server copy of the administrator password-reset ACTION event
+
+**Status:** Accepted 2026-11-04 (repeated gate 1 of EKO-1-12, Issue #53; Q-2 A accepted by the human in the driving session, recorded on the Issue).
+
+**What it changes.** This addendum takes effect only if the human also accepts ADR-0003's addendum
+of 2026-11-04, *Administrator password-reset events: audit fields without credential
+representation*. For the single administrator operation `PUT users/{id}/reset-password` recorded as
+an `ACTION` admin event, *Keycloak events off the server* permits the copied event to have no
+representation. The copy must still carry the acting account, the affected account through its
+resource path, the operation and resource path, the realm and the time. It carries no password or
+other credential value.
+
+Every other admin event keeps the existing representation requirement. Shipping frequency,
+heartbeat, append-only destination, retention, reviewer access, and every privacy prohibition remain
+unchanged. ADR-0005-C7's requirement that admin-event details are enabled also remains unchanged.
+
+**Why.** The local EKO-1-12 diagnostic found that this ACTION event has no representation even with
+admin-event details enabled. Shipping cannot supply a representation absent from the source event.
+Pairing this addendum with ADR-0003 prevents the local event rule and the off-server evidence rule
+from diverging. The retained fields preserve the security audit of who reset whose password and
+when; no credential representation is shipped.
+
+**Options requiring a human choice.**
+
+- **A — Accept this addendum together with the ADR-0003 pair (recommended).** This preserves the
+  same narrow, credential-free audit record locally and off the server without adding a provider,
+  service or image.
+- **B — Reject this addendum.** The existing off-server representation duty remains unchanged and
+  the ADR-0003 exception cannot operate alone. EKO-1-12 remains stopped until a supported mechanism
+  meets the original requirement through a separate architecture and privacy decision.
+
+### 2026-11-05 — Application-realm stored events: the top-level user-session identifier
+
+**Status:** Accepted 2026-11-05 (repeated gate 1 of EKO-1-12, Issue #53; option A accepted by the human in the driving session, recorded on the Issue).
+
+**What it changes.** On acceptance, ADR-0005-C5 has one narrow declared deviation: a stored
+application-realm authentication event of a type required by *Retention* may carry the Keycloak
+user-session identifier in its top-level `sessionId` field. The exception applies to that field and
+those stored events only. It does not apply to Keycloak's container log, master-realm events, admin
+events, authentication-session identifiers, application session identifiers, cookies, tokens,
+authorization codes, passwords, other credentials, or the typed username of an unknown account.
+
+Every event type required by *Retention* remains stored. This addendum permits no removal or
+substitution of event types and changes no retention period, log-level rule, or other privacy rule.
+The D-5 unknown-username stop is independent and unchanged.
+
+ADR-0005-C11 and the off-server rule are unchanged: no session identifier may be shipped. Before an
+application-realm event leaves the server, the shipping mechanism must omit the top-level `sessionId`
+field while retaining every field the off-server rule requires. Raw replication of the locally
+permitted field does not satisfy this rule. No off-server addendum is required for this local-only
+exception.
+
+**Why.** The EKO-1-12 runtime evidence establishes that serialized stored events contain the exact
+user-session identifier decoded from an issued access token. It does not establish the individual
+field or the affected event types. The official Keycloak 26.8.1 source establishes the storage
+mechanism: [`EventBuilder.session(...)`](https://github.com/keycloak/keycloak/blob/26.8.1/server-spi-private/src/main/java/org/keycloak/events/EventBuilder.java)
+sets the event's top-level `sessionId`; the [JPA event store](https://github.com/keycloak/keycloak/blob/26.8.1/model/jpa/src/main/java/org/keycloak/events/jpa/JpaEventStoreProvider.java)
+persists and returns that field; and successful login and logout paths set it from the user session.
+The JPA store factory exposes no field-filtering setting, and its `onEvent` conversion persists the
+field independently of event-listener configuration. Removing required event types is therefore the
+only way the accepted realm settings alone could avoid the stored value, and that would destroy
+required audit evidence.
+
+The exception retains session-level correlation for the reviewer's local audit while keeping the
+longer-lived off-server copy free of session identifiers. It is not a finding that a session
+identifier is harmless or a credential; it is an explicit choice to retain one identifier in the
+bounded local event store rather than add an unproven provider or weaken event coverage.
+
+**Options requiring a human choice.**
+
+- **A — Accept this local-only addendum (recommended).** Preserve all required stored event types
+  and the off-server prohibition while allowing only the top-level user-session `sessionId` in
+  application-realm stored events. This avoids a new provider, service or image and retains local
+  audit correlation; its cost is the explicit relaxation of C5 for that field.
+- **B — Reject the exception and preserve C5 unchanged.** EKO-1-12 remains stopped. A separate
+  decision must select and assess a mechanism that removes the field before storage, which the
+  accepted official-image configuration does not provide. Any provider, image or composition change
+  requires its own ADR-0003/ADR-0004 decision before implementation.
+
+### 2026-11-05 — Unknown typed usernames in application-realm LOGIN_ERROR events
+
+**Status:** Accepted 2026-11-05 (repeated gate 1 of EKO-1-12, Issue #53; D-5 option A accepted by the human in the driving session, recorded on the Issue).
+
+**What it changes.** If the human explicitly chooses a local stored-event exception, D-5 and
+ADR-0005-C5 receive only this declared deviation: an application-realm `LOGIN_ERROR` event for a
+failed login naming no existing account may retain the typed username in `details.username`. The
+exception covers neither the container log nor any other event type, realm, field or destination.
+The username of an existing account remains governed by the existing rule and known-account audit
+contrast.
+
+Every required event type and retention period remains unchanged. No credential, token,
+authorization code, cookie, session or authentication-session prohibition changes, including the
+accepted local-only top-level `sessionId` exception. This addendum does not decide that the typed
+value is harmless, personal data, or a credential; the existing reason for D-5 is that it may be a
+password typed into the wrong field.
+
+ADR-0005-C11 and the off-server rule remain unchanged. Before shipping an application-realm
+`LOGIN_ERROR` event naming no existing account, the shipping mechanism must omit `details.username`
+while retaining every field the off-server rule requires. Raw replication of the locally permitted
+field is non-compliant. No off-server addendum is required for this local-only exception.
+
+This exception addresses only stored events. The existing D-5 evidence combines container logs and
+stored events and does not identify the destination or field. Before this addendum can be accepted
+as a sufficient resolution, a synthetic-safe read-only projection must establish that the marker is
+absent from the container log and present only at the covered stored-event path. A marker in the
+container log or any other field leaves the task stopped and requires a separate decision.
+
+**Why.** The independently executed D-5 test proves that at least one unknown typed marker was
+retained in Keycloak logs or stored events. Its known-account contrast was a non-empty `LOGIN_ERROR`
+event carrying the known username in `details.username`. Neither result identifies where an unknown
+marker appeared.
+
+The official Keycloak 26.8.1 source establishes the relevant mechanism without resolving that
+runtime ambiguity. The [browser username authenticator](https://github.com/keycloak/keycloak/blob/26.8.1/services/src/main/java/org/keycloak/authentication/authenticators/browser/AbstractUsernameFormAuthenticator.java)
+trims the submitted value and calls `event.detail(Details.USERNAME, username)` before looking up the
+account; an unknown account then produces `USER_NOT_FOUND`. The [JPA event store](https://github.com/keycloak/keycloak/blob/26.8.1/model/jpa/src/main/java/org/keycloak/events/jpa/JpaEventStoreProvider.java)
+serializes the complete details map, and its factory exposes no field-filtering setting. The
+required `LOGIN_ERROR` type cannot simply be removed without weakening the accepted audit coverage.
+
+Container logging is separate. The current realm export has `eventsListeners: []`, so the built-in
+logging event listener is not enabled by that configuration. If enabled, the [logging listener](https://github.com/keycloak/keycloak/blob/26.8.1/services/src/main/java/org/keycloak/events/log/JBossLoggingEventListenerProvider.java)
+writes every event detail; its `sanitize` option addresses line breaks and quoting, not exclusion of
+`username`. This neither establishes nor excludes a current container-log leak and offers no
+supported selective-denial setting. Only the destination projection can establish the actual runtime
+destinations without exposing a marker value.
+
+**Options requiring a human choice.**
+
+- **A — Accept this local-only stored-event exception after the projection confirms its scope.**
+  This preserves every required event type and the off-server prohibition without a new provider,
+  service or image. Its cost is explicit local retention of input that may be credential-like; it is
+  insufficient for any marker in the container log or at another event path.
+- **B — Reject the exception and preserve D-5 unchanged.** EKO-1-12 remains stopped. A separate
+  decision must select a mechanism that removes the unknown typed username before storage or logging.
+  Any provider, authenticator, event store, image or composition change requires its own
+  ADR-0003/ADR-0004 assessment before implementation.
+- **C — Remove `LOGIN_ERROR` from stored events.** This is not an acceptable resolution: it weakens
+  required audit coverage and the accepted retention rule instead of removing only the prohibited
+  value.
+
+### 2026-11-05 — Application-realm LOGIN events: the duplicate user-session identifier in details.code_id
+
+**Status:** Accepted 2026-11-05 (repeated gate 1 of EKO-1-12, Issue #53; option A accepted by the human in the driving session, recorded on the Issue).
+
+**What it changes.** On acceptance, ADR-0005-C5 has one further narrow declared deviation: a stored
+application-realm `LOGIN` event may carry in `details.code_id` only the Keycloak user-session
+identifier already carried by that same event's top-level `sessionId` field under the accepted
+addendum of 2026-11-05. The exception applies to that one event type, field and duplicate value in
+the local stored event only. It does not apply to another value, another `details` field, another
+event type, Keycloak's container log, master-realm events, admin events, or an off-server copy.
+
+The accepted top-level `sessionId` exception is unchanged and is not widened. The accepted D-5
+exception remains limited to an unknown typed username at application-realm `LOGIN_ERROR`
+`details.username`; it neither covers nor is widened by this addendum. No authentication-session
+identifier, application session identifier, credential, password, token, authorization code, cookie,
+or unknown typed username receives an exception here.
+
+Every event type required by *Retention*, including `LOGIN`, and every required audit field and
+retention period remains unchanged. Removing `LOGIN` or any other required event type is not a
+permitted privacy remedy. No log-level rule changes.
+
+ADR-0005-C11 and the off-server rule remain unchanged: no session identifier may be shipped. Before
+an application-realm `LOGIN` event leaves the server, the shipping mechanism must omit both the
+top-level `sessionId` field and `details.code_id` while retaining every field the off-server rule
+requires. Raw replication of either locally permitted field is non-compliant. No off-server
+addendum is required for this local-only exception.
+
+**Why.** The EKO-1-12 field-path-aware runtime check compared the exact issued user-session
+identifier with stored-event values without disclosing that identifier. It confirmed the same value
+at application-realm `LOGIN` `details.code_id` in addition to the accepted top-level `sessionId`.
+For that observed event, `details.code_id` therefore is the same user-session identifier by direct
+value equality, not an inference from the field name. This evidence does not claim that every value
+ever named `code_id` is a user-session identifier or extend the exception to another occurrence.
+
+The official Keycloak 26.8.1 source previously reviewed for the accepted local exceptions establishes
+the storage side: the [JPA event store](https://github.com/keycloak/keycloak/blob/26.8.1/model/jpa/src/main/java/org/keycloak/events/jpa/JpaEventStoreProvider.java)
+serializes the complete event details map, and its factory exposes no field-filtering setting. Its
+storage conversion persists event details independently of event-listener configuration. This is
+source-based evidence about persistence and configurability; it is not what establishes the runtime
+value equality above. No supported official-image configuration has been established that excludes
+only `LOGIN` `details.code_id` while retaining the required event and its other audit fields.
+
+The exception preserves the required local login audit event while keeping the longer-lived
+off-server copy free of session identifiers. It is not a finding that a session identifier is
+harmless or a credential; it is an explicit choice to retain this duplicate identifier in the
+bounded local event store rather than add an unproven provider or weaken event coverage.
+
+**Options requiring a human choice.**
+
+- **A — Accept this local-only addendum (recommended).** Preserve every required event type and the
+  off-server prohibition while allowing only the confirmed duplicate user-session value at
+  application-realm `LOGIN` `details.code_id`. This avoids a new provider, service or image; its cost
+  is one additional explicit relaxation of C5 at one field, with fresh field-path and destination
+  evidence required.
+- **B — Reject the exception and preserve C5 unchanged.** EKO-1-12 remains stopped. A separate
+  decision must select and assess a mechanism that removes the field before storage. Any provider,
+  authenticator, event store, image or composition alternative requires its own ADR-0003/ADR-0004
+  assessment and human approval before implementation; none is selected or authorized here.
+- **C — Remove `LOGIN` or another required stored event type.** This is not an acceptable resolution:
+  it weakens required audit coverage and the accepted retention rule instead of removing only the
+  prohibited value.
+
+### 2026-11-05 — Required application-realm authentication events: duplicate user-session identifier in details.code_id
+
+**Status:** Draft — pending approval
+
+**What it changes.** On acceptance, ADR-0005-C5 has one further narrow declared deviation: a stored
+application-realm authentication event whose type is required by *Retention* may carry a session
+identifier in `details.code_id` only when that non-empty value exactly duplicates the non-empty
+Keycloak user-session identifier in the same event's top-level `sessionId` field under the accepted
+addendum of 2026-11-05. An arbitrary or different `details.code_id` value receives no exception. An
+absent or empty `details.code_id` counterpart at top-level `sessionId`, or a mismatch between the two
+values, fails the rule.
+
+The exception applies only to that field in those local stored application-realm events. It does not
+apply to another field, an event type not required by *Retention*, a successful `REFRESH_TOKEN` or
+`CODE_TO_TOKEN` event, Keycloak's container log, master-realm events, admin events, or an off-server
+copy. No authentication-session identifier, application session identifier, credential, password,
+token, authorization code, cookie, or unknown typed username receives an exception here.
+
+This addendum supplements the accepted 2026-11-05 `LOGIN` `details.code_id` addendum by extending
+only its event-type scope to the other application-realm authentication event types required by
+*Retention*, under the same non-empty same-event equality condition. The accepted `LOGIN` addendum
+remains unchanged. The accepted top-level `sessionId` exception and the accepted D-5 exception are
+also unchanged, and neither is widened by this addendum.
+
+Every event type required by *Retention*, including `LOGIN` and `RESET_PASSWORD_ERROR`, and every
+required audit field and retention period remains unchanged. Removing any required event type is not
+a permitted privacy remedy. No log-level rule changes.
+
+ADR-0005-C11 and the off-server rule remain unchanged: no session identifier may be shipped. Before
+an application-realm event leaves the server, the shipping mechanism must omit top-level `sessionId`
+and, wherever present, `details.code_id`, while retaining every field the off-server rule requires.
+The unknown-account `LOGIN_ERROR` `details.username` omission is also unchanged. Raw replication of
+any locally permitted field is non-compliant. No off-server addendum is required for this local-only
+exception.
+
+**Why.** The EKO-1-12 runtime evidence confirms a real application-realm `RESET_PASSWORD_ERROR`
+event carrying `details.code_id`, outside the accepted `LOGIN`-only rule. The projection did not
+establish that this event had a non-empty top-level `sessionId` or that the two fields were equal.
+Accordingly, this assessment does not claim same-event equality or identify the `code_id` value as
+the same user-session identifier for `RESET_PASSWORD_ERROR`. The field name alone proves neither
+fact.
+
+The official Keycloak 26.8.1 source previously reviewed for the accepted local exceptions establishes
+that the [JPA event store](https://github.com/keycloak/keycloak/blob/26.8.1/model/jpa/src/main/java/org/keycloak/events/jpa/JpaEventStoreProvider.java)
+serializes the complete event details map, exposes no field-filtering setting, and persists details
+independently of event-listener configuration. No supported official-image configuration has been
+established that selectively removes `details.code_id` from only the affected required event types
+while retaining those events and their other audit fields.
+
+Before this addendum can be accepted as a sufficient resolution, a separately authorized,
+synthetic-safe read-only projection must establish, without recording any identifier value, that
+every application-realm stored event relying on it has non-empty values at both fields and that those
+values are exactly equal. In particular, it must establish that condition for the observed
+`RESET_PASSWORD_ERROR` event. The projection must also identify every event type using the exception
+and establish that the value occurs at no non-excepted field, event type, realm, or container-log
+destination. If equality, non-empty counterparts, or destination scope are not established, this
+addendum is insufficient and the STOP remains; no value or behavior may be guessed.
+
+The exception preserves required local audit events while keeping the longer-lived off-server copy
+free of session identifiers. It is not a finding that a session identifier is harmless or a
+credential; it is an explicit choice to retain only an exact duplicate in the bounded local event
+store rather than add an unproven provider or weaken event coverage.
+
+**Options requiring a human choice.**
+
+- **A — Accept this local-only addendum only after the projection confirms its conditions
+  (recommended).** This preserves every required event type and the off-server prohibition without a
+  new provider, service or image. Its cost is an explicit relaxation of C5 for `details.code_id`
+  across the closed set of required application-realm authentication event types, strictly limited
+  to non-empty same-event duplicates. Acceptance alone is not runtime proof; fresh equality,
+  field-path, destination, contrast and mutation evidence is still required before K-04 can pass.
+- **B — Reject the exception and preserve C5 unchanged.** EKO-1-12 remains stopped. A separate
+  decision must select and assess a mechanism that removes the field before storage. Any provider,
+  authenticator, event store, image or composition alternative requires its own ADR-0003/ADR-0004
+  assessment and human approval before implementation; none is selected or authorized here.
+- **C — Remove `RESET_PASSWORD_ERROR`, `LOGIN`, or another required stored event type.** This is not
+  an acceptable resolution: it weakens required audit coverage and the accepted retention rule
+  instead of removing only the prohibited value.

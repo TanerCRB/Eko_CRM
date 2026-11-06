@@ -193,6 +193,20 @@ def running(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Started]:
         composition.down()
 
 
+@pytest.fixture(scope="session")
+def keycloak_running(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Started]:
+    """EKO-1-12: the development profile after the live, ordered Keycloak bootstrap."""
+    from tests.runtime.keycloak_client import prepare, run_bootstrap
+
+    composition = new_composition(tmp_path_factory, "keycloak")
+    try:
+        prepare(composition)
+        result = run_bootstrap(composition)
+        yield Started(composition, result)
+    finally:
+        composition.down()
+
+
 @pytest.fixture
 def fresh(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Composition]:
     """A separate composition for a scenario that must start from no volumes of its own."""
