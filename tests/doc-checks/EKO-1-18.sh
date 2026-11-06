@@ -50,10 +50,24 @@
 #      strict); a read that must not be stopped is evaluated both ways (it must pass even if the
 #      matcher ignores case).
 #   7. Not modelled, and not claimed: the program by path or another name (`/usr/bin/gh`,
-#      `gh.exe`), `sh -c`/`bash -c`/`env`/aliases/scripts, quoting of the command words, bodies
-#      or queries read from a file, user-level/local/managed settings, bypassed permission checks,
-#      and a user-level or environment setting that turns the PowerShell tool back on.
+#      `gh.exe`), `sh -c`/`bash -c`/`env`/shell or user-defined gh aliases/scripts, bodies or
+#      queries read from a file, user-level/local/managed settings, bypassed permission checks,
+#      and a user-level or environment setting that turns the PowerShell tool back on. Nor any
+#      normalization of a command typed directly (C-12): quoted command words
+#      (`gh release "create"`), whitespace other than single spaces (two spaces, a tab), a line
+#      continuation (backslash and newline) before an unindented flag, a quoted flag (`"-f"`), and
+#      a subcommand or endpoint built from a variable all pass every rule under this model; the
+#      `K-06 stated limit (C-12)` info lines show them. gh's built-in alias `gh release new` is
+#      modelled as its own command word and has its own rules (C-12).
 #      The model is the documentation's, not the live matcher's (K-07 samples the live matcher).
+#
+# ---- what this check does not prove -------------------------------------------------------------
+# No live behaviour: the model above, not the matcher of a running session (K-07, human). Not the
+# spellings of rule 7. Not agent tools other than Claude Code (Kilo, Kimi Code, Qwen Code, ...),
+# which do not read `.claude/settings.json` (C-12, B-02). Not that the rules survive an edit of
+# the hook scripts or of `.claude/settings.json` by a session: hook commands are not subject to
+# permission rules, and only the edit prompt of the default permission mode guards them (C-12,
+# B-03). Not that CI can tell an agent session from the human, and the check is not run by CI.
 #
 # ---- bases --------------------------------------------------------------------------------------
 # The K-05 base is the merge base of --base (origin/main) and the head, so changes on main after
@@ -221,11 +235,14 @@ function runCases() {
     if (parts.length < 4) fail2(`bad case line: ${line}`);
     const [id, want, toolSpec] = parts.map((x) => x.trim());
     const cmd = parts.slice(3).join(' @@ ');
+    // `<newline>` stands for a line break, so one case line can hold a multi-line command; the
+    // printed name keeps the placeholder.
+    const run = cmd.split('<newline>').join('\n');
     // Bash only (C-10): the Monitor tool uses the same rules, and the PowerShell tool stays off.
     if (toolSpec !== 'Bash') fail2(`tool '${toolSpec}' is not evaluated (Bash only, C-10) in: ${line}`);
     for (const tool of [toolSpec]) {
-      const strict = decide(settings, tool, cmd, false);
-      const loose = decide(settings, tool, cmd, true);
+      const strict = decide(settings, tool, run, false);
+      const loose = decide(settings, tool, run, true);
       let ok, name, why;
       if (want === 'deny') {
         name = `${id} stops [${tool}] ${cmd}`;
@@ -386,6 +403,14 @@ K-01 @@ deny @@ Bash @@ gh release -R TanerCRB/Eko_CRM edit probe --draft=false
 # QA contrast (EKO-1-18-M-09): no arguments with a repository flag before the subcommand; only
 # Bash(gh release * create) stops it.
 K-01 @@ deny @@ Bash @@ gh release -R TanerCRB/Eko_CRM create
+# Fix round 1 (C-12, B-01/R-01): `gh release new` is gh's built-in alias of `gh release create`
+# (`gh release create --help`, gh 2.97.0: "ALIASES gh release new"), in the same forms.
+K-01 @@ deny @@ Bash @@ gh release new v1.0.0
+K-01 @@ deny @@ Bash @@ gh release new probe --draft
+K-01 @@ deny @@ Bash @@ gh release new
+K-01 @@ deny @@ Bash @@ gh release -R TanerCRB/Eko_CRM new v1.0.0
+K-01 @@ deny @@ Bash @@ gh release -R TanerCRB/Eko_CRM new
+K-01 @@ deny @@ Bash @@ cd ../Eko_CRM-EKO-1-18 && gh release new v1.0.0
 K-01 @@ clear @@ Bash @@ gh release view v1.0.0
 K-01 @@ clear @@ Bash @@ gh release list
 # K-02 — gh api writes to git refs, git tags and releases; GraphQL ref mutations (G-5 A).
@@ -418,6 +443,13 @@ K-02 @@ clear @@ Bash @@ OPERATOR=$(gh api user --jq .login)
 K-02 known over-stop (G-4 A) @@ info @@ Bash @@ gh api graphql -f query='query { viewer { login } }'
 K-02 known over-stop (G-4 A) @@ info @@ Bash @@ gh api -X GET repos/{owner}/{repo}/git/refs/tags -f per_page=100
 K-02 known over-stop (G-4 A) @@ info @@ Bash @@ gh api repos/{owner}/{repo}/releases/latest --jq .tag_name
+# Direct spellings the rules do not see (C-12 stated limit, B-04/R-02; model rule 7): reported so
+# the limit is visible, never counted. K-07 tries the multi-line form against the live matcher.
+K-06 stated limit (C-12) @@ info @@ Bash @@ gh api repos/{owner}/{repo}/git/refs \<newline>-f ref=refs/tags/v1.0.0 \<newline>-f sha=0123456789abcdef0123456789abcdef01234567
+K-06 stated limit (C-12) @@ info @@ Bash @@ gh api repos/{owner}/{repo}/git/refs "-f" ref=refs/tags/v1.0.0 "-f" sha=0123456789abcdef0123456789abcdef01234567
+K-06 stated limit (C-12) @@ info @@ Bash @@ gh release "create" v1.0.0
+K-06 stated limit (C-12) @@ info @@ Bash @@ gh  release create v1.0.0
+K-06 stated limit (C-12) @@ info @@ Bash @@ S=create; gh release $S v1.0.0
 # K-03 — gh run rerun in every form.
 K-03 @@ deny @@ Bash @@ gh run rerun
 K-03 @@ deny @@ Bash @@ gh run rerun 123
@@ -479,6 +511,7 @@ PROPOSED_SETTINGS="$(cat <<'JSON'
   "permissions": {
     "deny": ["Bash(gh pr merge:*)", "Bash(git push --force:*)", "Bash(git push -f:*)",
              "Bash(gh release create *)", "Bash(gh release * create)", "Bash(gh release * create *)",
+             "Bash(gh release new *)", "Bash(gh release * new)", "Bash(gh release * new *)",
              "Bash(gh release edit *)", "Bash(gh release * edit)", "Bash(gh release * edit *)",
              "Bash(gh api*/git/* -*)", "Bash(gh api* -*/git/*)",
              "Bash(gh api*/releases* -*)", "Bash(gh api* -*/releases*)",
@@ -589,6 +622,20 @@ self_test() {
     "FAIL K-01 lets through [Bash] gh release list"
   expect "K-01 moved from deny to ask" 1 \
     "edit_settings 'del(\"deny\",\"Bash(gh release create *)\"); p.ask.push(\"Bash(gh release create *)\")'" \
+    "matched ask rule only"
+  expect "K-01 alias rule deleted" 1 "edit_settings 'del(\"deny\",\"Bash(gh release new *)\")'" \
+    "FAIL K-01 stops [Bash] gh release new v1.0.0"
+  expect "K-01 alias narrowed to release-form names" 1 \
+    "edit_settings 'del(\"deny\",\"Bash(gh release new *)\"); p.deny.push(\"Bash(gh release new v*)\")'" \
+    "FAIL K-01 stops [Bash] gh release new probe --draft"
+  expect "K-01 alias narrowed to the form without a flag before the subcommand" 1 \
+    "edit_settings 'del(\"deny\",\"Bash(gh release * new *)\")'" \
+    "FAIL K-01 stops [Bash] gh release -R TanerCRB/Eko_CRM new v1.0.0"
+  expect "K-01 alias without arguments after a repository flag" 1 \
+    "edit_settings 'del(\"deny\",\"Bash(gh release * new)\")'" \
+    "FAIL K-01 stops [Bash] gh release -R TanerCRB/Eko_CRM new — "
+  expect "K-01 alias moved from deny to ask" 1 \
+    "edit_settings 'del(\"deny\",\"Bash(gh release new *)\"); p.ask.push(\"Bash(gh release new *)\")'" \
     "matched ask rule only"
   expect "K-01 publishing-edit rule deleted" 1 "edit_settings 'del(\"deny\",\"Bash(gh release edit *)\")'" \
     "FAIL K-01 stops [Bash] gh release edit v1.0.0 --draft=false"
