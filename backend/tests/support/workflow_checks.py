@@ -42,9 +42,10 @@ def actions_pinned(workflow: Workflow) -> list[str]:
 
 
 RECORD_TOKEN = "RELEASE_RECORD_TOKEN"
-# The closed list of ci.yml jobs that may read the release record (EKO-1-15 C-3, C-7, C-8);
+# The closed list of ci.yml jobs that may read the release record (EKO-1-15 C-3, C-7, C-8;
+# runtime-checked: EKO-1-19 G-6 A, the release-mode runtime job);
 # K-07's check on ci.yml uses the same list.
-RECORD_JOBS = ("backend", "runtime")
+RECORD_JOBS = ("backend", "runtime", "runtime-checked")
 
 
 def reads_release_record(job: dict[str, Any]) -> bool:

@@ -24,6 +24,8 @@ pytestmark = pytest.mark.runtime
         ("GET", f"/api/eko113-{secrets.token_hex(4)}", 404),
         ("GET", "/api/health/", 307),
     ],
+    # A random path in a node ID differs between any two sessions (EKO-1-19 K-01 compares them).
+    ids=lambda value: "unknown-path" if str(value).startswith("/api/eko113-") else None,
 )
 def test_adr0005_c12_no_store_through_proxy(
     running: Started, method: str, path: str, status: int
