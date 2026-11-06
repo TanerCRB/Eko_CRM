@@ -309,6 +309,20 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   processing until the DPIA's approval conditions are evidenced; and new Google data, scopes,
   calendars or product behavior.
   **Done 2026-10-30:** merged in [PR #73](https://github.com/TanerCRB/Eko_CRM/pull/73), verified by `tests/doc-checks/EKO-1-16.sh` (nine passing contrasts). The accepted DPIA remains synthetic-data-only; Google runtime behavior is explicitly unproven pending EKO-5 and pre-go-live evidence.
+- [ ] **EKO-1-18** — Add agent-session permission rules for release-tag, release and re-run
+  actions outside git push (#83).
+  *Done when:* `.claude/settings.json` stops, in an agent session, `gh release create`, `gh api`
+  calls that create a ref, a tag or a release, `gh run rerun` in every form and `gh api` calls to
+  the three actions re-run endpoints; a repository check against the real file shows each rule
+  stopping its named command and not stopping the named ordinary reads, and fails when a rule is
+  removed, narrowed or over-widened; the existing deny/ask rules and hooks are unchanged; the
+  capability register states what the rules do not prove; exception EKO-1-15/security-2 is
+  closed.
+  **Out of scope (explicit):** a separate agent identity or paid-plan ruleset (G-6 B, new Story);
+  the release workflow (EKO-1-15, #56); wrapped or scripted invocations, local and user-level
+  settings, bypassed permission checks (stated limits); `workflow_dispatch` (until the release
+  workflow gains it); release-record deletion (#84). Before the first release tag and by
+  2026-12-05 (EKO-1-15/security-2).
 
 ## EKO-2 — Access
 
