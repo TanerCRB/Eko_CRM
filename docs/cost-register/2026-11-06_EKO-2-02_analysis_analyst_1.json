@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-06",
+  "task": "EKO-2-02",
+  "phase": "analysis",
+  "role": "analyst",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "acf8b9f6299d63d65",
+  "tokens": 633734,
+  "tokenSplit": { "input": 4311, "output": 23228, "cacheWrite": 80250, "cacheRead": 525945 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 22,
+  "seconds": 274,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "boundary-check: clean (--none, read-only role); verdict READY FOR GATE 1, 7 criteria (lint clean, 0 warnings), undecidable none, findings 0/1/2/2; markers.sh verdict not applicable (producer role — accepts only the four evaluating roles); driver appended criteria to the Issue; the report's trailing fenced marker block was the driver's prompt artifact, not a role failure"
+}
