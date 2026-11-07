@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-07",
+  "task": "EKO-1-12",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "High",
+  "agentId": "a7e443d5ce5f9da8e",
+  "tokens": 8138934,
+  "tokenSplit": { "input": 3922, "output": 66517, "cacheWrite": 229880, "cacheRead": 7838615 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 85,
+  "seconds": 949,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "boundary-check: clean --none; STOP at 855fab6: G-01 High master-realm unknown-account LOGIN_ERROR details.username neither filtered nor proven absent (provider removes code_id only; D-5 test scans eko realm only); G-02/03/04 Medium (unreachable event types = disclosed-not-decided deviation -> human; expiry paths unproven; restore-half no dated record); append-only independently verified 1219/0; verdict block needed driver-side prose-line normalization? no — role delivered the **Verdict:** line with inline UNDECIDABLE; first heredoc save failed on shell quoting, re-saved via Write; event 6712166540"
+}
