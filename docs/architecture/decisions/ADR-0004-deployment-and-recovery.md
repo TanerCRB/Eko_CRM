@@ -1553,41 +1553,6 @@ Enforcing write-only at the destination keeps ADR-0004-C16 true against a compro
 is not a deviation from ADR-0004, ADR-0003 or ADR-0005: it decides what they leave open. To be
 approved by the human at gate 1 of EKO-1-14 (G-1 A, Issue #55).
 
-### 2026-11-02 — Bootstrap order: each listener opens only after its own brute-force precondition
-
-**Status:** Accepted 2026-11-02 (gate 1 of EKO-1-12, Issue #53; G-1 A accepted by the human in the driving session, recorded on the Issue).
-
-**What it changes.** *Bootstrap of the first administrator* completes master-realm brute-force
-configuration at step 2 and then starts `proxy`, but imports the application realm only at step 3.
-Starting both listeners at step 2 therefore opens the public listener before the application-realm
-import and the live check required by ADR-0004-C8. This is exception EKO-1-03/R-22. On acceptance,
-the listener-opening order of that section reads as follows:
-
-1. Complete step 2 with neither listener running, including the master-realm configuration it
-   names. Verify that the live master realm reports `bruteForceProtected` true and record the date
-   of the check. Only then open the admin listener. Until that verification has completed, the
-   admin listener stays closed.
-2. With the public listener still closed, import the application realm from the export under
-   `identity/` as step 3 requires. After the import has completed, verify that the live application
-   realm reports `bruteForceProtected` true and record the date of the check. Only then open the
-   public listener. Until both the import and that verification have completed, the public listener
-   stays closed.
-3. Continue with the first application-realm administrator and the reviewer's confirmation as
-   steps 4 and 5 require.
-
-A check that does not establish the live value as true is not a completed verification and does
-not open the corresponding listener. ADR-0004-C8 is unchanged: this order satisfies its two
-preconditions independently. Every other bootstrap duty, and every other rule and control of this
-decision, is unchanged.
-
-**Why.** The accepted order cannot meet ADR-0004-C8: it starts `proxy` after master-realm
-configuration but before application-realm import, so the application realm's brute-force state
-cannot be verified before the public listener opens. The correction also makes the master-realm
-check explicit before the admin listener opens, as C8 already requires. Recording the correction
-as an addendum is required by this decision's addendum of 2026-10-28, *Forwards to EKO-1-06
-reassigned after its split*. This is a declared deviation from the accepted bootstrap step order,
-submitted for human approval at gate 1 of EKO-1-12 (Issue #53).
-
 ### 2026-11-04 — Releases: the release tag, the release composition and its record, the registry write credential, and what a release run guards
 
 **Status:** Accepted 2026-11-04
@@ -1694,6 +1659,42 @@ tag-pinned third-party images, which the B-01 widening of 2026-10-28 forbids for
 environments. This is a declared deviation: it restates where *Container runtime*, *Deployment*
 and *Restore procedure* step 2 take the composition from, and it adds controls. Approved by the
 human at gate 1 of EKO-1-15 (Issue #56), 2026-11-04: R-1 A and G-6 A+.
+
+### 2026-11-02 — Bootstrap order: each listener opens only after its own brute-force precondition
+
+**Status:** Accepted 2026-11-02 (gate 1 of EKO-1-12, Issue #53; G-1 A accepted by the human in the driving session, recorded on the Issue).
+
+**What it changes.** *Bootstrap of the first administrator* completes master-realm brute-force
+configuration at step 2 and then starts `proxy`, but imports the application realm only at step 3.
+Starting both listeners at step 2 therefore opens the public listener before the application-realm
+import and the live check required by ADR-0004-C8. This is exception EKO-1-03/R-22. On acceptance,
+the listener-opening order of that section reads as follows:
+
+1. Complete step 2 with neither listener running, including the master-realm configuration it
+   names. Verify that the live master realm reports `bruteForceProtected` true and record the date
+   of the check. Only then open the admin listener. Until that verification has completed, the
+   admin listener stays closed.
+2. With the public listener still closed, import the application realm from the export under
+   `identity/` as step 3 requires. After the import has completed, verify that the live application
+   realm reports `bruteForceProtected` true and record the date of the check. Only then open the
+   public listener. Until both the import and that verification have completed, the public listener
+   stays closed.
+3. Continue with the first application-realm administrator and the reviewer's confirmation as
+   steps 4 and 5 require.
+
+A check that does not establish the live value as true is not a completed verification and does
+not open the corresponding listener. ADR-0004-C8 is unchanged: this order satisfies its two
+preconditions independently. Every other bootstrap duty, and every other rule and control of this
+decision, is unchanged.
+
+**Why.** The accepted order cannot meet ADR-0004-C8: it starts `proxy` after master-realm
+configuration but before application-realm import, so the application realm's brute-force state
+cannot be verified before the public listener opens. The correction also makes the master-realm
+check explicit before the admin listener opens, as C8 already requires. Recording the correction
+as an addendum is required by this decision's addendum of 2026-10-28, *Forwards to EKO-1-06
+reassigned after its split*. This is a declared deviation from the accepted bootstrap step order,
+submitted for human approval at gate 1 of EKO-1-12 (Issue #53).
+
 ### 2026-11-06 — Custom Keycloak image build, startup verification, and recovery for event filtering
 
 **Status:** Accepted 2026-11-06
