@@ -122,6 +122,8 @@ def test_adr0005_c4_proxy_access_log_refused_by_proxy(
         ("long-query", f"q={QUERY_MARKER}&pad=" + "z" * 9000, True),
         ("crlf", f"q={QUERY_MARKER}%0D%0A{{%22forged%22:1}}", True),
     ],
+    # By label: the marker is random, and EKO-1-19 K-01 compares node IDs between sessions.
+    ids=["empty-query", "no-query", "long-query", "crlf"],
 )
 def test_adr0005_c4_proxy_access_log_query_edges(
     running: Started, proxy_log: Window, label: str, query: str | None, cookie: bool

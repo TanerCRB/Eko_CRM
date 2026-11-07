@@ -382,9 +382,10 @@ class BackupLab:
         return self.start_run(**kwargs).wait()
 
     def backup_image(self) -> str:
-        """The shipped `backup` image the composition built."""
+        """The `backup` image the composition runs: its `image:`, else the one Compose built."""
+        model = json.loads(self.composition.compose("config", "--format", "json").stdout)
         # Compose names a built image <project>-<service>; `config --images` lists dependencies too.
-        image = f"{self.composition.project}-backup"
+        image = model["services"]["backup"].get("image") or f"{self.composition.project}-backup"
         docker("image", "inspect", image)
         return image
 

@@ -101,11 +101,14 @@ def test_k04_c10_unset_secret_stops_the_composition_naming_it(
     running: Started, service: str
 ) -> None:
     _, outer = SECRETS[service]
+    project = running.composition.project + "-unset"
     values = read_env(running.composition.env_file)
     del values[outer]
+    # With -f, Compose names a model it cannot load by this name, not -p (EKO-1-19 K-02).
+    values["COMPOSE_PROJECT_NAME"] = project
     unset_env = running.composition.env_file.parent / f"unset-{outer}.env"
     write_env(unset_env, values)
-    unset = Composition(project=running.composition.project + "-unset", env_file=unset_env)
+    unset = Composition(project=project, env_file=unset_env)
     try:
         result = unset.compose("up", "--no-build", "-d", service, check=False, timeout=180)
         assert result.returncode != 0
@@ -220,11 +223,14 @@ def test_k06_c10_unset_backup_variable_stops_the_composition_naming_it(
     backup_lab: BackupLab, variable: str
 ) -> None:
     composition = backup_lab.composition
+    project = composition.project + "-unset"
     values = read_env(composition.env_file)
     del values[variable]
+    # With -f, Compose names a model it cannot load by this name, not -p (EKO-1-19 K-02).
+    values["COMPOSE_PROJECT_NAME"] = project
     unset_env = composition.env_file.parent / f"unset-{variable}.env"
     write_env(unset_env, values)
-    unset = Composition(project=composition.project + "-unset", env_file=unset_env)
+    unset = Composition(project=project, env_file=unset_env)
     try:
         result = unset.compose("up", "--no-build", "-d", "backup", check=False, timeout=180)
         assert result.returncode != 0

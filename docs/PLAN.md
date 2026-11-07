@@ -328,6 +328,15 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   `Bash(...)` deny rules (incl. the `gh release new` alias); live attempts in agent sessions on
   2026-11-06 (Claude Code 2.1.319) recorded on #83. Limits are in the capability register;
   follow-ups #86 (other agent tools) and #87 (hook and rule-file edits).
+- [ ] **EKO-1-19** — Make the runtime tests pass on the checked images and run that mode on every pull request (#95).
+  *Done when:* on one commit the runtime tests pass with and without `EKO_CHECKED_IMAGES`, with the
+  same tests collected and skipped in both; each failure of release run 42276738866 has a named
+  cause; CI runs release mode on every pull request that runs the runtime tests and on `main`, and
+  fails on a planted Compose-name image lookup; `ci.yml` pushes nothing; [per G-1] a `v0.1.1`
+  release run on `main` publishes a release.
+  **Out of scope (explicit):** what the release pipeline checks or publishes (EKO-1-15); the runtime
+  trigger (K-05); tag `v0.1.0`; EKO-1-15's gate-3 documentation (#56); new runtime tests; ADR changes
+  (Architect). After EKO-1-15's code; before EKO-1-15's gate 3 and EKO-1-08's first deployment.
 
 ## EKO-2 — Access
 
