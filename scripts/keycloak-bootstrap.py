@@ -95,7 +95,7 @@ def setting(name: str, default: str) -> str:
 
 
 def emit(event: str) -> None:
-    print(json.dumps({"event": event}, separators=(",", ":")), flush=True)
+    print(json.dumps({"event": event}, separators=(",", ":")), flush=True)  # leftovers-allow: K-02
 
 
 def request(
@@ -592,5 +592,6 @@ if __name__ == "__main__":
     except SystemExit:
         raise
     except Exception as error:
-        print(f"bootstrap failed: {type(error).__name__}: {error}", file=sys.stderr)
+        notice = f"bootstrap failed: {type(error).__name__}: {error}"
+        print(notice, file=sys.stderr)  # leftovers-allow: operator failure notice before exit
         raise SystemExit(1) from None
