@@ -1,4 +1,4 @@
-"""Runtime harness: the composition started by the documented command, from no volumes.
+"""Runtime harness: the composition started by the documented bring-up, from no volumes.
 
 Each composition gets its own project name, a fresh synthetic environment file outside the
 repository and free host ports, and is removed with its volumes afterwards.
@@ -228,17 +228,29 @@ class Started:
 
 @pytest.fixture(scope="session")
 def running(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Started]:
-    """The development profile, started by the documented command from no volumes."""
+    """The development profile, brought up the accepted two-step way from no volumes.
+
+    EKO-1-12 (ADR-0004 addendum of 2026-11-02): `compose up` alone leaves both proxy listeners
+    closed — each opens only after its own live brute-force precondition — so the session
+    bring-up runs `prepare` and then `scripts/keycloak-bootstrap.sh`, exactly like
+    `keycloak_running`. `prepare` must stay the first step: it keeps Keycloak out of the up,
+    so the server's first start of an empty database happens inside the bootstrap's own
+    override recreate, where the temporary administrator is the one the script answers.
+    A contrast that needs an un-bootstrapped composition must use `fresh` or its own project,
+    never this fixture. The two final assertions are the live precondition this whole session
+    depends on: if bootstrap ever returns success on a composition whose listeners are closed,
+    the fixture fails here instead of handing out the closed sockets behind 100+ connection
+    errors.
+    """
+    from tests.runtime.keycloak_client import listener_open, prepare, run_bootstrap
+
     composition = new_composition(tmp_path_factory, "dev")
     try:
-        up = composition.compose(
-            "up", "--build", "--wait", "--wait-timeout", str(UP_TIMEOUT_SECONDS),
-            check=False, timeout=UP_TIMEOUT_SECONDS + 300,
-        )  # fmt: skip
-        if up.returncode != 0:
-            logs = composition.compose("logs", "--tail", "40", check=False).stdout
-            raise AssertionError(f"up exited {up.returncode}\n{up.stderr[-3000:]}\n{logs[-6000:]}")
-        yield Started(composition, up)
+        prepare(composition)
+        result = run_bootstrap(composition)
+        assert listener_open(composition, "admin"), "admin listener closed after bootstrap"
+        assert listener_open(composition, "auth"), "public listener closed after bootstrap"
+        yield Started(composition, result)
     finally:
         composition.down()
 

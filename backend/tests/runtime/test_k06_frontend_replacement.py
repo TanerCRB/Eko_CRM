@@ -12,6 +12,7 @@ import pytest
 from playwright.sync_api import Page, Request, expect, sync_playwright
 
 from tests.runtime.conftest import UP_TIMEOUT_SECONDS, Composition
+from tests.runtime.keycloak_client import run_bootstrap
 from tests.support.repo import REPO_ROOT
 
 pytestmark = pytest.mark.runtime
@@ -148,6 +149,10 @@ def test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement(
         timeout=UP_TIMEOUT_SECONDS + 300,
     )
     assert up.returncode == 0, up.stderr[-6000:]
+    # EKO-1-12 (ADR-0004 addendum): the proxy serves the app listener only after the ordered
+    # bootstrap, so this scenario brings its fresh composition up with the same documented
+    # script instead of a parallel mechanism.
+    run_bootstrap(fresh)
     old_frontend = fresh.container_id("frontend")
     old_proxy = fresh.container_id("proxy")
     old_backend = fresh.container_id("backend")
@@ -260,6 +265,10 @@ def test_r01_two_consecutive_lazy_chunk_failures_stop_after_one_recovery(
         timeout=UP_TIMEOUT_SECONDS + 300,
     )
     assert up.returncode == 0, up.stderr[-6000:]
+    # EKO-1-12 (ADR-0004 addendum): the proxy serves the app listener only after the ordered
+    # bootstrap, so this scenario brings its fresh composition up with the same documented
+    # script instead of a parallel mechanism.
+    run_bootstrap(fresh)
     old_frontend = fresh.container_id("frontend")
     old_proxy = fresh.container_id("proxy")
     old_backend = fresh.container_id("backend")
