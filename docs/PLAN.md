@@ -328,7 +328,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   `Bash(...)` deny rules (incl. the `gh release new` alias); live attempts in agent sessions on
   2026-11-06 (Claude Code 2.1.319) recorded on #83. Limits are in the capability register;
   follow-ups #86 (other agent tools) and #87 (hook and rule-file edits).
-- [ ] **EKO-1-19** — Make the runtime tests pass on the checked images and run that mode on every pull request (#95).
+- [x] **EKO-1-19** — Make the runtime tests pass on the checked images and run that mode on every pull request (#95).
   *Done when:* on one commit the runtime tests pass with and without `EKO_CHECKED_IMAGES`, with the
   same tests collected and skipped in both; each failure of release run 42276738866 has a named
   cause; CI runs release mode on every pull request that runs the runtime tests and on `main`, and
@@ -337,6 +337,13 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** what the release pipeline checks or publishes (EKO-1-15); the runtime
   trigger (K-05); tag `v0.1.0`; EKO-1-15's gate-3 documentation (#56); new runtime tests; ADR changes
   (Architect). After EKO-1-15's code; before EKO-1-15's gate 3 and EKO-1-08's first deployment.
+  **Done 2026-11-07:** merged in [PR #96](https://github.com/TanerCRB/Eko_CRM/pull/96), verified at `bb150c1`: on PR #96 build and
+  release mode each 374 passed, 1 skipped, `mode_parity` exit 0 ([run 42320667987](https://github.com/TanerCRB/Eko_CRM/actions/runs/42320667987)); the planted
+  Compose-name lookup on [PR #97](https://github.com/TanerCRB/Eko_CRM/pull/97) failed release mode with exactly rows 1–9 while build
+  mode passed ([run 42353040687](https://github.com/TanerCRB/Eko_CRM/actions/runs/42353040687)); the first `main` run passed on its first attempt
+  ([run 42362952882](https://github.com/TanerCRB/Eko_CRM/actions/runs/42362952882)); release [run 42363349085](https://github.com/TanerCRB/Eko_CRM/actions/runs/42363349085) passed its tests on the first attempt and
+  published `v0.1.1` on attempt 4, after GHCR package access was set by hand (#99). 21 mutations;
+  follow-ups #98 and #99.
 
 ## EKO-2 — Access
 
