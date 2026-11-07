@@ -4,7 +4,9 @@ import ast
 import copy
 import io
 import json
+import os
 import re
+import shlex
 import subprocess
 import sys
 from collections.abc import Callable
@@ -14,11 +16,13 @@ from typing import Any
 import pytest
 import yaml
 
+from tests.static.release_doubles import ReachDouble, RecordDouble
 from tests.static.test_k07_changeset import at_base, in_worktree
 from tests.support import api_surface as api
 from tests.support import changeset_checks as cc
 from tests.support import openapi_compat as oc
 from tests.support import workflow_checks as wc
+from tests.support.releases import Release
 from tests.support.repo import REPO_ROOT, bash
 
 Document = dict[str, Any]
@@ -435,6 +439,10 @@ def ci_step() -> tuple[dict[str, Any], dict[str, Any]]:
     return found[0]
 
 
+def no_document(release: Release) -> Any:
+    raise AssertionError(f"{release.tag}: no document is fetched when no release is published")
+
+
 def test_eko110_k06_no_previous_release_says_compared_nothing() -> None:
     code, output = run_main()
     assert code == 0 and "compared nothing" in output and not COMPARED.search(output), output
@@ -442,14 +450,29 @@ def test_eko110_k06_no_previous_release_says_compared_nothing() -> None:
     job, step = ci_step()
     assert "if" not in job and "if" not in step
     assert wc.failures_fail_the_run({"jobs": {"backend": job}}) == []
+    # The step's own arguments against a record holding no release (EKO-1-15 C-9).
+    command = shlex.split(step["run"])
+    module = ["uv", "run", "python", "-m", "tests.support.openapi_compat"]
+    assert command[: len(module)] == module, step["run"]
+    out = io.StringIO()
+    empty, reach = RecordDouble(), ReachDouble()
+    code = oc.main(command[len(module) :], out, record=empty, reach=reach, served=no_document)
+    assert code == 0, out.getvalue()
+    assert "compared nothing" in out.getvalue() and not COMPARED.search(out.getvalue())
+
+
+def test_eko110_k06_contrast_the_step_without_a_record_token_exits_2() -> None:
+    _, step = ci_step()
+    env = {k: v for k, v in os.environ.items() if k != wc.RECORD_TOKEN}
     result = subprocess.run(
         [bash(), "-c", step["run"]],
         cwd=REPO_ROOT / step.get("working-directory", "."),
         capture_output=True,
         text=True,
+        env=env,
     )
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "compared nothing" in result.stdout and not COMPARED.search(result.stdout)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "compared nothing" not in result.stdout
 
 
 def test_eko110_k06_supplied_previous_release_reports_a_comparison(tmp_path: Path) -> None:

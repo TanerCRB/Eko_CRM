@@ -232,12 +232,39 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** login to the application (EKO-2-01); event shipping (EKO-1-09).
   After EKO-1-06; before EKO-2-01.
 
-- [ ] **EKO-1-13** — Set the log settings and log bounds of every service (#54).
+- [x] **EKO-1-13** — Set the log settings and log bounds of every service (#54).
   *Done when:* ADR-0005-C3 (with a marker statement), C4 and C6's composition half pass; backend
   log lines and error responses carry one backend-generated correlation identifier; responses carry
   `Cache-Control: no-store`; ADR-0005-C2 is built and shown failing on a fixture endpoint.
   **Out of scope (explicit):** Keycloak's log (EKO-1-12); C6 on a shared host (EKO-1-08). After
   EKO-1-06; before EKO-2-01.
+  **Done 2026-11-04:** built as the ADR-0005 addenda of 2026-11-02 decide. Gate 1 accepted them
+  with the deviation Q-7 H (`adr-deviation`); they were amended at implementation (S-2, S-3) and
+  at verification (R-01/B-01, S-5). What was built:
+  - 23 literal PostgreSQL `-c` settings;
+  - one filtered Caddy access line per request;
+  - `app.core.logs`, which writes JSON lines whose exceptions and warnings carry only type and
+    location;
+  - a backend-generated `Eko-Correlation-Id` on every response, and `no-store` on `/api/`;
+  - no `logging` key in the composition.
+
+  The form is documented in `docs/operations/log-format.md`. Merged in [PR #81](https://github.com/TanerCRB/Eko_CRM/pull/81), verified at
+  `49d9459` after one fix round. Proven by:
+  - `backend/tests/runtime/`: `test_adr0005_c3_postgres_error_log.py`,
+    `test_adr0005_c4_proxy_access_log.py`, `test_adr0005_frontend_request_log.py`,
+    `test_adr0005_backend_request_log_line.py`, `test_adr0005_correlation_identifier.py`,
+    `test_adr0005_backend_error_handling_runtime.py`, `test_adr0005_uncaught_driver_error.py`,
+    `test_adr0005_serving_process_hooks.py`, `test_adr0005_qa_migrate_command_error.py`,
+    `test_adr0005_c12_no_store_through_proxy.py`, `test_adr0005_no_secret_in_logs.py`;
+  - `backend/tests/static/`: `test_adr0005_c3_postgres_settings_in_release.py`,
+    `test_adr0005_c3_qa_no_log_setting_outside_the_table.py`, `test_adr0005_c6_no_logging_key.py`,
+    `test_adr0005_eko113_changeset.py`;
+  - `backend/tests/unit/test_adr0005_*.py`.
+
+  The rows are in `architecture/capabilities.md`. Every mutation of a criterion's mechanism was
+  killed; M16 was killed after QA added a `CommandError` case. Four exceptions are recorded
+  (EKO-1-13/weakening-1..4). Deleting container logs by time on each shared host is EKO-1-08's
+  (#36), under Q-7 H.
 
 - [x] **EKO-1-14** — Build the backup service against a destination test double (#55).
   *Done when:* a nightly run under the backup role's connection limit completes (ADR-0004-C19);
@@ -282,6 +309,25 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   processing until the DPIA's approval conditions are evidenced; and new Google data, scopes,
   calendars or product behavior.
   **Done 2026-10-30:** merged in [PR #73](https://github.com/TanerCRB/Eko_CRM/pull/73), verified by `tests/doc-checks/EKO-1-16.sh` (nine passing contrasts). The accepted DPIA remains synthetic-data-only; Google runtime behavior is explicitly unproven pending EKO-5 and pre-go-live evidence.
+- [x] **EKO-1-18** — Add agent-session permission rules for release-tag, release and re-run
+  actions outside git push (#83).
+  *Done when:* `.claude/settings.json` stops, in an agent session, `gh release create`, `gh api`
+  calls that create a ref, a tag or a release, `gh run rerun` in every form and `gh api` calls to
+  the three actions re-run endpoints; a repository check against the real file shows each rule
+  stopping its named command and not stopping the named ordinary reads, and fails when a rule is
+  removed, narrowed or over-widened; the existing deny/ask rules and hooks are unchanged; the
+  capability register states what the rules do not prove; exception EKO-1-15/security-2 is
+  closed.
+  **Out of scope (explicit):** a separate agent identity or paid-plan ruleset (G-6 B, new Story);
+  the release workflow (EKO-1-15, #56); wrapped or scripted invocations, local and user-level
+  settings, bypassed permission checks (stated limits); `workflow_dispatch` (until the release
+  workflow gains it); release-record deletion (#84). Before the first release tag and by
+  2026-12-05 (EKO-1-15/security-2).
+  **Done 2026-11-06:** merged in [PR #88](https://github.com/TanerCRB/Eko_CRM/pull/88), verified at
+  `0aa781e` by `tests/doc-checks/EKO-1-18.sh` (74 checks; self-test 89) and 61 mutations; 21 new scoped
+  `Bash(...)` deny rules (incl. the `gh release new` alias); live attempts in agent sessions on
+  2026-11-06 (Claude Code 2.1.319) recorded on #83. Limits are in the capability register;
+  follow-ups #86 (other agent tools) and #87 (hook and rule-file edits).
 
 ## EKO-2 — Access
 

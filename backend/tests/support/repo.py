@@ -59,12 +59,15 @@ def render(
     dev_profile: bool,
     interpolate: bool = True,
     compose_file: Path | None = None,
+    extra_files: list[Path] | None = None,
 ) -> dict[str, Any]:
-    """`docker compose config` as JSON. Without `compose_file` it runs in the repository root, so
-    auto-loaded override files are part of what is checked."""
+    """`docker compose config` as JSON. Without `compose_file` or `extra_files` it runs in the
+    repository root, so auto-loaded override files are part of what is checked."""
     args = ["docker", "compose"]
-    if compose_file is not None:
-        args += ["-f", str(compose_file)]
+    if compose_file is not None or extra_files:
+        args += ["-f", str(compose_file or REPO_ROOT / "compose.yaml")]
+    for extra in extra_files or []:
+        args += ["-f", str(extra)]
     if env_file is not None:
         args += ["--env-file", str(env_file)]
     if dev_profile:

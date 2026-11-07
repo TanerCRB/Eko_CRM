@@ -525,7 +525,8 @@ def test_k03_existing_volume_needs_the_documented_operator_step(
 # taken: no test write lands there. The server's own statement log can: for one run, the control
 # session's statements in order, with eko_backup's statements logged for that run only.
 
-LOGGED = re.compile(r"\[(?P<pid>[0-9]+)\] LOG:  statement: (?P<text>.*)$")
+# The prefix is docs/operations/log-format.md's: `%m [%p] %e %q%u@%d %h ` (S-1, Issue #54).
+LOGGED = re.compile(r"\[(?P<pid>[0-9]+)\] (?:\S+ )*?LOG:  statement: (?P<text>.*)$")
 
 
 def logged_statements(backup_lab: BackupLab) -> list[tuple[str, str]]:
@@ -569,7 +570,8 @@ def test_k03_7_contrast_the_statement_log_holds_nothing_outside_the_logged_run(
     backup_lab: BackupLab,
 ) -> None:
     """The log window is the run's own: with logging reset, a second run adds no statement."""
-    statement_logged_run(backup_lab)
+    first_run = statement_logged_run(backup_lab)
+    assert first_run, "the parser found no statement in the logged run"
     already = len(logged_statements(backup_lab))
     result = backup_lab.run()
     assert result.code == 0, result.stderr

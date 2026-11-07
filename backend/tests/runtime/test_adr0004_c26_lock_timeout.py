@@ -89,7 +89,7 @@ def test_adr0004_c26_lock_timeout(lab: Lab) -> None:
     statuses = watch.statuses()
     elapsed = exited_at - granted_at
     assert code != 0, logs
-    assert "lock timeout" in logs, logs[-2000:]
+    assert '"cause":"psycopg.errors.LockNotAvailable"' in logs, logs[-2000:]
     assert LOCK_TIMEOUT - TOLERANCE <= elapsed < LOCK_TIMEOUT + MARGIN, elapsed
     assert read_lines == ["0"]
     assert read_done - read_started < LOCK_TIMEOUT + MARGIN

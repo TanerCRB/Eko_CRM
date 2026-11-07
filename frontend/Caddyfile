@@ -5,6 +5,30 @@
 	admin off
 	persist_config off
 	auto_https off
+	# The site declares no access log, so no request writes a line here. The default logger's
+	# own lines (start, stop, an error) use `proxy`'s field restriction (ADR-0005 addendum
+	# 2026-11-02, docs/operations/log-format.md).
+	log default {
+		output stderr
+		format filter {
+			wrap json {
+				time_format rfc3339_nano
+			}
+			fields {
+				request>remote_ip delete
+				request>remote_port delete
+				request>proto delete
+				request>headers delete
+				request>tls delete
+				request>uri regexp "\?.*$" ""
+				resp_headers delete
+				bytes_read delete
+				user_id delete
+				err_id delete
+				err_trace delete
+			}
+		}
+	}
 }
 
 :8080 {

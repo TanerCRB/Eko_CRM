@@ -4,6 +4,16 @@
 .claude/agents/
 .claude/settings.local.json
 .claude/worktrees/
+# One machine's dev-server launcher — runtimeArgs carry absolute E:/GitHub/... paths.
+.claude/launch.json
+
+# Qwen Code, the same split as .claude/ above: .qwen/commands/ and .qwen/settings.json ARE
+# versioned. .qwen/worktrees/ is that environment's own worktree location and never a task
+# worktree — those go to ../Eko_CRM-<identifier>, outside any agent configuration directory.
+.qwen/agents/
+.qwen/settings.local.json
+.qwen/worktrees/
+.qwen/tmp/
 
 # Task journal and role hand-offs, kept in each task worktree — a memory aid, never evidence.
 .task/

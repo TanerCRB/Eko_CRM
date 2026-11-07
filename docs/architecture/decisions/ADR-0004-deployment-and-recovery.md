@@ -1588,6 +1588,112 @@ as an addendum is required by this decision's addendum of 2026-10-28, *Forwards 
 reassigned after its split*. This is a declared deviation from the accepted bootstrap step order,
 submitted for human approval at gate 1 of EKO-1-12 (Issue #53).
 
+### 2026-11-04 — Releases: the release tag, the release composition and its record, the registry write credential, and what a release run guards
+
+**Status:** Accepted 2026-11-04
+<!-- Accepted by the human at gate 1 of EKO-1-15 (Issue #56), 2026-11-04: R-1 A, G-6 A+, G-1, G-5, G-7, G-8 and G-9 A, the release-tag form as written. -->
+
+**What it settles.** *Images* has CI build images "from a release tag" and push them to the
+project's container registry, and has "a release's composition" reference them by digest. The
+addendum of 2026-10-28 on *Images* widens the digest rule to `postgres`, `keycloak` and `proxy`'s
+base. The addendum of 2026-10-29 says that "nothing yet fixes what a release tag is" and gives
+EKO-1-15 (#56) the choice of which release is the previous one. None of these says what a release
+is, where its composition lives, or what the readers of releases (CI, the operator) count as a
+published release. Three passages of this decision also take the composition from the repository:
+*Container runtime* ("from one composition file kept in the repository"), *Restore procedure*
+("the composition from the repository at the release tag", step 2), and *Deployment* (steps 2 and
+rollback, by "the digests its composition names"). The repository at a release tag holds tag pins
+and local builds, not digests. A restore that takes its composition from there runs what the B-01
+widening forbids. From this date:
+
+- **A release tag.** A release tag is a tag of the form `v<major>.<minor>.<patch>`, each part a
+  decimal number with no leading zero. A tag with any other form, a pre-release suffix
+  included (Issue #56, G-7), is not a release tag. Release tags are ordered by their numbers, never
+  as text. A release tag lower than a published one is refused (G-8). A release is made only from a
+  commit on `main` (G-5).
+- **A release.** A release is a release tag whose release run passed every check on the tagged
+  commit and then produced its release composition. A release-form tag whose run was refused,
+  failed or stopped before the release composition exists is not a release (G-9). A release, once
+  published, never changes: no later run replaces its release composition, and no later run pushes
+  under its name.
+- **The release composition.** It is the one composition file kept in the repository at the
+  release tag, rendered with only these differences: every image reference of the
+  shared-environment profile is in digest form (`<tag>@sha256:<64 lower-case hex>` or the bare
+  digest), project-built images name the digests of the images the release run checked and pushed,
+  and no service of that profile has `build:`. Required variables stay required variables. No
+  environment value is substituted into it, and it holds no secret value (*Secret handling*). It is
+  the composition file *Container runtime* means for every shared environment.
+- **Where the release composition and the record of releases live.** An OCI artifact in the
+  project registry (`ghcr.io/tanercrb/eko-crm/…`), one per release tag (R-1 A, chosen at gate 1). The record that CI and the operator read as "the published releases"
+  is the same place that holds the release compositions. A file in the repository is never that
+  record (addendum of 2026-10-29, *Why*).
+- **The previous release** is the highest release in release-tag order other than the one being
+  built (G-1) whose tagged commit is reachable from `main` when the record is read (G-6 A+). A
+  release whose tagged commit is not reachable from `main` is not counted; when reachability
+  cannot be determined, the reader fails as "the check itself failed". Both the API-compatibility check (addendum of 2026-10-29) and the previous-release
+  half of ADR-0004-C13 read it from the record above: the OpenAPI document as that release's
+  backend, started by digest, serves it directly (ADR-0003, addendum of 2026-10-28), and its
+  backend image by digest. While the record lists no release, each says it compared nothing and
+  reports no pass. When the record cannot be read, or lists a release whose composition, image or
+  document cannot be obtained, the check fails as "the check itself failed", never as "no release".
+- **Deployment, rollback and restore take the release composition from the record.** *Deployment*
+  step 2 and *Rollback to the previous release* use the release composition of the release
+  deployed. *Restore procedure* step 2 fetches the release composition of the release currently
+  deployed from the record, together with the repository at its release tag for everything else it
+  needs. Exception EKO-1-03/R-18 on that step's choice of release is unchanged and stays EKO-1-08's
+  (#36).
+- **The registry write credential.** Writing to the project registry happens only in a release
+  run, with that run's own short-lived `GITHUB_TOKEN` granted `packages: write` in the jobs that
+  push and nowhere else. No long-lived registry write credential exists: none is a repository or
+  environment secret, none is in a tracked file, an image or a server. This is not a secret of the
+  inventory under *Secret handling*: it has no master copy, and nothing holds it after the run. The
+  row *Container registry pull credential (read-only)* is unchanged. Who holds it, and how the
+  operator reaches the record, stays EKO-1-08's (#36).
+- **What the release run guards, and what it does not.** On a tag push GitHub runs the workflow
+  file of the tagged commit. On the free plan for a private repository, as the human confirms in
+  the repository settings, there are no tag rulesets or branch rulesets, and no environment
+  protection rules. The package setting for Actions access is per repository, not per ref or
+  workflow. Any workflow on any pushed ref of this repository can therefore request
+  `packages: write`. The release run's own checks (the tag form, the commit on `main`, the
+  account) bind only a tagged commit that carries `main`'s release workflow. Agent sessions act
+  through the account `TanerCRB`, so no check in CI can tell an agent's tag from the human's. Under
+  G-6 A+ (chosen at gate 1), "an agent never pushes a release tag" rests on the agent sessions'
+  permission settings (Issue #83) and the human's push approval, and every reader of releases (CI's
+  previous-release selection now, the operator's procedure in EKO-1-08) accepts a release only
+  when its tagged commit is reachable from `main` at read time. That closes a branch tag's bypass
+  of the release run's checks for the readers; it does not cover the account. Both limits are
+  stated in the capability register's *What this does not prove* for the release pipeline.
+
+**New controls.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0004-C29 | In every published release composition, every `image:` of the shared-environment profile carries `@sha256:` and 64 lower-case hexadecimal digits, no service of that profile has `build:`, and the `FROM` of `proxy/Dockerfile` at the release tag carries a digest; a fixture with one tag-only reference (a project image, `postgres`, `keycloak`, `proxy`'s `FROM`) fails naming it. |
+| ADR-0004-C30 | Across every file in `.github/workflows/`, only jobs of the release path hold `packages: write` (a job or workflow with no `permissions` key counts as holding it), and only behind the release admission; registry login uses no credential other than `GITHUB_TOKEN`; the repository's secrets list holds no registry credential. |
+| ADR-0004-C31 | The digests a release composition names equal the registry's for those references and the images the release run's checks ran on; a second release run for a published release tag fails before pushing, and the release composition and its digests are unchanged after it. |
+
+Every other rule and control of this decision is unchanged. ADR-0004-C1 is unchanged: no service is
+added.
+
+**Options considered for this addendum.**
+
+| Question | Option | Cost | Closes off |
+|---|---|---|---|
+| R-1: where the release composition and the record of releases live | A. **An OCI artifact in the project registry** (`ghcr.io/tanercrb/eko-crm/…`), one per release tag | the release path needs only `packages: write`; PR runs need `packages: read` to list releases; listing tags of a private user-owned package with `GITHUB_TOKEN` is unproven here; a registry tag can be re-pointed by any workflow holding `packages: write`, so "never changes" rests on the release run's refusal and on readers taking the composition's own digest | nothing; the operator retrieves it with the read-only pull credential already in the inventory, and *Images*' "the registry is used at deployment only" holds |
+| | B. **A GitHub release on the release tag, the composition as its asset** | the release job also needs `contents: write`, which on this plan (no branch protection) also lets that job push to `main` and move tags; the operator needs read access to the private repository besides the registry credential, a credential the inventory does not list (restore step 2 already assumes repository access); release assets can be replaced by the account | nothing |
+| | C. A file committed to the repository | the digests exist only after the run, so a second commit on `main` follows every tag, made by CI with `contents: write` or through a pull request that can edit the record | a record no pull request can change (addendum of 2026-10-29, *Why*); DoD 7 of #56 |
+| | D. An artifact of the release run | Actions artifacts expire (at most 90 days on this plan) | rollback and restore of any release older than that |
+| G-6: a guard outside the tagged commit's workflow | **A. Accept the stated limit** (proposed): the release run's checks bind a tagged commit carrying `main`'s release workflow; "never an agent" rests on session settings and push approval | two claims are stated as unproven in the capability register | nothing now; a later Story can add B |
+| | A+. As A, and every reader (CI's previous-release selection, the operator's procedure) also accepts a release only when its tagged commit is reachable from `main` at read time | one more check in each reader; it does not cover the account (C-2) | nothing |
+| | B. A guard GitHub enforces | needs a paid plan (tag rulesets) **and** agents on their own GitHub identity without the admin role, because the owner bypasses rulesets; neither exists, and both are outside this task | nothing, but it is a new Story |
+
+**Why.** Without a definition of a release and of its record, the previous-release checks of the
+addendum of 2026-10-29 have nothing to read, and EKO-1-08 (#36) has nothing to pull. Taking the
+composition from the repository at the release tag would make deployment, rollback and restore run
+tag-pinned third-party images, which the B-01 widening of 2026-10-28 forbids for shared
+environments. This is a declared deviation: it restates where *Container runtime*, *Deployment*
+and *Restore procedure* step 2 take the composition from, and it adds controls. Approved by the
+human at gate 1 of EKO-1-15 (Issue #56), 2026-11-04: R-1 A and G-6 A+.
 ### 2026-11-06 — Custom Keycloak image build, startup verification, and recovery for event filtering
 
 **Status:** Accepted 2026-11-06
@@ -1636,3 +1742,4 @@ inspection as runtime proof.
   accepts the custom-image release and verification duties without adding a service or store.
 - **B — Reject this addendum.** The accepted composition/image rules and EKO-1-12 STOP remain
   unchanged; no custom image or provider is authorized.
+
