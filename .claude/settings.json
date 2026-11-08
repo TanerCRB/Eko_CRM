@@ -1,5 +1,17 @@
 {
   "permissions": {
+    "allow": ["Bash(scripts/boundary-check.sh *)", "Bash(bash scripts/boundary-check.sh *)",
+              "Bash(git fetch *)", "Bash(git hash-object --stdin)",
+              "Bash(scripts/markers.sh *)", "Bash(bash scripts/markers.sh *)",
+              "Bash(scripts/scope-check.sh *)", "Bash(bash scripts/scope-check.sh *)",
+              "Bash(scripts/evidence-chain.sh *)", "Bash(bash scripts/evidence-chain.sh *)",
+              "Bash(scripts/exception-check.sh *)", "Bash(bash scripts/exception-check.sh *)",
+              "Bash(scripts/weakening-check.sh *)", "Bash(bash scripts/weakening-check.sh *)",
+              "Bash(scripts/leftovers-check.sh *)", "Bash(bash scripts/leftovers-check.sh *)",
+              "Bash(scripts/layer-check.sh *)", "Bash(bash scripts/layer-check.sh *)",
+              "Bash(scripts/risk-check.sh *)", "Bash(bash scripts/risk-check.sh *)",
+              "Bash(gh run watch *)", "Bash(node tools/sync-agents.mjs --check)",
+              "Bash(node tools/check-links.mjs)"],
     "deny": ["Bash(gh pr merge:*)", "Bash(git push --force:*)", "Bash(git push -f:*)",
              "Bash(gh release create *)", "Bash(gh release * create)", "Bash(gh release * create *)",
              "Bash(gh release new *)", "Bash(gh release * new)", "Bash(gh release * new *)",
