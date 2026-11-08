@@ -198,22 +198,26 @@ def released_within_the_bound(
     try:
         with table_held(backup_lab, table) as holder:
             run = backup_lab.start_run()
-            seen = first_seen(
-                backup_lab,
-                f"the control session waits on {table}",
-                lambda: control_waits_on(backup_lab, table),
-                120,
-            )
-            if later is not None:
-                migrate = lab.start_migrate(later)
-            while time.monotonic() < seen + RELEASE_AFTER:
-                assert run.running(), "the run ended before the lock was released"
-                assert backup_lab.dump_sessions() == []
-                if migrate is not None:
-                    assert migrate.running(), migrate.logs()
-                time.sleep(POLL_SECONDS)
-            holder.query("COMMIT")
-            result = run.wait()
+            try:
+                seen = first_seen(
+                    backup_lab,
+                    f"the control session waits on {table}",
+                    lambda: control_waits_on(backup_lab, table),
+                    120,
+                )
+                if later is not None:
+                    migrate = lab.start_migrate(later)
+                while time.monotonic() < seen + RELEASE_AFTER:
+                    assert run.running(), "the run ended before the lock was released"
+                    assert backup_lab.dump_sessions() == []
+                    if migrate is not None:
+                        assert migrate.running(), migrate.logs()
+                    time.sleep(POLL_SECONDS)
+                holder.query("COMMIT")
+                result = run.wait()
+            finally:
+                if run.running():
+                    end_the_run(backup_lab, run)
         assert result.code == 0, result.stderr
         assert failure_lines(result.output) == []
         new = set_names(backup_lab.double) - before
@@ -262,18 +266,23 @@ def test_eko120_k03_an_advisory_lock_held_past_the_bound_only_delays_the_run(
     before = set_names(backup_lab.double)
     with backup_lab.advisory_lock_held() as holder:
         run = backup_lab.start_run()
-        seen = first_seen(
-            backup_lab,
-            "the control session waits for the advisory lock",
-            lambda: control_waits_for_the_advisory_lock(backup_lab),
-            120,
-        )
-        while time.monotonic() < seen + ADVISORY_HOLD:
-            assert run.running(), "the run ended while it waited for the advisory lock"
-            sessions = backup_lab.backup_sessions()
-            assert [s[:2] for s in sessions] == [CONTROL], sessions
-            time.sleep(POLL_SECONDS)
-        holder.query(UNLOCK_BIGINT, k=str(KEY))
+        # Not `finally`: on the passing path the run is meant to outlive this block and dump.
+        try:
+            seen = first_seen(
+                backup_lab,
+                "the control session waits for the advisory lock",
+                lambda: control_waits_for_the_advisory_lock(backup_lab),
+                120,
+            )
+            while time.monotonic() < seen + ADVISORY_HOLD:
+                assert run.running(), "the run ended while it waited for the advisory lock"
+                sessions = backup_lab.backup_sessions()
+                assert [s[:2] for s in sessions] == [CONTROL], sessions
+                time.sleep(POLL_SECONDS)
+            holder.query(UNLOCK_BIGINT, k=str(KEY))
+        except BaseException:
+            end_the_run(backup_lab, run)
+            raise
     result = run.wait()
     assert result.code == 0, result.stderr
     assert failure_lines(result.output) == []
