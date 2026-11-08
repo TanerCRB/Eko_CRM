@@ -1659,3 +1659,70 @@ tag-pinned third-party images, which the B-01 widening of 2026-10-28 forbids for
 environments. This is a declared deviation: it restates where *Container runtime*, *Deployment*
 and *Restore procedure* step 2 take the composition from, and it adds controls. Approved by the
 human at gate 1 of EKO-1-15 (Issue #56), 2026-11-04: R-1 A and G-6 A+.
+
+### 2026-11-06 — *Releases*: the readers' reachability rule does not close a planted record entry
+
+**What it corrects.** The addendum of 2026-11-04 on *Releases*, in its item *What the release run
+guards, and what it does not*, says of the readers' reachability rule: "That closes a branch tag's
+bypass of the release run's checks for the readers". **That sentence does not hold.** The same
+item already states that any workflow on any pushed ref of this repository can request
+`packages: write`. Such a workflow needs no tag and no pull request. It can push images under
+`ghcr.io/tanercrb/eko-crm/…` and write a record entry under a release-form tag, a new one or an
+already published one, because the registry overwrites a tag on write. The refusal to replace a
+published release lives only in the release run. The entry's tagged commit, as readers see it, is
+the `org.opencontainers.image.revision` annotation, and the writer sets it. A planted entry that
+names any commit on `main` therefore passes the reachability rule. From this date, the text of
+2026-11-04 is read with this correction:
+
+- **What the reachability rule guards.** An honest record entry, written by a release run, whose
+  tagged commit is not reachable from `main` when the record is read: for example, a release-form
+  tag pushed on a branch whose run published. Readers do not count it as a release.
+- **What it does not guard.** A planted or overwritten record entry, written by any workflow that
+  holds `packages: write`, whose revision annotation names a commit on `main`. Readers cannot tell
+  such an entry from a release (*A release*: a release tag whose release run passed every check).
+  The rule checks the annotation, not who wrote the entry. *A release, once published, never
+  changes* binds release runs. It does not bind such a workflow.
+- **The narrowing in place (EKO-1-15, PR #85).** The CI readers, the API-compatibility check
+  (addendum of 2026-10-29) and the previous-release half of ADR-0004-C13, take only the backend
+  image digest from the record entry. They run it under the `compose.yaml` of the commit under
+  test. The entry's own composition is never given to Docker Compose, so a planted entry cannot
+  bring services, mounts, volumes or dependencies of its own into a CI run.
+- **The residual risk.** A planted or overwritten entry still decides which backend image runs as
+  "the previous release" in every CI job that reads the record. That image serves the OpenAPI
+  document the API-compatibility check compares against. It is also the image the C13 test
+  migrates and health-checks. So it controls the outcome of both checks: it can make them pass or
+  fail as its author chooses. A planted entry with a release tag higher than every real release
+  also makes the release admission refuse every real release ("a release tag lower than a
+  published one is refused"), which blocks releasing until the entry is removed.
+- **Where it is recorded.** This residual is the recorded exception **EKO-1-15/security-1**
+  (owner @TanerCRB, blocks again on 2027-02-05, or earlier if EKO-1-08 starts reading the record).
+  Provenance of record entries is Issue **#84**, which is not decided.
+- **For EKO-1-08 (#36).** The operator's procedure reads the same record (*Deployment, rollback and
+  restore take the release composition from the record*). Until #84 is decided, that procedure
+  must not treat the record, or the reachability rule, as establishing that an entry is a release
+  produced by a release run, or that its composition and digests are the ones that run checked.
+  When EKO-1-08 starts reading the record, exception EKO-1-15/security-1 blocks again.
+
+The second half of the corrected sentence, "it does not cover the account", is unchanged. The
+capability register's *What this does not prove* for the release pipeline must state the planted
+entry as well as those two limits.
+
+**Controls.** ADR-0004-C29, C30 and C31 do not change. Their wording does not depend on the
+corrected sentence:
+
+- C29 states what every published release composition holds. It does not claim who wrote an entry.
+- C30 binds the workflow files of the ref under test. It does not claim that a workflow on another
+  pushed ref cannot hold `packages: write`, and the addendum of 2026-11-04 already says one can.
+- C31 binds a second release run for a published release tag. It does not claim that another
+  workflow cannot overwrite the entry.
+
+None of them is to be read as closing the planted-entry path. No control is added. Every other rule
+and control of this decision is unchanged.
+
+**Why.** The security auditor's finding B-01 on EKO-1-15 showed that the reachability rule checks a
+revision the writer sets. Finding B-03 showed that this decision still said the bypass was closed.
+A reader of the decision, or the author of EKO-1-08's procedure, would then rely on a guard that
+does not hold. B-03 was accepted by the human at gate 2 of EKO-1-15 (Issue #56, PR #85), as part
+of exception EKO-1-15/security-1, with this correction to be made in the documentation PR. This is
+not a deviation. It withdraws a claim that the text of 2026-11-04 made, and it states the residual
+risk that exception covers. No rule chosen at gate 1 (R-1 A, G-6 A+) changes.

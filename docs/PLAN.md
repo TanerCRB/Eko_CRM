@@ -292,7 +292,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   manifest digests (EKO-1-15, #56); product-table counts (EKO-3-01); the control session's unbounded
   table-lock wait (#76).
 
-- [ ] **EKO-1-15** — Build the release pipeline that publishes images by digest (#56).
+- [x] **EKO-1-15** — Build the release pipeline that publishes images by digest (#56).
   *Done when:* a release tag makes CI build the backend, frontend and backup images and push them
   to the registry by digest as ADR-0004 *Images* decides; the composition used for a deployment
   references those digests and, by the 2026-10-28 ADR-0004 addendum, also the `proxy` base,
@@ -300,6 +300,14 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   pipeline as proven.
   **Out of scope (explicit):** the deployment itself and production setup (EKO-1-08). After
   EKO-1-06; before EKO-1-08's first deployment.
+  **Done 2026-11-08:** merged in [PR #85](https://github.com/TanerCRB/Eko_CRM/pull/85), verified at `852b0b5`; the first release
+  attempt `v0.1.0` failed in its runtime tests and published nothing (fixed by EKO-1-19, #95);
+  release [run 42363349085](https://github.com/TanerCRB/Eko_CRM/actions/runs/42363349085) published `v0.1.1` on `794c04a` (record
+  `sha256:52f8dcb0…`), its composition naming the four project images, `keycloak` and `postgres` by
+  digest, with `proxy` on a digest-pinned `caddy` base; the first `main` run after it
+  ([run 42380237367](https://github.com/TanerCRB/Eko_CRM/actions/runs/42380237367)) compared the API with `v0.1.1` and ran C13's previous-release half.
+  Mutations M01–M47, Q01–Q60 and R1–R5, every one killed counting QA's added tests; exception
+  EKO-1-06/B-01 closed; follow-ups #84, #98, #99.
 - [x] **EKO-1-16** — Amend ADR-0006 to close the EKO-1-05 exceptions (#46).
   *Done when:* a dated ADR-0006 addendum resolves EKO-1-05/R-11, R-15, R-16, R-17, R-18, B-06 and
   Q-01; `tests/doc-checks/EKO-1-16.sh` proves the stated contrasts; the corresponding exception

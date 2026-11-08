@@ -62,9 +62,8 @@ Accepted at gate 2 of EKO-1-05 in [PR #49](https://github.com/TanerCRB/Eko_CRM/p
 an ADR-0006 addendum tracked in #46:
 
 
-Accepted at gate 2 of EKO-1-06 in [PR #57](https://github.com/TanerCRB/Eko_CRM/pull/57); B-01 is fixed by EKO-1-15 (#56), R23 and R18 record surviving mutations whose mechanism stays covered as the PR describes:
+Accepted at gate 2 of EKO-1-06 in [PR #57](https://github.com/TanerCRB/Eko_CRM/pull/57); B-01 was fixed by EKO-1-15 (#56) and left this register at its gate 3, when the `v0.1.1` release composition named `proxy` (on a digest-pinned `caddy` base), `keycloak` and `postgres` by digest; R23 and R18 record surviving mutations whose mechanism stays covered as the PR describes:
 
-- Exception EKO-1-06/B-01 — owner: @TanerCRB — reason: third-party images run by full-version tag, not digest, until EKO-1-15 pins them by digest — blocks again: 2027-03-31
 - Exception EKO-1-06/R23 — owner: @TanerCRB — reason: the proxy's OpenAPI refusal on the app site is a deliberate second layer (A-08) over backend serving its docs outside /api/, so removing it alone fails no test — blocks again: 2027-03-31
 - Exception EKO-1-06/R18 — owner: @TanerCRB — reason: the root-decoy mutation could not reach any image; the mechanism is covered by QA's decoy test (R18c) and the vacuous CI step was removed — blocks again: 2027-03-31
 
@@ -86,6 +85,13 @@ Accepted at gate 2 of EKO-1-13 in [PR #81](https://github.com/TanerCRB/Eko_CRM/p
 - Exception EKO-1-13/weakening-2 — owner: @TanerCRB — reason: `# type: ignore[method-assign]` on a planted `Database.from_settings` failure in test support (`backend/tests/support/fixture_app.py`) — blocks again: 2027-05-04
 - Exception EKO-1-13/weakening-3 — owner: @TanerCRB — reason: `# noqa: S608` on a test statement built from a synthetic marker identifier (`backend/tests/runtime/test_adr0005_c3_postgres_error_log.py`) — blocks again: 2027-05-04
 - Exception EKO-1-13/weakening-4 — owner: @TanerCRB — reason: `# noqa: S102` on test-only `exec` of a constant probe compiled under an `app/` file name, the only kill of M61/M62 (`backend/tests/unit/test_adr0005_qa_warning_location.py`) — blocks again: 2027-05-04
+
+Accepted at gate 2 of EKO-1-15 in [PR #85](https://github.com/TanerCRB/Eko_CRM/pull/85) (decided by the human on 2026-11-05, recorded on #56); security-1 is tracked in #84. EKO-1-15/security-2 (Security Auditor B-02) is not entered: EKO-1-18 (#83) closed it before the first release tag, in PR #88, raised to proven at gate 3 in PR #93:
+
+- Exception EKO-1-15/weakening-1 — owner: @TanerCRB — reason: read_only_token narrowed so that ci.yml's backend and runtime jobs that read the release record may hold packages: read (C-3, C-8), guarded by three contrast cases. — blocks again: 2027-11-05
+- Exception EKO-1-15/weakening-2 — owner: @TanerCRB — reason: EKO-1-10 test test_eko110_k06_no_previous_release_says_compared_nothing amended to run the step's arguments against an empty record double, with a subprocess contrast requiring exit 2 without the token (C-9). — blocks again: 2027-11-05
+- Exception EKO-1-15/weakening-3 — owner: @TanerCRB — reason: pytest.skip in test_eko115_k06_c13_previous_release.py:37 while no release is reachable from main (K-06(1)); CannotTell fails, never skips. — blocks again: 2027-11-05
+- Exception EKO-1-15/security-1 — owner: @TanerCRB — reason: a push-triggered workflow with packages: write can plant or overwrite a release-record entry whose revision annotation the reachability guard accepts; CI readers are narrowed to run only its backend digest under the head's compose, but that image still decides the compat-check and C13 outcomes and a planted higher version blocks admission of every real release (B-01, B-03; provenance in #84, blocks earlier if EKO-1-08 starts reading the record). — blocks again: 2027-02-05
 
 Accepted at gate 2 of EKO-1-19 in [PR #96](https://github.com/TanerCRB/Eko_CRM/pull/96) (decided by the human on 2026-11-07, recorded on #95); follow-up #98:
 
