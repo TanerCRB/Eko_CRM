@@ -309,6 +309,41 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   processing until the DPIA's approval conditions are evidenced; and new Google data, scopes,
   calendars or product behavior.
   **Done 2026-10-30:** merged in [PR #73](https://github.com/TanerCRB/Eko_CRM/pull/73), verified by `tests/doc-checks/EKO-1-16.sh` (nine passing contrasts). The accepted DPIA remains synthetic-data-only; Google runtime behavior is explicitly unproven pending EKO-5 and pre-go-live evidence.
+- [x] **EKO-1-18** — Add agent-session permission rules for release-tag, release and re-run
+  actions outside git push (#83).
+  *Done when:* `.claude/settings.json` stops, in an agent session, `gh release create`, `gh api`
+  calls that create a ref, a tag or a release, `gh run rerun` in every form and `gh api` calls to
+  the three actions re-run endpoints; a repository check against the real file shows each rule
+  stopping its named command and not stopping the named ordinary reads, and fails when a rule is
+  removed, narrowed or over-widened; the existing deny/ask rules and hooks are unchanged; the
+  capability register states what the rules do not prove; exception EKO-1-15/security-2 is
+  closed.
+  **Out of scope (explicit):** a separate agent identity or paid-plan ruleset (G-6 B, new Story);
+  the release workflow (EKO-1-15, #56); wrapped or scripted invocations, local and user-level
+  settings, bypassed permission checks (stated limits); `workflow_dispatch` (until the release
+  workflow gains it); release-record deletion (#84). Before the first release tag and by
+  2026-12-05 (EKO-1-15/security-2).
+  **Done 2026-11-06:** merged in [PR #88](https://github.com/TanerCRB/Eko_CRM/pull/88), verified at
+  `0aa781e` by `tests/doc-checks/EKO-1-18.sh` (74 checks; self-test 89) and 61 mutations; 21 new scoped
+  `Bash(...)` deny rules (incl. the `gh release new` alias); live attempts in agent sessions on
+  2026-11-06 (Claude Code 2.1.319) recorded on #83. Limits are in the capability register;
+  follow-ups #86 (other agent tools) and #87 (hook and rule-file edits).
+- [x] **EKO-1-19** — Make the runtime tests pass on the checked images and run that mode on every pull request (#95).
+  *Done when:* on one commit the runtime tests pass with and without `EKO_CHECKED_IMAGES`, with the
+  same tests collected and skipped in both; each failure of release run 42276738866 has a named
+  cause; CI runs release mode on every pull request that runs the runtime tests and on `main`, and
+  fails on a planted Compose-name image lookup; `ci.yml` pushes nothing; [per G-1] a `v0.1.1`
+  release run on `main` publishes a release.
+  **Out of scope (explicit):** what the release pipeline checks or publishes (EKO-1-15); the runtime
+  trigger (K-05); tag `v0.1.0`; EKO-1-15's gate-3 documentation (#56); new runtime tests; ADR changes
+  (Architect). After EKO-1-15's code; before EKO-1-15's gate 3 and EKO-1-08's first deployment.
+  **Done 2026-11-07:** merged in [PR #96](https://github.com/TanerCRB/Eko_CRM/pull/96), verified at `bb150c1`: on PR #96 build and
+  release mode each 374 passed, 1 skipped, `mode_parity` exit 0 ([run 42320667987](https://github.com/TanerCRB/Eko_CRM/actions/runs/42320667987)); the planted
+  Compose-name lookup on [PR #97](https://github.com/TanerCRB/Eko_CRM/pull/97) failed release mode with exactly rows 1–9 while build
+  mode passed ([run 42353040687](https://github.com/TanerCRB/Eko_CRM/actions/runs/42353040687)); the first `main` run passed on its first attempt
+  ([run 42362952882](https://github.com/TanerCRB/Eko_CRM/actions/runs/42362952882)); release [run 42363349085](https://github.com/TanerCRB/Eko_CRM/actions/runs/42363349085) passed its tests on the first attempt and
+  published `v0.1.1` on attempt 4, after GHCR package access was set by hand (#99). 21 mutations;
+  follow-ups #98 and #99.
 
 ## EKO-2 — Access
 

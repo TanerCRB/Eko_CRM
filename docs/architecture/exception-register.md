@@ -86,3 +86,8 @@ Accepted at gate 2 of EKO-1-13 in [PR #81](https://github.com/TanerCRB/Eko_CRM/p
 - Exception EKO-1-13/weakening-2 — owner: @TanerCRB — reason: `# type: ignore[method-assign]` on a planted `Database.from_settings` failure in test support (`backend/tests/support/fixture_app.py`) — blocks again: 2027-05-04
 - Exception EKO-1-13/weakening-3 — owner: @TanerCRB — reason: `# noqa: S608` on a test statement built from a synthetic marker identifier (`backend/tests/runtime/test_adr0005_c3_postgres_error_log.py`) — blocks again: 2027-05-04
 - Exception EKO-1-13/weakening-4 — owner: @TanerCRB — reason: `# noqa: S102` on test-only `exec` of a constant probe compiled under an `app/` file name, the only kill of M61/M62 (`backend/tests/unit/test_adr0005_qa_warning_location.py`) — blocks again: 2027-05-04
+
+Accepted at gate 2 of EKO-1-19 in [PR #96](https://github.com/TanerCRB/Eko_CRM/pull/96) (decided by the human on 2026-11-07, recorded on #95); follow-up #98:
+
+- Exception EKO-1-19/M17 — owner: @TanerCRB — reason: a branch on the resolved image name passes both modes, so the literal-name mode-branch grep cannot see it; left to review, follow-up #98 — blocks again: 2027-05-07
+- Exception EKO-1-19/M21 — owner: @TanerCRB — reason: weakening-check sees patterns, not a looser assertion; K-05 (b) is judged by evaluator review, which found none in this diff — blocks again: 2027-05-07

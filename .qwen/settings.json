@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "deny": ["Bash(gh pr merge:*)", "Bash(git push --force:*)", "Bash(git push -f:*)",
+             "Bash(gh release create *)", "Bash(gh release * create)", "Bash(gh release * create *)",
+             "Bash(gh release new *)", "Bash(gh release * new)", "Bash(gh release * new *)",
+             "Bash(gh release edit *)", "Bash(gh release * edit)", "Bash(gh release * edit *)",
+             "Bash(gh api*/git/* -*)", "Bash(gh api* -*/git/*)",
+             "Bash(gh api*/releases* -*)", "Bash(gh api* -*/releases*)",
+             "Bash(gh api*graphql*)",
+             "Bash(gh run rerun *)", "Bash(gh run * rerun)", "Bash(gh run * rerun *)",
+             "Bash(gh api*/actions/runs/*/rerun*)", "Bash(gh api*/actions/jobs/*/rerun*)",
+             "Bash(gh api*/check-suites/*/rerequest*)", "Bash(gh api*/check-runs/*/rerequest*)"],
+    "ask": ["Bash(git push:*)"]
+  },
+  "hooks": {
+    "SessionStart": [
+      { "matcher": "startup|resume|clear|compact",
+        "hooks": [ { "type": "command",
+                     "command": "bash \"$QWEN_PROJECT_DIR/scripts/task-journal-context.sh\"" } ] }
+    ],
+    "SubagentStop": [
+      { "hooks": [ { "type": "command",
+                     "command": "node \"$QWEN_PROJECT_DIR/scripts/cost-capture.mjs\"" } ] }
+    ]
+  }
+}

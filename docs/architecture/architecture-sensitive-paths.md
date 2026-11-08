@@ -67,6 +67,8 @@ that task edits its own rows.
 | `backend/tests/support/releases.py` | pipeline | ADR-0004 | release admission and the previous-release selection: tag form, order, account, reachability from `main` and "cannot tell" decide what is published and what the compatibility and C13 checks compare against |
 | `backend/tests/support/release_backend.py` | pipeline | ADR-0004 | obtains the previous release's OpenAPI document from its own backend started by digest; a document taken from elsewhere, or a failure read as "no release", empties the compatibility check |
 | `backend/tests/support/release_workflow.py` | pipeline | ADR-0004 | the static checks of the release path and of `ci.yml` (C30, C31, K-07's listed differences); a widened allowance lets a registry write or a changed check through |
+| `backend/tests/runtime/conftest.py` | pipeline | ADR-0004 | the runtime harness decides which images a release run's checks run on (`checked_images_override`, ADR-0004-C31); a kept `build:` or a missing `image:` tests an image that is never published (EKO-1-19 G-8) |
+| `backend/tests/support/workflow_checks.py` | pipeline | ADR-0004 | the static checks of `ci.yml`; `RECORD_JOBS` is the closed list of jobs that may hold `packages: read` for the release record, so a widened list grants it to another job (EKO-1-19 G-8) |
 | `.githooks/**` | pipeline | — | the pre-push guard on `main` |
 | `scripts/**` | pipeline | — | the process checks the task command and CI rely on |
 | `docs/architecture/layer-dependencies.md` | pipeline | ADR-0001, ADR-0003, ADR-0006 | the layer table the CI layer check and the ruff bans read (ADR-0001-C9, C11); an emptied row drops a ban |
