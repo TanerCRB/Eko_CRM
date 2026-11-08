@@ -12,9 +12,13 @@ import os
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
+from tests.runtime import test_eko115_k02_manifest_digests as manifest_test
+from tests.runtime.backup_lab import BackupLab
 from tests.runtime.test_eko115_k02_manifest_digests import eko_1_15_backup_changes
 from tests.static.test_k07_changeset import changed_paths
 from tests.support.repo import REPO_ROOT, git
@@ -226,3 +230,59 @@ def test_eko115_k02_backup_claim_errors_on_an_unavailable_commit(side: str) -> N
     assert missing.returncode != 0, "precondition: the commit is not in the object store"
     with pytest.raises(subprocess.CalledProcessError):
         eko_1_15_backup_changes(**{side: ABSENT})
+
+
+# The manifest test's own call (QA, EKO-1-21) --------------------------------------------------
+# K-01..K-04 judge `eko_1_15_backup_changes`; this binds the manifest test to it. Without it the
+# manifest test's last assertion can go back to the live change set, be dropped, or be called on
+# an empty pair, and every other test here stays green.
+
+
+class LabDouble:
+    """Stands in for `BackupLab` so the manifest test's body runs without containers: the run's
+    manifest names exactly the references it was given, so the claim is the only open question."""
+
+    double = "double"
+    identity = "identity"
+
+    def __init__(self) -> None:
+        self.env: dict[str, str] | None = None
+
+    def at_probe_head(self) -> None:
+        pass
+
+    def run(self, env: dict[str, str]) -> SimpleNamespace:
+        self.env = env
+        return SimpleNamespace(code=0, stderr="")
+
+    def set_names(self, double: str) -> set[str]:
+        return set() if self.env is None else {"set-1"}
+
+    def open_set(self, double: str, name: str, identity: str) -> SimpleNamespace:
+        assert self.env is not None
+        names = manifest_test.NAMES
+        return SimpleNamespace(
+            manifest={"images": {n: self.env[f"BACKUP_MANIFEST_{n.upper()}_IMAGE"] for n in names}}
+        )
+
+
+@pytest.mark.parametrize("pair", ["clean", "planted"])
+def test_eko115_k02_backup_claim_is_what_the_manifest_test_asserts(
+    pair: str, throwaway: Throwaway, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    planted = throwaway.commit(PAIR_HEAD, modify("backup/eko-backup"))
+    throwaway.checkout(planted)
+    live = [p for p in changed_paths() if p.startswith("backup/")]
+    assert live != [], "precondition: the live change set holds a path under backup/"
+    lab = LabDouble()
+    monkeypatch.setattr(manifest_test, "set_names", lab.set_names)
+    monkeypatch.setattr(manifest_test, "open_set", lab.open_set)
+    run = manifest_test.test_eko115_k02_manifest_names_the_release_digests
+    if pair == "clean":
+        run(cast(BackupLab, lab))
+        return
+    # Contrast: the same live state; only the pair's head differs, by one change under backup/.
+    base, _ = eko_1_15_backup_changes.__defaults__ or ("", "")
+    monkeypatch.setattr(eko_1_15_backup_changes, "__defaults__", (base, planted))
+    with pytest.raises(AssertionError, match="backup/eko-backup"):
+        run(cast(BackupLab, lab))
