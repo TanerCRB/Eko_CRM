@@ -8,8 +8,8 @@ fast lane will wave through — when in doubt, add it.
 
 Paths follow the layout fixed by ADR-0001, ADR-0002, ADR-0003 and ADR-0004; the personal-data
 class follows ADR-0005 (*Where personal data is held*).
-Rows that mark a decision as "pending" (ADR-0006) are governed by a decision not yet accepted;
-that task edits its own rows.
+A row cites the decision that governs it: an unmarked citation names an Accepted decision; a row
+that marks a decision "pending <id>" is rewritten by that decision's own task when it is accepted.
 
 | Path (glob) | Risk classes | Governing decisions | Why it's sensitive |
 |---|---|---|---|
