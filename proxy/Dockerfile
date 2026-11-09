@@ -2,4 +2,11 @@
 # The entry point image: pinned Caddy with the release's routing configuration (ADR-0004).
 # The digest pins the base the release names (ADR-0004 addendum 2026-10-28, B-01; C29).
 FROM caddy:2.11.7@sha256:36c24ad91a7ff7bc4c87fe22bfa8df3c4b18da0773d73fc12ee2c52b98c0bb7e
-COPY Caddyfile /etc/caddy/Caddyfile
+COPY Caddyfile Caddyfile.admin Caddyfile.closed /etc/caddy/
+# The boot-identity helper (ADR-0004 C29 marker binding): the entrypoint calls it to compare
+# each gate marker against the running Keycloak, and scripts/keycloak-bootstrap.sh execs it so
+# the value open_gate records is observed from inside this network, never from host metadata.
+COPY keycloak-boot-identity.sh /usr/local/bin/eko-keycloak-boot-identity.sh
+COPY entrypoint.sh /usr/local/bin/eko-proxy-entrypoint.sh
+RUN chmod 755 /usr/local/bin/eko-proxy-entrypoint.sh /usr/local/bin/eko-keycloak-boot-identity.sh
+ENTRYPOINT ["/usr/local/bin/eko-proxy-entrypoint.sh"]

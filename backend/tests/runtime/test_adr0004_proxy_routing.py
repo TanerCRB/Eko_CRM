@@ -13,6 +13,7 @@ Before this file these rules were probed by hand only:
 
 import time
 
+import httpx
 import pytest
 
 from tests.runtime.conftest import Composition, Started, read_env, write_env
@@ -71,7 +72,21 @@ def test_adr0004_admin_listener_refuses_a_source_outside_the_company_network(
     values["COMPANY_NETWORK_CIDRS"] = FOREIGN_NETWORK
     write_env(fresh.env_file, values)
     fresh.compose("up", "-d", "--build", "--no-deps", "--wait", "proxy", timeout=600)
-    refused = fresh.through_proxy("admin", DISCOVERY.format(realm="master"))
+    # EKO-1-12 (ADR-0004 addendum): the listener answers only behind its gate marker, and the
+    # bootstrap cannot open it in this environment — its own gate check arrives from inside the
+    # composition network, which the foreign CIDR set above refuses (TEST-NET-1 holds no Docker
+    # or host address). This contrast therefore opens the marker the bootstrap would write,
+    # with nothing running behind the listener at all.
+    fresh.compose("exec", "-T", "proxy", "touch", "/data/admin-open")
+    fresh.compose("restart", "proxy", timeout=120)
+    refused: httpx.Response | None = None
+    deadline = time.monotonic() + 60
+    while refused is None and time.monotonic() < deadline:
+        try:
+            refused = fresh.through_proxy("admin", DISCOVERY.format(realm="master"))
+        except (httpx.HTTPError, OSError):
+            time.sleep(1)
+    assert refused is not None, "the admin listener never became reachable behind its marker"
     # 403 is proxy's refusal; a forwarded request would find no keycloak and be a 502.
     assert refused.status_code == 403
 
