@@ -66,6 +66,7 @@ def adr_files_at_base() -> list[str]:
 
 
 def test_k07_adr_files_change_only_by_appended_dated_addenda() -> None:
+    """Live invariant: accepted ADR text changes only by appended dated addenda, on every branch."""
     problems = []
     for path in adr_files_at_base():
         base, head = at_base(path), in_worktree(path)
@@ -112,6 +113,7 @@ def test_k07_adr_check_fails_on_an_edit_of_accepted_text(edit: Any) -> None:
 
 
 def test_k07_nothing_under_docs_prototype_changes() -> None:
+    """Live invariant: docs/prototype/ is a sensitive-data boundary, untouched on every branch."""
     assert [p for p in changed_paths() if p.startswith("docs/prototype/")] == []
 
 
@@ -229,6 +231,7 @@ def added_lines() -> dict[str, list[str]]:
 
 
 def test_k07_no_real_person_data_in_added_lines() -> None:
+    """Live invariant: no branch adds a real person's data (ADR-0005: tests hold synthetic data)."""
     assert rc.personal_data(added_lines()) == []
 
 

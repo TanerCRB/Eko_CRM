@@ -2,7 +2,9 @@
 same run and loaded under the EKO_CHECKED_IMAGES names, exactly where the build-mode runtime job
 runs, and nothing in it writes to the registry. Each check fails on a one-change plant.
 
-Base for the unchanged-job and unchanged-release checks: $CHANGESET_BASE, else origin/main.
+The unchanged-job and unchanged-release checks are EKO-1-19's claims and are judged on PR #96's
+parents (EKO_1_19_BASE, EKO_1_19_HEAD), read through Git objects only (EKO-1-23, #110): never
+`$CHANGESET_BASE`, `origin/main` or the working tree. "Builds once" stays judged on the live file.
 """
 
 import copy
@@ -13,14 +15,17 @@ from typing import Any
 import pytest
 import yaml
 
-from tests.static.test_k07_changeset import at_base, in_worktree
 from tests.support import release_mode_ci as rm
 from tests.support import release_workflow as rw
 from tests.support import workflow_checks as wc
+from tests.support.fixed_pair import file_at
 from tests.support.repo import REPO_ROOT
 
 CI = ".github/workflows/ci.yml"
 RELEASE = ".github/workflows/release.yml"
+# PR #96 (EKO-1-19): 794c04a's parents; its merge base is the first parent.
+EKO_1_19_BASE = "e895ce17ad46b8f50df6b92b2dc11ed9af8af110"
+EKO_1_19_HEAD = "726befdd86cebbd67d1796f5cc79f4f7121685d3"
 Workflow = dict[Any, Any]
 
 
@@ -96,14 +101,22 @@ def assert_existing_jobs_unchanged(base: str, head: str) -> None:
     assert head_keys == {k: v for k, v in base_flow.items() if k != "jobs"}
 
 
+def eko_1_19_pair(
+    path: str, base: str = EKO_1_19_BASE, head: str = EKO_1_19_HEAD
+) -> tuple[str | None, str | None]:
+    """`path` as EKO-1-19's base and head hold it; a missing commit raises."""
+    return file_at(base, path), file_at(head, path)
+
+
 def test_eko119_k03_every_existing_ci_job_is_byte_identical() -> None:
-    base, head = at_base(CI), in_worktree(CI)
+    base, head = eko_1_19_pair(CI)
     assert base is not None and head is not None
     assert_existing_jobs_unchanged(base, head)
 
 
 def test_eko119_k06_release_workflow_unchanged() -> None:
-    assert at_base(RELEASE) == in_worktree(RELEASE)
+    base, head = eko_1_19_pair(RELEASE)
+    assert base is not None and base == head
     assert rw.build_once_violations(release()) == []
 
 

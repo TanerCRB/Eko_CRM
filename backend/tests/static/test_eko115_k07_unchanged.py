@@ -2,7 +2,9 @@
 today, with no permission added except `packages: read`; the development profile builds its
 project images locally and names no image of the project registry.
 
-Base: $CHANGESET_BASE, else origin/main (tests/static/test_k07_changeset.py). The runtime half
+The unchanged-jobs claim is EKO-1-15's and is judged on PR #85's parents (EKO_1_15_BASE,
+EKO_1_15_HEAD), read through Git objects only (EKO-1-23, #110): never `$CHANGESET_BASE`,
+`origin/main` or the working tree; the other checks read the live `ci.yml`. The runtime half
 (the development profile started with the project registry unreachable) is not here.
 """
 
@@ -15,8 +17,12 @@ import yaml
 from tests.static.test_k07_changeset import at_base, in_worktree
 from tests.support import release_workflow as rw
 from tests.support import workflow_checks as wc
+from tests.support.fixed_pair import file_at
 
 CI = ".github/workflows/ci.yml"
+# PR #85 (EKO-1-15): 0e525b6's parents; its merge base is the first parent.
+EKO_1_15_BASE = "14e9576a1bbf17e94f3a281e2061b0c4ad4a6563"
+EKO_1_15_HEAD = "0d221229917c0fea3d7b99efaa3cce578e51087f"
 Workflow = dict[Any, Any]
 PROJECT_REGISTRY = "ghcr.io/tanercrb"
 PROJECT_SERVICES = ("proxy", "frontend", "backend", "backup")
@@ -28,8 +34,17 @@ def base_and_head() -> tuple[Workflow, Workflow]:
     return yaml.safe_load(base), yaml.safe_load(head)
 
 
+def pair_base_and_head(
+    base: str = EKO_1_15_BASE, head: str = EKO_1_15_HEAD
+) -> tuple[Workflow, Workflow]:
+    """`ci.yml` as EKO-1-15's base and head hold it; a missing commit raises."""
+    base_text, head_text = file_at(base, CI), file_at(head, CI)
+    assert base_text is not None and head_text is not None
+    return yaml.safe_load(base_text), yaml.safe_load(head_text)
+
+
 def test_eko115_k07_ci_jobs_and_steps_unchanged() -> None:
-    base, head = base_and_head()
+    base, head = pair_base_and_head()
     assert rw.ci_unchanged_violations(base, head) == []
 
 
@@ -146,7 +161,7 @@ def test_eko115_k07_ci_check_fails_on_a_plant(case_id: str) -> None:
 
 
 def test_eko115_k07_contrast_packages_read_is_allowed_on_a_record_reading_job() -> None:
-    base, head = base_and_head()
+    base, head = pair_base_and_head()
     planted = _job("backend", "permissions", {"contents": "read", "packages": "read"})(head)
     assert rw.ci_unchanged_violations(base, planted) == []
 
