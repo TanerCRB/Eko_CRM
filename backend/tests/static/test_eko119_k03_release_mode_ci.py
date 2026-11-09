@@ -84,15 +84,22 @@ def job_blocks(text: str) -> dict[str, str]:
     return trimmed
 
 
+def assert_existing_jobs_unchanged(base: str, head: str) -> None:
+    """Byte-identical but for a retuned `timeout-minutes` (wc.timeout_lines_masked, EKO-1-20)."""
+    before = {n: wc.timeout_lines_masked(b) for n, b in job_blocks(base).items()}
+    after = {n: wc.timeout_lines_masked(b) for n, b in job_blocks(head).items()}
+    assert {name: after.get(name) for name in before} == before
+    base_flow, head_flow = yaml.safe_load(base), yaml.safe_load(head)
+    base_jobs = {name: wc.timeout_masked(job) for name, job in base_flow["jobs"].items()}
+    assert {name: wc.timeout_masked(head_flow["jobs"].get(name)) for name in base_jobs} == base_jobs
+    head_keys = {k: v for k, v in head_flow.items() if k != "jobs"}
+    assert head_keys == {k: v for k, v in base_flow.items() if k != "jobs"}
+
+
 def test_eko119_k03_every_existing_ci_job_is_byte_identical() -> None:
     base, head = at_base(CI), in_worktree(CI)
     assert base is not None and head is not None
-    before, after = job_blocks(base), job_blocks(head)
-    assert {name: after.get(name) for name in before} == before
-    base_flow, head_flow = yaml.safe_load(base), yaml.safe_load(head)
-    assert {name: head_flow["jobs"].get(name) for name in base_flow["jobs"]} == base_flow["jobs"]
-    head_keys = {k: v for k, v in head_flow.items() if k != "jobs"}
-    assert head_keys == {k: v for k, v in base_flow.items() if k != "jobs"}
+    assert_existing_jobs_unchanged(base, head)
 
 
 def test_eko119_k06_release_workflow_unchanged() -> None:
