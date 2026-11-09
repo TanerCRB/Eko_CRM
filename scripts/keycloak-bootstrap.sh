@@ -13,6 +13,150 @@ usage() {
   exit 2
 }
 
+# --self-test: process-ci sweeps `bash scripts/<name>.sh --self-test` over every script; this
+# mode proves the bootstrap's own refusal paths offline. No case starts a container, contacts
+# the composition or writes into the repository: (a) and (b) run the script as a sub-process
+# that stops before the first compose call; (c) runs this file's own extracted open_gate with
+# only the composition side stubbed, so the boot-identity character class is exercised as
+# written, never re-implemented here; (d) re-runs the whole self-test from a scratch directory
+# and checks nothing was left behind (EKO112_SELFTEST_NESTED bounds the recursion). Live
+# composition behavior (marker removal, reachability, residual-state records) is carried by
+# backend/tests/runtime, not by these offline cases.
+self_test() {
+  local self self_dir root repo_before open_gate_src out rc status failures=0 total=0
+  trap - ERR
+  set +e
+  # Line 9 already moved the cwd to ROOT, so a relative BASH_SOURCE must be resolved against
+  # the launch directory (OLDPWD from that cd), not against ROOT: `cd scripts && bash ./…`
+  # and `bash Eko_CRM/scripts/…` from a sibling directory would otherwise build a wrong path.
+  self_dir="$(dirname "${BASH_SOURCE[0]}")"
+  case "$self_dir" in
+    /* | [A-Za-z]:/*) ;; # absolute already (POSIX-style or MSYS drive-style)
+    *) self_dir="$OLDPWD/$self_dir" ;;
+  esac
+  self="$(cd "$self_dir" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+  root="$(mktemp -d)"
+  repo_before="$(git -C "$ROOT" status --porcelain 2>/dev/null)"
+
+  ok() { total=$((total + 1)); echo "ok   $1"; }
+  fail() { total=$((total + 1)); echo "FAIL $1 — $2"; failures=$((failures + 1)); }
+
+  # No argument: the usage line with exit 2 (the same refusal exit (a) asserts).
+  out="$(bash "$self" 2>&1)"
+  rc=$?
+  if [ "$rc" -eq 2 ] \
+    && [ "$out" = "usage: bash scripts/keycloak-bootstrap.sh <env-file> [--evidence <jsonl-path>] [--shared]" ]; then
+    ok "no argument prints the usage line and exits 2"
+  else
+    fail "no argument prints the usage line and exits 2" "exit $rc: $out"
+  fi
+
+  # (a) A missing environment file is refused with the named message and exit 2, before any
+  # compose call: the sub-run's own output shows which line ended it.
+  out="$(bash "$self" "$root/does-not-exist.env" 2>&1)"
+  rc=$?
+  if [ "$rc" -eq 2 ] && [ "$out" = "keycloak-bootstrap: environment file is not readable" ]; then
+    ok "a missing environment file is refused with the named message and exit 2"
+  else
+    fail "a missing environment file is refused with the named message and exit 2" "exit $rc: $out"
+  fi
+
+  # (b) An environment file without the composition's required project name (ADR-0004,
+  # 2026-10-28) names that variable and stops with the failed-expansion exit, before any
+  # compose call. The chmod-000 unreadable variant is not asserted here: read denial is not
+  # enforced on this repository's Windows development filesystems, so the case would be a
+  # local failure rather than an honest check.
+  printf 'AUTH_HOST=auth.localhost\nCOMPANY_NETWORK_CIDRS=private_ranges\n' > "$root/no-project.env"
+  out="$(bash "$self" "$root/no-project.env" 2>&1)"
+  rc=$?
+  if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q "COMPOSE_PROJECT_NAME: missing project name"; then
+    ok "an environment file without COMPOSE_PROJECT_NAME names the variable and exits 1"
+  else
+    fail "an environment file without COMPOSE_PROJECT_NAME names the variable and exits 1" "exit $rc: $out"
+  fi
+
+  # (c) The gate-marker identity checks run the script's own open_gate: the function text is
+  # extracted from this file at run time, and only the composition side (compose, record,
+  # keycloak_boot_identity) is stubbed. An extraction miss fails the cases below loudly.
+  open_gate_src="$(awk '/^open_gate\(\) \{/,/^\}/' "$self")"
+  if printf '%s\n' "$open_gate_src" | grep -q "unusable Keycloak boot identity"; then
+    ok "open_gate is exercised from this file's own text, not re-implemented"
+  else
+    fail "open_gate is exercised from this file's own text, not re-implemented" "no open_gate text in $self"
+  fi
+
+  identity_case() {
+    # identity_case <name> <identity> <reject|accept> — one open_gate run against stubs; the
+    # marker file is the stub's recorded call argument, so nothing touches a real /data.
+    local name="$1" identity="$2" expect="$3" dir calls
+    dir="$root/identity"
+    rm -rf "$dir"
+    mkdir -p "$dir"
+    calls="$dir/calls"
+    : > "$calls"
+    status="$(
+      FAKE_IDENTITY="$identity"
+      record() { :; }
+      compose() { printf '%s\n' "$*" >> "$calls"; return 0; }
+      keycloak_boot_identity() { printf '%s\n' "$FAKE_IDENTITY"; return 0; }
+      eval "$open_gate_src"
+      rc=0
+      open_gate admin auth-admin.localhost 8443 master 2> "$dir/gate.err" || rc=$?
+      printf 'rc=%s marker_writes=%s evil=%s\n' "$rc" \
+        "$(grep -c admin-open "$calls")" \
+        "$([ -e "$dir/evil-marker" ] && echo present || echo absent)"
+    )"
+    if [ "$expect" = reject ]; then
+      if [ "$status" = "rc=1 marker_writes=0 evil=absent" ] \
+        && grep -q "unusable Keycloak boot identity" "$dir/gate.err"; then
+        ok "$name"
+      else
+        fail "$name" "status '$status', gate stderr: $(tr '\n' ' ' < "$dir/gate.err")"
+      fi
+    else
+      if [ "$status" = "rc=0 marker_writes=1 evil=absent" ] && grep -qF -- "$identity" "$calls"; then
+        ok "$name"
+      else
+        fail "$name" "status '$status', gate stderr: $(tr '\n' ' ' < "$dir/gate.err")"
+      fi
+    fi
+  }
+  identity_case "an empty boot identity keeps the gate marker unwritten" "" reject
+  # The embedded command stays data: its invalid characters are outside the [0-9a-f:] class,
+  # it must be refused before any marker write, and its target file must not appear.
+  identity_case "a malformed boot identity is refused and stays inert" \
+    "02:42:de:ad:be:ef \$(touch '$root/identity/evil-marker')" reject
+  identity_case "a valid hex:colon boot identity is accepted and reaches the marker write" \
+    "02:42:ac:12:00:03" accept
+
+  # (d) The whole self-test re-run from a scratch directory: nothing is left there, and the
+  # repository's working state is byte-identical before and after (git porcelain, read-only).
+  if [ -z "${EKO112_SELFTEST_NESTED:-}" ]; then
+    local scratch leftover repo_after
+    scratch="$(mktemp -d)"
+    out="$(cd "$scratch" && EKO112_SELFTEST_NESTED=1 bash "$self" --self-test 2>&1)"
+    rc=$?
+    leftover="$(find "$scratch" -mindepth 1 2>/dev/null | head -n 1)"
+    repo_after="$(git -C "$ROOT" status --porcelain 2>/dev/null)"
+    if [ "$rc" -eq 0 ] && [ -z "$leftover" ] && [ "$repo_after" = "$repo_before" ]; then
+      ok "--self-test from a scratch directory leaves no files behind and mutates nothing"
+    else
+      fail "--self-test from a scratch directory leaves no files behind and mutates nothing" \
+        "exit $rc, leftover '$leftover', repo state '$repo_after' vs '$repo_before'"
+    fi
+    rm -rf "$scratch"
+  fi
+
+  rm -rf "$root"
+  echo "Self-test: $total cases ran, $((total - failures)) passed, $failures failed."
+  [ "$failures" -eq 0 ]
+}
+
+if [ "${1:-}" = "--self-test" ]; then
+  self_test
+  exit $?
+fi
+
 [ "$#" -ge 1 ] || usage
 ENV_FILE="$1"
 shift

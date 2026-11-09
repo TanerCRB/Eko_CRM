@@ -109,14 +109,15 @@ def test_k03_administrator_operations_denials_and_stored_admin_events(
         assert created.status_code == 201, f"create status {created.status_code}"
         managed = user(app, token, managed_name)
         managed["firstName"] = "Changed"
-        assert app.admin(
-            token, "PUT", f"users/{managed['id']}", json_body=managed
-        ).status_code == 204
+        assert (
+            app.admin(token, "PUT", f"users/{managed['id']}", json_body=managed).status_code == 204
+        )
         for enabled in (False, True):
             managed["enabled"] = enabled
-            assert app.admin(
-                token, "PUT", f"users/{managed['id']}", json_body=managed
-            ).status_code == 204
+            assert (
+                app.admin(token, "PUT", f"users/{managed['id']}", json_body=managed).status_code
+                == 204
+            )
         reset = app.admin(
             token,
             "PUT",
@@ -253,8 +254,7 @@ def test_k03_reviewer_reads_required_events_and_mappings_but_cannot_write(
         assert holders == 2
         assert fixtures.ACCOUNTS["breakglass_one"] in {item["username"] for item in master_users}
         assert not any(
-            name.startswith("KC_BOOTSTRAP_ADMIN")
-            for name in composition.container_env("keycloak")
+            name.startswith("KC_BOOTSTRAP_ADMIN") for name in composition.container_env("keycloak")
         )
 
         assert master.admin_json(reviewer_token, "GET", "events", realm="master")
@@ -346,12 +346,15 @@ def test_k03_admin_event_representations_identify_actor_and_exclude_password(
             assert created.status_code == 201
         managed = user(master, token, fixtures.ACCOUNTS["managed"])
         managed["firstName"] = "Changed"
-        assert master.admin(
-            token, "PUT", f"users/{managed['id']}", json_body=managed, realm="eko"
-        ).status_code == 204
-        assert master.admin(
-            token, "DELETE", f"users/{managed['id']}", realm="eko"
-        ).status_code == 204
+        assert (
+            master.admin(
+                token, "PUT", f"users/{managed['id']}", json_body=managed, realm="eko"
+            ).status_code
+            == 204
+        )
+        assert (
+            master.admin(token, "DELETE", f"users/{managed['id']}", realm="eko").status_code == 204
+        )
         events = master.admin_json(token, "GET", "admin-events", realm="eko")
         operations = [
             event for event in events if event.get("resourcePath", "").startswith("users")

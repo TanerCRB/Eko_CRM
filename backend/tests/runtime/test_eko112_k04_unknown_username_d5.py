@@ -108,9 +108,9 @@ def refused_master_console_login(composition: Composition, username: str) -> Non
     env = composition.env
     redirect = f"https://{env['AUTH_ADMIN_HOST']}:{env['PROXY_ADMIN_PORT']}/admin/master/console/"
     verifier = secrets.token_urlsafe(48)
-    challenge = base64.urlsafe_b64encode(
-        hashlib.sha256(verifier.encode()).digest()
-    ).rstrip(b"=").decode()
+    challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+    )
     query = httpx.QueryParams(
         {
             "client_id": "security-admin-console",
