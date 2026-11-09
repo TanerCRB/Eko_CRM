@@ -161,7 +161,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.runtime == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # EKO-1-20 (#76): the control-lock-wait tests hold locks past the 180 s bound; 45 min no longer fits the suite.
+    timeout-minutes: 75
     # Reads the release record for ADR-0004-C13's previous-release half (EKO-1-15 K-06, C-3, C-4).
     permissions:
       contents: read
@@ -190,3 +191,110 @@ jobs:
         env:
           RELEASE_RECORD_TOKEN: ${{ github.token }}
         run: uv run pytest -m "runtime or previous_release" tests/runtime -v
+
+  # EKO-1-19 (#95): release mode wherever the runtime tests run. The four project images are built
+  # once in this run as release.yml's images job builds them (ADR-0004-C31), with Docker only
+  # (ADR-0001-C4), and reach the next job as this run's own artifact; nothing is pushed.
+  checked-images:
+    name: checked image builds (release mode)
+    needs: changes
+    if: needs.changes.outputs.runtime == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      backend-id: ${{ steps.ids.outputs.backend }}
+      frontend-id: ${{ steps.ids.outputs.frontend }}
+      proxy-id: ${{ steps.ids.outputs.proxy }}
+      backup-id: ${{ steps.ids.outputs.backup }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build images
+        run: |
+          docker build -t eko-crm/backend:checked backend
+          docker build -t eko-crm/frontend:checked frontend
+          docker build -t eko-crm/proxy:checked proxy
+          docker build -t eko-crm/backup:checked backup
+      - name: Record image IDs
+        id: ids
+        shell: bash
+        run: |
+          for name in backend frontend proxy backup; do
+            echo "$name=$(docker image inspect --format '{{.Id}}' "eko-crm/$name:checked")" >> "$GITHUB_OUTPUT"
+          done
+      - name: Save the checked images
+        run: docker save -o "$RUNNER_TEMP/checked-images.tar" eko-crm/backend:checked eko-crm/frontend:checked eko-crm/proxy:checked eko-crm/backup:checked
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: checked-images
+          path: ${{ runner.temp }}/checked-images.tar
+          retention-days: 1
+          if-no-files-found: error
+
+  # The build-mode runtime job's session on the loaded images, EKO_CHECKED_IMAGES its one
+  # difference (K-01). Identity is checked before and after the tests, and afterwards no image a
+  # Compose build leaves behind may exist (K-04). The download reads this run's artifact only.
+  runtime-checked:
+    name: runtime tests on the checked images (release mode)
+    needs: [changes, checked-images]
+    if: needs.changes.outputs.runtime == 'true'
+    runs-on: ubuntu-latest
+    # EKO-1-20 (#76): the release-mode suite also runs the control-lock-wait tests; 60 min left no margin (57 min observed).
+    timeout-minutes: 75
+    # Reads the release record for ADR-0004-C13's previous-release half, as the runtime job does.
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: checked-images
+          path: ${{ runner.temp }}
+      - name: Load the checked images and check their identity
+        shell: bash
+        env:
+          BACKEND_ID: ${{ needs.checked-images.outputs.backend-id }}
+          FRONTEND_ID: ${{ needs.checked-images.outputs.frontend-id }}
+          PROXY_ID: ${{ needs.checked-images.outputs.proxy-id }}
+          BACKUP_ID: ${{ needs.checked-images.outputs.backup-id }}
+        run: |
+          docker load -i "$RUNNER_TEMP/checked-images.tar"
+          bash scripts/release-images.sh check-identity
+      - name: Registry login, read only (pulls the previous release's backend)
+        shell: bash
+        env:
+          TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: printf '%s' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.21"
+          python-version: "3.12"
+      - name: Install
+        working-directory: backend
+        run: uv sync --locked
+      - name: Images before the tests (K-04)
+        working-directory: backend
+        run: uv run python -m tests.support.session_images snapshot --out "$RUNNER_TEMP/images-before.txt"
+      - name: Runtime tests on the checked images (K-01, K-02, K-03, K-04)
+        working-directory: backend
+        env:
+          EKO_CHECKED_IMAGES: "backend=eko-crm/backend:checked frontend=eko-crm/frontend:checked proxy=eko-crm/proxy:checked backup=eko-crm/backup:checked"
+          RELEASE_RECORD_TOKEN: ${{ github.token }}
+        run: uv run pytest -m "runtime or previous_release" tests/runtime -v
+      - name: The checked images are still the ones built (K-04)
+        shell: bash
+        env:
+          BACKEND_ID: ${{ needs.checked-images.outputs.backend-id }}
+          FRONTEND_ID: ${{ needs.checked-images.outputs.frontend-id }}
+          PROXY_ID: ${{ needs.checked-images.outputs.proxy-id }}
+          BACKUP_ID: ${{ needs.checked-images.outputs.backup-id }}
+        run: bash scripts/release-images.sh check-identity
+      - name: No image built by the tests (K-04)
+        working-directory: backend
+        run: uv run python -m tests.support.session_images check --before "$RUNNER_TEMP/images-before.txt"

@@ -75,11 +75,41 @@ invocation mode in the cost register (`registered` / `general-purpose`): calibra
 for the mode they were measured in. Prefer registering the roles (run the command from the product
 repository) whenever you can.
 
-**Subagent model — the same as yours**, if you're calling the role through the general-purpose
-mechanism: the model field in the role definition file does not apply automatically in this mode.
-**Raising the model requires the human's consent** — treat it like any other question: say which
-role and why (task complexity, risk of missing something), and wait for the decision instead of
-silently escalating based on the field in the role file alone.
+**Subagent model — by the difficulty of the work, never above yours.** You, the supervisor, stay
+on the model the command was launched on and don't change it. The `model` field in
+`agents/<role>.md` is `inherit` and decides nothing here — set the role's model explicitly with
+the `model` parameter on every role call (registered or general-purpose), by this table:
+
+| Tier | Model | Roles and work |
+|---|---|---|
+| easy | `haiku` | helper work with no role: waiting on CI, reading logs, counting tests, searching the repo, git state, cleanup |
+| medium | `sonnet` | `product-owner`; `developer-backend`, `developer-frontend`, `developer-infrastructure` by default |
+| hard | your model | `analyst`, `architect`; the evaluators `invariant-guardian`, `qa`, `reviewer`, `security-auditor`; a developer when the task touches a trigger below |
+
+Hard-tier triggers for a developer: a schema migration; authentication, authorization or the
+session; data isolation between reps; concurrency or idempotency (including retried writes and
+Google Calendar sync); an API contract between `backend/` and `frontend/`; personal data;
+secrets or identity/proxy configuration (infrastructure).
+
+**Evaluators stay on your model until calibrated lower.** A role's calibration result holds only
+for the model it was run on (see `calibration/README.md`). An evaluator moves down to `sonnet`
+only after the human records a passed calibration for it on `sonnet` and edits this table — never
+on your own judgment.
+
+Model order: `haiku` < `sonnet` < `opus`. For any other model the human sets the order before you
+use it.
+
+- **The ceiling is hard.** A subagent never gets a model above yours — not even with the human's
+  consent. When the table names a tier above your model, the role runs on yours. On `sonnet`, the
+  hard tier is `sonnet` — note it in the role's report, don't ask to raise it.
+- **Hard-tier triggers are fixed**, not a feeling. A doubt whether a trigger applies is resolved in
+  favor of the higher tier (within the ceiling).
+- **A retry goes one tier up.** When a role's work on a lower tier failed a gate (Guardian, QA, CI,
+  Reviewer), that role's second round runs one tier higher, within the ceiling — not a second time
+  on the same model.
+- **Trail.** In every role report, in the cost-register row's notes, and in the PR description,
+  name the model the role ran on and the tier that put it there (e.g. `product-owner — sonnet
+  (medium)`, `developer-backend — opus (hard: schema migration)`).
 
 ## How you talk to the human
 
@@ -140,8 +170,8 @@ special rule for them.
 
 **Model** — the model the role actually ran on, from the measured record (below), not from the
 role file.
-Roles inherit the calling session's model, so the same role can run on different models across
-tasks; without this column a cost or quality difference between two runs can't be told apart
+The model follows the tier table in "How you call a role" and is capped by the session's model,
+so the same role can run on different models across tasks; without this column a cost or quality difference between two runs can't be told apart
 from a model difference. A role's calibration result holds only for the model it was run on (see
 `calibration/README.md`).
 
@@ -319,6 +349,13 @@ where to create it are in step 6). Until gate 1 the branch carries only bookkeep
 number reservation and the cost-register rows of the analysis roles; code enters it only after
 gate 1. If gate 1 rejects the task, the branch and worktree are removed like at closure. Start the
 task journal in the new worktree now (see "Task journal and hand-offs").
+
+**Name the session tab.** When the session context gives `Plik tytułu sesji: <path>` (the global
+session-title hook), write one line there: `<identifier> <short description>`, e.g.
+`EKO-1-15 visit dashboard`. The terminal tab picks it up on the human's next message. After every
+PR the task opens (the code PR in step 17, the gate-3 documentation PR in step 21) overwrite it:
+`<identifier> - #<PR number> <description>`. A merge doesn't change the name. With no such line
+in the context, skip this step.
 
 **Pin what the task runs on, and who runs it.** Post one comment on the Issue:
 
@@ -861,6 +898,9 @@ converged.
     <VERIFIED SHA>`**. The PR refers to the Issue with **`Refs #<N>`, never a closing keyword** —
     merging this PR must leave the Issue open for gate 3 (see step 21). A field you can't fill
     stays empty with a reason. "N/A" with no justification is worse than empty.
+    The description also lists each role that ran, with its model and tier (see "How you call a
+    role"). Once the PR is open, overwrite the session-title file: `<identifier> - #<PR number>
+    <description>` (step 0).
 18. **CI.** Wait for the required checks. Before calling red CI a defect, rule out environmental
     causes: missing checks from a merge conflict, a container image pull failure, a timeout on
     the hosting platform's endpoints, an executor that dropped out (a failure with no log, a step
@@ -946,7 +986,8 @@ converged.
     had an entry in the exception register, that entry is removed in the same commit. On the human's request, push it and
     open the PR with **`Closes #<N>`**. **The human's review and merge of that PR is gate 3** —
     reading each entry against its evidence is the decision; you never merge it, and it is the
-    merge that closes the Issue.
+    merge that closes the Issue. Once it is open, overwrite the session-title file with this PR's
+    number (step 0).
 22. **Ratcheted numeric counters** (e.g. a test counter), if you keep one — write the measured
     values **only on the main branch, after a full run**. On a task branch, report-only mode,
     no write.

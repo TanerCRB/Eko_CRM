@@ -8,7 +8,12 @@ import copy
 import re
 from typing import Any
 
-from tests.support.workflow_checks import RECORD_JOBS, RECORD_TOKEN, failures_fail_the_run
+from tests.support.workflow_checks import (
+    RECORD_JOBS,
+    RECORD_TOKEN,
+    failures_fail_the_run,
+    timeout_masked,
+)
 
 Workflow = dict[Any, Any]
 RELEASE_FILE = "release.yml"
@@ -355,9 +360,9 @@ def _revert_allowed(name: str, job: dict[str, Any]) -> dict[str, Any]:
 
 
 def ci_unchanged_violations(base: Workflow, head: Workflow) -> list[str]:
-    """Every base job is present and identical but for the differences listed above; its
-    permissions may gain `packages: read` on a record-reading job only; the workflow's own keys
-    are identical."""
+    """Every base job is present and identical but for the differences listed above and a
+    retuned `timeout-minutes` value (workflow_checks.timeout_masked); its permissions may gain
+    `packages: read` on a record-reading job only; the workflow's own keys are identical."""
     problems = []
     for key in sorted(set(base) | set(head), key=str):
         if key != "jobs" and base.get(key) != head.get(key):
@@ -368,7 +373,7 @@ def ci_unchanged_violations(base: Workflow, head: Workflow) -> list[str]:
         if now is None:
             problems.append(f"job {name} removed")
             continue
-        if _revert_allowed(name, job) != _revert_allowed(name, now):
+        if timeout_masked(_revert_allowed(name, job)) != timeout_masked(_revert_allowed(name, now)):
             problems.append(f"job {name}: changed")
         before, after = effective_permissions(base, job), effective_permissions(head, now)
         allowed = [before]

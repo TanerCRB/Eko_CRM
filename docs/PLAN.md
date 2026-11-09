@@ -292,7 +292,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   manifest digests (EKO-1-15, #56); product-table counts (EKO-3-01); the control session's unbounded
   table-lock wait (#76).
 
-- [ ] **EKO-1-15** — Build the release pipeline that publishes images by digest (#56).
+- [x] **EKO-1-15** — Build the release pipeline that publishes images by digest (#56).
   *Done when:* a release tag makes CI build the backend, frontend and backup images and push them
   to the registry by digest as ADR-0004 *Images* decides; the composition used for a deployment
   references those digests and, by the 2026-10-28 ADR-0004 addendum, also the `proxy` base,
@@ -300,6 +300,14 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   pipeline as proven.
   **Out of scope (explicit):** the deployment itself and production setup (EKO-1-08). After
   EKO-1-06; before EKO-1-08's first deployment.
+  **Done 2026-11-08:** merged in [PR #85](https://github.com/TanerCRB/Eko_CRM/pull/85), verified at `852b0b5`; the first release
+  attempt `v0.1.0` failed in its runtime tests and published nothing (fixed by EKO-1-19, #95);
+  release [run 42363349085](https://github.com/TanerCRB/Eko_CRM/actions/runs/42363349085) published `v0.1.1` on `794c04a` (record
+  `sha256:52f8dcb0…`), its composition naming the four project images, `keycloak` and `postgres` by
+  digest, with `proxy` on a digest-pinned `caddy` base; the first `main` run after it
+  ([run 42380237367](https://github.com/TanerCRB/Eko_CRM/actions/runs/42380237367)) compared the API with `v0.1.1` and ran C13's previous-release half.
+  Mutations M01–M47, Q01–Q60 and R1–R5, every one killed counting QA's added tests; exception
+  EKO-1-06/B-01 closed; follow-ups #84, #98, #99.
 - [x] **EKO-1-16** — Amend ADR-0006 to close the EKO-1-05 exceptions (#46).
   *Done when:* a dated ADR-0006 addendum resolves EKO-1-05/R-11, R-15, R-16, R-17, R-18, B-06 and
   Q-01; `tests/doc-checks/EKO-1-16.sh` proves the stated contrasts; the corresponding exception
@@ -328,6 +336,34 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   `Bash(...)` deny rules (incl. the `gh release new` alias); live attempts in agent sessions on
   2026-11-06 (Claude Code 2.1.319) recorded on #83. Limits are in the capability register;
   follow-ups #86 (other agent tools) and #87 (hook and rule-file edits).
+- [x] **EKO-1-19** — Make the runtime tests pass on the checked images and run that mode on every pull request (#95).
+  *Done when:* on one commit the runtime tests pass with and without `EKO_CHECKED_IMAGES`, with the
+  same tests collected and skipped in both; each failure of release run 42276738866 has a named
+  cause; CI runs release mode on every pull request that runs the runtime tests and on `main`, and
+  fails on a planted Compose-name image lookup; `ci.yml` pushes nothing; [per G-1] a `v0.1.1`
+  release run on `main` publishes a release.
+  **Out of scope (explicit):** what the release pipeline checks or publishes (EKO-1-15); the runtime
+  trigger (K-05); tag `v0.1.0`; EKO-1-15's gate-3 documentation (#56); new runtime tests; ADR changes
+  (Architect). After EKO-1-15's code; before EKO-1-15's gate 3 and EKO-1-08's first deployment.
+  **Done 2026-11-07:** merged in [PR #96](https://github.com/TanerCRB/Eko_CRM/pull/96), verified at `bb150c1`: on PR #96 build and
+  release mode each 374 passed, 1 skipped, `mode_parity` exit 0 ([run 42320667987](https://github.com/TanerCRB/Eko_CRM/actions/runs/42320667987)); the planted
+  Compose-name lookup on [PR #97](https://github.com/TanerCRB/Eko_CRM/pull/97) failed release mode with exactly rows 1–9 while build
+  mode passed ([run 42353040687](https://github.com/TanerCRB/Eko_CRM/actions/runs/42353040687)); the first `main` run passed on its first attempt
+  ([run 42362952882](https://github.com/TanerCRB/Eko_CRM/actions/runs/42362952882)); release [run 42363349085](https://github.com/TanerCRB/Eko_CRM/actions/runs/42363349085) passed its tests on the first attempt and
+  published `v0.1.1` on attempt 4, after GHCR package access was set by hand (#99). 21 mutations;
+  follow-ups #98 and #99.
+- [x] **EKO-1-20** — Bound the backup control session's lock wait after the advisory lock is granted (#76).
+  *Done when:* with an application table held `ACCESS EXCLUSIVE`, a backup run fails with
+  `reason=dump-application`, SQLSTATE 55P03, within the stated bound, leaves no set object and
+  releases the advisory lock; the same run without the lock succeeds; the advisory-lock wait stays
+  unbounded; the ADR-0004 text states the bound.
+  **Out of scope (explicit):** the advisory-lock wait itself (accepted cost); retry after a failure;
+  the off-server alert (EKO-1-08). After EKO-1-14.
+  **Done 2026-11-09:** merged in [PR #113](https://github.com/TanerCRB/Eko_CRM/pull/113), verified at `83e85a9`: the control session sets `SET LOCAL lock_timeout = '180s'` right after the export statement and before the revision read (`bound_control_lock_waits()` in `backup/eko-backup`, ADR-0004 addendum of 2026-11-08, ADR-0004-C32); a run held past it by an `ACCESS EXCLUSIVE` table lock or a held `alembic_version` fails with `reason=dump-application sqlstate=55P03`, leaves no set object and releases the advisory lock, and the advisory-lock wait stays unbounded — `backend/tests/runtime/test_eko120_control_lock_wait.py`, `test_eko120_qa_control_lock_wait.py` and two static checks; both runtime jobs of [run 42633372226](https://github.com/TanerCRB/Eko_CRM/actions/runs/42633372226) green. The CI runtime jobs' `timeout-minutes` raised to 75 under exception EKO-1-20/weakening-1. K-06 confirmed by the human at gate 2. 18 mutations, 17 killed; M3 survived as a redundant mechanism (exception EKO-1-20/M3). Follow-ups #108, #110.
+- [x] **EKO-1-21** — Check EKO-1-15's "no change under `backup/`" claim against EKO-1-15's own change set (#109).
+  *Done when:* the manifest-digest runtime test no longer asserts the claim against the live branch; the claim is checked on EKO-1-15's fixed base/head pair, a branch that changes `backup/` passes, and a planted `backup/` change inside EKO-1-15's pair fails; the rest of `test_eko115_k02_manifest_names_the_release_digests` is unchanged.
+  **Out of scope (explicit):** any change to `backup/` (EKO-1-20); other live-base change-set tests (follow-up Issue). Before EKO-1-20's merge.
+  **Done 2026-11-09:** merged in [PR #111](https://github.com/TanerCRB/Eko_CRM/pull/111), verified at `65e245c`: `test_eko115_k02_manifest_names_the_release_digests` now asserts `eko_1_15_backup_changes() == []` on EKO-1-15's pair `14e9576`..`0d22122`, proven by `backend/tests/runtime/test_eko115_k02_claim_on_own_pair.py` (22 cases); both runtime jobs of [run 42522741112](https://github.com/TanerCRB/Eko_CRM/actions/runs/42522741112) listed every case PASSED, none skipped. K-05 and K-06 judged by the human on one-time evidence (amended at gate 2). 11 mutations, all killed; follow-up #110.
 
 ## EKO-2 — Access
 

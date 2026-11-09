@@ -1660,6 +1660,171 @@ environments. This is a declared deviation: it restates where *Container runtime
 and *Restore procedure* step 2 take the composition from, and it adds controls. Approved by the
 human at gate 1 of EKO-1-15 (Issue #56), 2026-11-04: R-1 A and G-6 A+.
 
+### 2026-11-06 — *Releases*: the readers' reachability rule does not close a planted record entry
+
+**What it corrects.** The addendum of 2026-11-04 on *Releases*, in its item *What the release run
+guards, and what it does not*, says of the readers' reachability rule: "That closes a branch tag's
+bypass of the release run's checks for the readers". **That sentence does not hold.** The same
+item already states that any workflow on any pushed ref of this repository can request
+`packages: write`. Such a workflow needs no tag and no pull request. It can push images under
+`ghcr.io/tanercrb/eko-crm/…` and write a record entry under a release-form tag, a new one or an
+already published one, because the registry overwrites a tag on write. The refusal to replace a
+published release lives only in the release run. The entry's tagged commit, as readers see it, is
+the `org.opencontainers.image.revision` annotation, and the writer sets it. A planted entry that
+names any commit on `main` therefore passes the reachability rule. From this date, the text of
+2026-11-04 is read with this correction:
+
+- **What the reachability rule guards.** An honest record entry, written by a release run, whose
+  tagged commit is not reachable from `main` when the record is read: for example, a release-form
+  tag pushed on a branch whose run published. Readers do not count it as a release.
+- **What it does not guard.** A planted or overwritten record entry, written by any workflow that
+  holds `packages: write`, whose revision annotation names a commit on `main`. Readers cannot tell
+  such an entry from a release (*A release*: a release tag whose release run passed every check).
+  The rule checks the annotation, not who wrote the entry. *A release, once published, never
+  changes* binds release runs. It does not bind such a workflow.
+- **The narrowing in place (EKO-1-15, PR #85).** The CI readers, the API-compatibility check
+  (addendum of 2026-10-29) and the previous-release half of ADR-0004-C13, take only the backend
+  image digest from the record entry. They run it under the `compose.yaml` of the commit under
+  test. The entry's own composition is never given to Docker Compose, so a planted entry cannot
+  bring services, mounts, volumes or dependencies of its own into a CI run.
+- **The residual risk.** A planted or overwritten entry still decides which backend image runs as
+  "the previous release" in every CI job that reads the record. That image serves the OpenAPI
+  document the API-compatibility check compares against. It is also the image the C13 test
+  migrates and health-checks. So it controls the outcome of both checks: it can make them pass or
+  fail as its author chooses. A planted entry with a release tag higher than every real release
+  also makes the release admission refuse every real release ("a release tag lower than a
+  published one is refused"), which blocks releasing until the entry is removed.
+- **Where it is recorded.** This residual is the recorded exception **EKO-1-15/security-1**
+  (owner @TanerCRB, blocks again on 2027-02-05, or earlier if EKO-1-08 starts reading the record).
+  Provenance of record entries is Issue **#84**, which is not decided.
+- **For EKO-1-08 (#36).** The operator's procedure reads the same record (*Deployment, rollback and
+  restore take the release composition from the record*). Until #84 is decided, that procedure
+  must not treat the record, or the reachability rule, as establishing that an entry is a release
+  produced by a release run, or that its composition and digests are the ones that run checked.
+  When EKO-1-08 starts reading the record, exception EKO-1-15/security-1 blocks again.
+
+The second half of the corrected sentence, "it does not cover the account", is unchanged. The
+capability register's *What this does not prove* for the release pipeline must state the planted
+entry as well as those two limits.
+
+**Controls.** ADR-0004-C29, C30 and C31 do not change. Their wording does not depend on the
+corrected sentence:
+
+- C29 states what every published release composition holds. It does not claim who wrote an entry.
+- C30 binds the workflow files of the ref under test. It does not claim that a workflow on another
+  pushed ref cannot hold `packages: write`, and the addendum of 2026-11-04 already says one can.
+- C31 binds a second release run for a published release tag. It does not claim that another
+  workflow cannot overwrite the entry.
+
+None of them is to be read as closing the planted-entry path. No control is added. Every other rule
+and control of this decision is unchanged.
+
+**Why.** The security auditor's finding B-01 on EKO-1-15 showed that the reachability rule checks a
+revision the writer sets. Finding B-03 showed that this decision still said the bypass was closed.
+A reader of the decision, or the author of EKO-1-08's procedure, would then rely on a guard that
+does not hold. B-03 was accepted by the human at gate 2 of EKO-1-15 (Issue #56, PR #85), as part
+of exception EKO-1-15/security-1, with this correction to be made in the documentation PR. This is
+not a deviation. It withdraws a claim that the text of 2026-11-04 made, and it states the residual
+risk that exception covers. No rule chosen at gate 1 (R-1 A, G-6 A+) changes.
+
+### 2026-11-08 — The backup control session's lock wait after the advisory lock is granted
+
+**Status:** Accepted 2026-11-08 (gate 1 of EKO-1-20, Issue #76; accepted by the human in the driving session with every recommended option, recorded on the Issue).
+<!-- Gate 1 of EKO-1-20 (Issue #76): G-1, G-2 and G-3 are in EKO-1-20's impact map. -->
+
+**What it settles.** The addendum of 2026-10-30 (*One run: its sessions, the lock and the
+snapshot*) has the control session wait for the advisory lock with no time limit (step 1). Then, in
+the snapshot transaction, it reads the Alembic revision and counts the rows of every application
+table (step 3). It says nothing about how long those statements may wait for a table lock. A session
+holding a conflicting lock on an application table, `alembic_version` included, therefore stalls
+the run with no failure line. Because the advisory lock stays held, it also stalls a release's
+`migrate` for the same time (Issue #76, QA finding Q-01 of EKO-1-14). The two `pg_dump` calls
+already wait at most 180 seconds for a table lock (EKO-1-14 fix round 1, R-04). From this date:
+
+- **The bound.** In the control session's snapshot transaction, each wait for a lock ends after at
+  most **180 seconds**. The value is the same as the `pg_dump` calls' lock wait (Issue #76, C-1).
+  - It is PostgreSQL's lock timeout (`lock_timeout`), set as a transaction-local setting of the
+    snapshot transaction. It bounds each lock wait separately. It does not bound a statement's
+    running time, or the transaction as a whole (G-1 A).
+  - It covers the revision read and the row counts of step 3. It ends with the transaction's
+    commit, so it never applies to the release of the advisory lock or to anything after the
+    commit.
+  - The value is greater than 0, because PostgreSQL reads `0` as no limit. It is written once, as a
+    literal in `backup/eko-backup`, beside the `pg_dump` calls' value.
+- **Where it sits in the control session's order.** The order of the addendum of 2026-10-30 becomes:
+  1. the advisory lock is taken and waited for with no time limit (step 1, unchanged);
+  2. only once the lock is granted, the `REPEATABLE READ`, read-only transaction begins. Its first
+     statement establishes and exports the snapshot and returns the backup point (step 2,
+     unchanged);
+  3. **after that statement**, the bound is set, for the rest of that transaction only;
+  4. the revision is read and the rows are counted (step 3, now under the bound);
+  5. steps 4 to 6 follow, unchanged.
+
+  The bound is never in force before the export statement has run:
+  - not on the connection (its start-up options, `PGOPTIONS` in `backup`'s environment), on the
+    `eko_backup` role, on either database or in the server configuration, and not by a statement
+    before `pg_advisory_lock`. PostgreSQL's lock timeout also bounds an advisory-lock wait, so
+    each of these would bound the wait that step 1 keeps unbounded. The role, database and server
+    places would also reach the dump tools' sessions and other services;
+  - not by a statement between the transaction's start and the export. The export must stay the
+    transaction's first statement, because the snapshot and the backup point are fixed there
+    (exception EKO-1-14/M12: a backup point read later cannot be told apart by timing).
+- **A run that reaches the bound.** The waiting statement fails with SQLSTATE 55P03. The run fails
+  with the failure line, `reason=dump-application` and `sqlstate=55P03`. No object of the run has
+  been uploaded yet. Ending the control session releases the advisory lock (step 6). The reason
+  list and the line's form do not change. No retry and no second attempt follow.
+- **What does not change.**
+  - The advisory-lock wait has no limit. The cost recorded in the addendum of 2026-10-29 (*What
+    this does not bound*) and restated on 2026-10-30 (*Two runs at once*) stands.
+  - The `pg_dump` calls keep their own 180-second lock wait, which fails with SQLSTATE 57014.
+  - A run still holds at most two sessions.
+  - No other session gets a setting: the dump tools, `migrate` (5 and 30 seconds, addendum of
+    2026-10-29), `backend`, `worker`, `keycloak`, the `eko_backup` role and both databases.
+  - The control session gets no statement timeout and no transaction timeout.
+- **What this does not bound (a stated cost).**
+  - Each lock wait is bounded on its own. A run that meets locks on several application tables in
+    turn can wait up to 180 seconds for each, so the worst case grows with the number of
+    application tables.
+  - Once a count has its lock, the time it runs is not bounded.
+  - 180 seconds is the value the human chose (Issue #76, C-1). It is not shown to be the right size
+    for production.
+
+**New control.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0004-C32 | With an `ACCESS EXCLUSIVE` lock held before a backup run, once on `alembic_version` and once on another application table, the run exits non-zero with the failure line `reason=dump-application` and `sqlstate=55P03`, no earlier than the control session's bound and no later than the bound plus a stated margin after its wait starts. It has uploaded no object, and a `migrate` started afterwards is not held by the advisory lock. With the advisory lock held past the same time instead, the run only waits, then completes its set. `backup/eko-backup` and this addendum state the same bound, greater than 0. |
+
+Every other rule and control of this decision is unchanged. ADR-0004-C19 and the backup half of
+C26 are unchanged.
+
+**Consequence for EKO-1-20's Story.** In Definition of done item 5, "the accepted ADR-0004 text"
+is this addendum once accepted. Criterion K-06 reads the bound from it. The addendum of 2026-10-30
+is not edited.
+
+**Options considered for this addendum.**
+
+| Question | Option | Cost | Closes off |
+|---|---|---|---|
+| G-1: what is bounded | **A. Each lock wait, by a transaction-local lock timeout** (chosen at gate 1) | the worst case grows with the number of application tables locked in turn | nothing |
+| | B1. The transaction as a whole (`transaction_timeout`) | the transaction stays open through the application dump, so it also bounds a long dump that waits on no lock, which is a bound on `pg_dump` (out of scope of Issue #76); on timeout PostgreSQL ends the session, with another SQLSTATE than Issue #76 states | an application dump longer than the budget |
+| | B2. Each statement's running time (`statement_timeout`) | a count that runs long with no lock waiting fails too; it fails with 57014, which the `pg_dump` bound already uses (R-04), so the two causes cannot be told apart | counts on large tables longer than the bound |
+| Where the bound is set | **P1. Transaction-local, after the export statement, before the revision read** (chosen at gate 1) | none beyond A | nothing |
+| | P2. Session-level, after the advisory lock is granted and before the transaction begins | keeps steps 1 and 2 as written, but the setting outlives the snapshot transaction for the rest of the run, unlike `migrate`'s transaction-only setting | nothing now; a later control-session statement that waits would inherit it unnoticed |
+| | P3. The connection, `PGOPTIONS`, the role, a database or the server | bounds the advisory-lock wait (step 1); the role, database and server places also reach other sessions | the unbounded advisory wait |
+| G-2: how the text changes | **A. This new dated addendum** (chosen at gate 1) | one more addendum to read beside 2026-10-30 | nothing |
+| | B. An edit of the accepted addendum of 2026-10-30 | rewrites accepted text, which this decision's *Addenda* rule forbids and `test_k07_adr_files_change_only_by_appended_dated_addenda` (capability register, `mutation-tested`) refuses | the accepted text as the record of what gate 1 of EKO-1-14 approved |
+
+**Why.** A backup that waits without limit on a table lock fails silently, and, because it holds
+the advisory lock, it blocks a deployment for as long. A bound on the control session's lock waits,
+the same size as the dumps' bound, turns that into the documented failure line. Setting it after
+the export keeps the two properties the addendum of 2026-10-30 rests on: the advisory wait has no
+limit, and the export is the transaction's first statement. Setting it for the transaction only
+mirrors how `migrate` sets its timeouts (addendum of 2026-10-29, step 2). This is not a deviation
+from ADR-0004: it decides what the addendum of 2026-10-30 leaves open (step 3 states no rule for a
+lock wait), and it changes no rule that addendum states. Approved by the human at gate 1 of
+EKO-1-20 (Issue #76), 2026-11-08.
+
 ### 2026-11-02 — Bootstrap order: each listener opens only after its own brute-force precondition
 
 **Status:** Accepted 2026-11-02 (gate 1 of EKO-1-12, Issue #53; G-1 A accepted by the human in the driving session, recorded on the Issue).
