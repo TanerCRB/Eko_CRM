@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-07",
+  "task": "EKO-1-12",
+  "phase": "verification",
+  "role": "security-auditor",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "High",
+  "agentId": "a924be4a0e2e71fec",
+  "tokens": 2664623,
+  "tokenSplit": { "input": 3780, "output": 68254, "cacheWrite": 141570, "cacheRead": 2451019 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 50,
+  "seconds": 1201,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "STOP at 855fab6: S-01 High master/admin stored events keep top-level sessionId (accepted text prohibits at that destination; runtime-results recorded a reinterpretation the human never made); S-02 offline_access unapproved by any decision; S-03 plain-up marker persistence reopens listeners unverified (= reviewer R-05); S-04 kcadm session cleanup; U-01 secret-in-admin-event fact missing (cheap disproof = assert in k03 suite), U-02 offline refresh state unexercised; verdict block failed secid scan (prose K-03/K-04 refs) -> format resubmission #1 passed (block 0/1/2/1, K-05,K-07,U-01,U-02); event posted; boundary clean --none"
+}

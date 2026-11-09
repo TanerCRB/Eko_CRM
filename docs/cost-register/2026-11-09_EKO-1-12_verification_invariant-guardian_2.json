@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-09",
+  "task": "EKO-1-12",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "af55f2d5dde433fc2",
+  "tokens": 3133694,
+  "tokenSplit": { "input": 3828, "output": 48314, "cacheWrite": 125217, "cacheRead": 2956335 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 65,
+  "seconds": 1324,
+  "fixRound": 1,
+  "reworkCause": null,
+  "notes": "re-verification of fix round 1 at d84f3e32; boundary clean --none; G-01/G-03/G-04 RESOLVED, G-02 awaiting human ruling (no re-block); STOP stands via new G-21 Medium (rebuilt shipped image has no K-06 artifact inspection; record cites a nonexistent re-inspection with unfilled placeholder) + G-22 Low (k06 scan prefixes omit proxy/ vs K-06 'complete tracked change set'); all fixed-rule re-checks on new mechanisms clean; finding headings renumbered in the driver's handoff copy to the parser format (G2-01 to G-21) - driver's prompt style caused it, verdicts unchanged"
+}
