@@ -365,6 +365,10 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** any change to `backup/` (EKO-1-20); other live-base change-set tests (follow-up Issue). Before EKO-1-20's merge.
   **Done 2026-11-09:** merged in [PR #111](https://github.com/TanerCRB/Eko_CRM/pull/111), verified at `65e245c`: `test_eko115_k02_manifest_names_the_release_digests` now asserts `eko_1_15_backup_changes() == []` on EKO-1-15's pair `14e9576`..`0d22122`, proven by `backend/tests/runtime/test_eko115_k02_claim_on_own_pair.py` (22 cases); both runtime jobs of [run 42522741112](https://github.com/TanerCRB/Eko_CRM/actions/runs/42522741112) listed every case PASSED, none skipped. K-05 and K-06 judged by the human on one-time evidence (amended at gate 2). 11 mutations, all killed; follow-up #110.
 
+- [ ] **EKO-1-23** — Recheck past tasks' change-set claims on their own base/head pair, not on the live branch (#110).
+  *Done when:* every test in the verified candidate list is classified live invariant (left, one-line docstring reason) or past claim (rechecked on that task's fixed pair); for each rechecked test a later branch touching the same paths passes and a planted change inside the original pair fails.
+  **Out of scope (explicit):** `changed_paths()`/`merge_base()`; `.github/workflows/ci.yml`; past `tests/doc-checks/*.sh` (G-1, follow-up); any new or tightened rule.
+
 ## EKO-2 — Access
 
 - [ ] **EKO-2-01** — Require login for the whole application.
