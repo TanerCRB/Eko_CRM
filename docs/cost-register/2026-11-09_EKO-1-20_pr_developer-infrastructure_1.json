@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-09",
+  "role": "developer-infrastructure",
+  "task": "EKO-1-20",
+  "phase": "pr",
+  "model": "claude-sonnet-5-5",
+  "invocation": "registered",
+  "complexity": "Low",
+  "tokens": 551496,
+  "tokenSplit": {"input": 56, "output": 7327, "cacheWrite": 25062, "cacheRead": 519051},
+  "tokensSource": "transcript",
+  "toolCalls": 28,
+  "seconds": 1890,
+  "measured": "record",
+  "fixRound": 0,
+  "reworkCause": "",
+  "notes": "developer-infrastructure — sonnet (medium). Raise both runtime jobs' timeout-minutes in ci.yml (CI run 42591459348 cancelled at 45 min, no test failed), under a one-off write-boundary exception (human decision B, 2026-11-09). STOPPED, hard stop 4: six static tests lock every existing CI job byte-identical to the live base (EKO-1-15 K-07, EKO-1-19 K-03), the #110 defect class."
+}

@@ -1726,3 +1726,101 @@ does not hold. B-03 was accepted by the human at gate 2 of EKO-1-15 (Issue #56, 
 of exception EKO-1-15/security-1, with this correction to be made in the documentation PR. This is
 not a deviation. It withdraws a claim that the text of 2026-11-04 made, and it states the residual
 risk that exception covers. No rule chosen at gate 1 (R-1 A, G-6 A+) changes.
+
+### 2026-11-08 — The backup control session's lock wait after the advisory lock is granted
+
+**Status:** Accepted 2026-11-08 (gate 1 of EKO-1-20, Issue #76; accepted by the human in the driving session with every recommended option, recorded on the Issue).
+<!-- Gate 1 of EKO-1-20 (Issue #76): G-1, G-2 and G-3 are in EKO-1-20's impact map. -->
+
+**What it settles.** The addendum of 2026-10-30 (*One run: its sessions, the lock and the
+snapshot*) has the control session wait for the advisory lock with no time limit (step 1). Then, in
+the snapshot transaction, it reads the Alembic revision and counts the rows of every application
+table (step 3). It says nothing about how long those statements may wait for a table lock. A session
+holding a conflicting lock on an application table, `alembic_version` included, therefore stalls
+the run with no failure line. Because the advisory lock stays held, it also stalls a release's
+`migrate` for the same time (Issue #76, QA finding Q-01 of EKO-1-14). The two `pg_dump` calls
+already wait at most 180 seconds for a table lock (EKO-1-14 fix round 1, R-04). From this date:
+
+- **The bound.** In the control session's snapshot transaction, each wait for a lock ends after at
+  most **180 seconds**. The value is the same as the `pg_dump` calls' lock wait (Issue #76, C-1).
+  - It is PostgreSQL's lock timeout (`lock_timeout`), set as a transaction-local setting of the
+    snapshot transaction. It bounds each lock wait separately. It does not bound a statement's
+    running time, or the transaction as a whole (G-1 A).
+  - It covers the revision read and the row counts of step 3. It ends with the transaction's
+    commit, so it never applies to the release of the advisory lock or to anything after the
+    commit.
+  - The value is greater than 0, because PostgreSQL reads `0` as no limit. It is written once, as a
+    literal in `backup/eko-backup`, beside the `pg_dump` calls' value.
+- **Where it sits in the control session's order.** The order of the addendum of 2026-10-30 becomes:
+  1. the advisory lock is taken and waited for with no time limit (step 1, unchanged);
+  2. only once the lock is granted, the `REPEATABLE READ`, read-only transaction begins. Its first
+     statement establishes and exports the snapshot and returns the backup point (step 2,
+     unchanged);
+  3. **after that statement**, the bound is set, for the rest of that transaction only;
+  4. the revision is read and the rows are counted (step 3, now under the bound);
+  5. steps 4 to 6 follow, unchanged.
+
+  The bound is never in force before the export statement has run:
+  - not on the connection (its start-up options, `PGOPTIONS` in `backup`'s environment), on the
+    `eko_backup` role, on either database or in the server configuration, and not by a statement
+    before `pg_advisory_lock`. PostgreSQL's lock timeout also bounds an advisory-lock wait, so
+    each of these would bound the wait that step 1 keeps unbounded. The role, database and server
+    places would also reach the dump tools' sessions and other services;
+  - not by a statement between the transaction's start and the export. The export must stay the
+    transaction's first statement, because the snapshot and the backup point are fixed there
+    (exception EKO-1-14/M12: a backup point read later cannot be told apart by timing).
+- **A run that reaches the bound.** The waiting statement fails with SQLSTATE 55P03. The run fails
+  with the failure line, `reason=dump-application` and `sqlstate=55P03`. No object of the run has
+  been uploaded yet. Ending the control session releases the advisory lock (step 6). The reason
+  list and the line's form do not change. No retry and no second attempt follow.
+- **What does not change.**
+  - The advisory-lock wait has no limit. The cost recorded in the addendum of 2026-10-29 (*What
+    this does not bound*) and restated on 2026-10-30 (*Two runs at once*) stands.
+  - The `pg_dump` calls keep their own 180-second lock wait, which fails with SQLSTATE 57014.
+  - A run still holds at most two sessions.
+  - No other session gets a setting: the dump tools, `migrate` (5 and 30 seconds, addendum of
+    2026-10-29), `backend`, `worker`, `keycloak`, the `eko_backup` role and both databases.
+  - The control session gets no statement timeout and no transaction timeout.
+- **What this does not bound (a stated cost).**
+  - Each lock wait is bounded on its own. A run that meets locks on several application tables in
+    turn can wait up to 180 seconds for each, so the worst case grows with the number of
+    application tables.
+  - Once a count has its lock, the time it runs is not bounded.
+  - 180 seconds is the value the human chose (Issue #76, C-1). It is not shown to be the right size
+    for production.
+
+**New control.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0004-C32 | With an `ACCESS EXCLUSIVE` lock held before a backup run, once on `alembic_version` and once on another application table, the run exits non-zero with the failure line `reason=dump-application` and `sqlstate=55P03`, no earlier than the control session's bound and no later than the bound plus a stated margin after its wait starts. It has uploaded no object, and a `migrate` started afterwards is not held by the advisory lock. With the advisory lock held past the same time instead, the run only waits, then completes its set. `backup/eko-backup` and this addendum state the same bound, greater than 0. |
+
+Every other rule and control of this decision is unchanged. ADR-0004-C19 and the backup half of
+C26 are unchanged.
+
+**Consequence for EKO-1-20's Story.** In Definition of done item 5, "the accepted ADR-0004 text"
+is this addendum once accepted. Criterion K-06 reads the bound from it. The addendum of 2026-10-30
+is not edited.
+
+**Options considered for this addendum.**
+
+| Question | Option | Cost | Closes off |
+|---|---|---|---|
+| G-1: what is bounded | **A. Each lock wait, by a transaction-local lock timeout** (chosen at gate 1) | the worst case grows with the number of application tables locked in turn | nothing |
+| | B1. The transaction as a whole (`transaction_timeout`) | the transaction stays open through the application dump, so it also bounds a long dump that waits on no lock, which is a bound on `pg_dump` (out of scope of Issue #76); on timeout PostgreSQL ends the session, with another SQLSTATE than Issue #76 states | an application dump longer than the budget |
+| | B2. Each statement's running time (`statement_timeout`) | a count that runs long with no lock waiting fails too; it fails with 57014, which the `pg_dump` bound already uses (R-04), so the two causes cannot be told apart | counts on large tables longer than the bound |
+| Where the bound is set | **P1. Transaction-local, after the export statement, before the revision read** (chosen at gate 1) | none beyond A | nothing |
+| | P2. Session-level, after the advisory lock is granted and before the transaction begins | keeps steps 1 and 2 as written, but the setting outlives the snapshot transaction for the rest of the run, unlike `migrate`'s transaction-only setting | nothing now; a later control-session statement that waits would inherit it unnoticed |
+| | P3. The connection, `PGOPTIONS`, the role, a database or the server | bounds the advisory-lock wait (step 1); the role, database and server places also reach other sessions | the unbounded advisory wait |
+| G-2: how the text changes | **A. This new dated addendum** (chosen at gate 1) | one more addendum to read beside 2026-10-30 | nothing |
+| | B. An edit of the accepted addendum of 2026-10-30 | rewrites accepted text, which this decision's *Addenda* rule forbids and `test_k07_adr_files_change_only_by_appended_dated_addenda` (capability register, `mutation-tested`) refuses | the accepted text as the record of what gate 1 of EKO-1-14 approved |
+
+**Why.** A backup that waits without limit on a table lock fails silently, and, because it holds
+the advisory lock, it blocks a deployment for as long. A bound on the control session's lock waits,
+the same size as the dumps' bound, turns that into the documented failure line. Setting it after
+the export keeps the two properties the addendum of 2026-10-30 rests on: the advisory wait has no
+limit, and the export is the transaction's first statement. Setting it for the transaction only
+mirrors how `migrate` sets its timeouts (addendum of 2026-10-29, step 2). This is not a deviation
+from ADR-0004: it decides what the addendum of 2026-10-30 leaves open (step 3 states no rule for a
+lock wait), and it changes no rule that addendum states. Approved by the human at gate 1 of
+EKO-1-20 (Issue #76), 2026-11-08.
