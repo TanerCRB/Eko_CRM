@@ -352,13 +352,14 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   ([run 42362952882](https://github.com/TanerCRB/Eko_CRM/actions/runs/42362952882)); release [run 42363349085](https://github.com/TanerCRB/Eko_CRM/actions/runs/42363349085) passed its tests on the first attempt and
   published `v0.1.1` on attempt 4, after GHCR package access was set by hand (#99). 21 mutations;
   follow-ups #98 and #99.
-- [ ] **EKO-1-20** — Bound the backup control session's lock wait after the advisory lock is granted (#76).
+- [x] **EKO-1-20** — Bound the backup control session's lock wait after the advisory lock is granted (#76).
   *Done when:* with an application table held `ACCESS EXCLUSIVE`, a backup run fails with
   `reason=dump-application`, SQLSTATE 55P03, within the stated bound, leaves no set object and
   releases the advisory lock; the same run without the lock succeeds; the advisory-lock wait stays
   unbounded; the ADR-0004 text states the bound.
   **Out of scope (explicit):** the advisory-lock wait itself (accepted cost); retry after a failure;
   the off-server alert (EKO-1-08). After EKO-1-14.
+  **Done 2026-11-09:** merged in [PR #113](https://github.com/TanerCRB/Eko_CRM/pull/113), verified at `83e85a9`: the control session sets `SET LOCAL lock_timeout = '180s'` right after the export statement and before the revision read (`bound_control_lock_waits()` in `backup/eko-backup`, ADR-0004 addendum of 2026-11-08, ADR-0004-C32); a run held past it by an `ACCESS EXCLUSIVE` table lock or a held `alembic_version` fails with `reason=dump-application sqlstate=55P03`, leaves no set object and releases the advisory lock, and the advisory-lock wait stays unbounded — `backend/tests/runtime/test_eko120_control_lock_wait.py`, `test_eko120_qa_control_lock_wait.py` and two static checks; both runtime jobs of [run 42633372226](https://github.com/TanerCRB/Eko_CRM/actions/runs/42633372226) green. The CI runtime jobs' `timeout-minutes` raised to 75 under exception EKO-1-20/weakening-1. K-06 confirmed by the human at gate 2. 18 mutations, 17 killed; M3 survived as a redundant mechanism (exception EKO-1-20/M3). Follow-ups #108, #110.
 - [x] **EKO-1-21** — Check EKO-1-15's "no change under `backup/`" claim against EKO-1-15's own change set (#109).
   *Done when:* the manifest-digest runtime test no longer asserts the claim against the live branch; the claim is checked on EKO-1-15's fixed base/head pair, a branch that changes `backup/` passes, and a planted `backup/` change inside EKO-1-15's pair fails; the rest of `test_eko115_k02_manifest_names_the_release_digests` is unchanged.
   **Out of scope (explicit):** any change to `backup/` (EKO-1-20); other live-base change-set tests (follow-up Issue). Before EKO-1-20's merge.
