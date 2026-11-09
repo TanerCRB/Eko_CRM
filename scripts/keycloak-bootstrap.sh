@@ -120,6 +120,13 @@ import_with_kcadm() {
     fi
   '
   compose exec -T -u 0 keycloak rm -f /tmp/eko112-realm.json >/dev/null
+  # S-04: `config credentials` above persisted the master-admin session under the container
+  # user's home — Keycloak 26.8.1's kcadm writes ~/.keycloak/kcadm.config (probed on this
+  # image: HOME=/opt/keycloak as uid 1000), mintable into admin access for the rest of the
+  # container's life. The import is the last step that needs it, so the session is torn down
+  # next to the /tmp cleanup, under the same user that wrote it.
+  compose exec -T keycloak sh -c 'rm -rf "${HOME}/.keycloak"' >/dev/null
+  compose exec -T keycloak sh -c 'test ! -e "${HOME}/.keycloak/kcadm.config"' >/dev/null
 }
 
 verify_custom_provider() {
@@ -140,19 +147,63 @@ verify_custom_provider() {
   run_mode verify
 }
 
+keycloak_boot_identity() {
+  # ADR-0004 C29 (addendum 2026-11-06): every gate marker names the Keycloak boot whose
+  # provider pair this run verified. The identity is the hardware address the running
+  # Keycloak container answers with on the composition network (assigned per container
+  # creation); the proxy's own helper observes it, so the marker and the entrypoint compare
+  # the same view. A later proxy start against a recreated Keycloak finds a mismatch and
+  # keeps every listener closed until a bootstrap runs again (R-05/S-03).
+  compose exec -T proxy sh /usr/local/bin/eko-keycloak-boot-identity.sh
+}
+
 open_gate() {
-  local gate="$1" host="$2" port="$3" realm="$4" attempt
-  compose exec -T proxy touch "/data/$gate-open" >/dev/null
+  local gate="$1" host="$2" port="$3" realm="$4" identity deadline
+  identity="$(keycloak_boot_identity)" || {
+    echo "keycloak-bootstrap: no Keycloak boot identity for the $gate gate; listeners stay closed" >&2
+    return 1
+  }
+  case "$identity" in
+    *[!0-9a-f:]* | '')
+      echo "keycloak-bootstrap: unusable Keycloak boot identity for the $gate gate" >&2
+      return 1
+      ;;
+  esac
+  compose exec -T proxy sh -c "printf '%s\n' '${identity}' > '/data/${gate}-open'" >/dev/null
   compose restart proxy >/dev/null
-  for attempt in $(seq 1 45); do
+  # R-06: the reachability deadline is raised past the healthcheck's own worst case
+  # (start_period 30 s + 30 retries x 10 s = 330 s), so a slow-but-serving boot is recorded
+  # open; a gate that never serves removes its own marker and re-closes the proxy, so the
+  # recorded closed state and the wire agree, and the record names the residual state.
+  deadline=$(( $(date +%s) + 420 ))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
     if compose exec -T proxy wget --no-check-certificate \
       --header="Host: $host" -qO- \
       "https://$host:$port/realms/$realm/.well-known/openid-configuration" >/dev/null 2>&1; then
       return 0
     fi
-    sleep 1
+    sleep 2
   done
   echo "keycloak-bootstrap: $gate listener did not become reachable" >&2
+  # Residual state of this failed gate: the marker is removed and the proxy restarted onto
+  # the closed configuration before the script exits non-zero. The removal runs through a
+  # one-off mount of the markers' own volume — a failing proxy may be crash-looping, and
+  # `compose exec` cannot reach it between restart attempts; a marker that survives a failed
+  # gate must end the run, not be papered over.
+  local proxy_image
+  proxy_image="$(docker image ls --format '{{.Repository}}:{{.Tag}}' \
+    --filter "reference=${COMPOSE_PROJECT_NAME}-proxy:latest" | head -n 1)"
+  [ -n "$proxy_image" ] || {
+    echo "keycloak-bootstrap: cannot resolve the proxy image to remove the $gate marker" >&2
+    return 1
+  }
+  docker run --rm -v "${COMPOSE_PROJECT_NAME}_proxy-data:/data" --entrypoint sh "$proxy_image" \
+    -c "rm -f /data/${gate}-open && test ! -e /data/${gate}-open" >/dev/null || {
+    echo "keycloak-bootstrap: the $gate marker could not be removed after the failed gate" >&2
+    return 1
+  }
+  compose restart proxy >/dev/null || true
+  record "${gate} verification failed; marker removed; listeners closed"
   return 1
 }
 
@@ -175,16 +226,16 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?required}
 YAML
   compose -f "$DOCKER_ROOT/compose.yaml" -f "$DOCKER_OVERRIDE" up -d --force-recreate --wait \
-    --wait-timeout 240 keycloak >/dev/null
+    --wait-timeout 420 keycloak >/dev/null
   EKO112_USE_BOOTSTRAP=true
   export EKO112_USE_BOOTSTRAP
   run_mode master
   rm -f "$OVERRIDE"
   trap 'echo "keycloak-bootstrap: failed closed (line $LINENO)" >&2' ERR
-  compose up -d --force-recreate --wait --wait-timeout 240 keycloak >/dev/null
+  compose up -d --force-recreate --wait --wait-timeout 420 keycloak >/dev/null
   compose exec -T proxy touch /data/master-initialized >/dev/null
 else
-  compose up -d --force-recreate --wait --wait-timeout 240 keycloak >/dev/null
+  compose up -d --force-recreate --wait --wait-timeout 420 keycloak >/dev/null
   EKO112_USE_BOOTSTRAP=false
   export EKO112_USE_BOOTSTRAP
   run_mode master

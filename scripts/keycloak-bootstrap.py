@@ -138,7 +138,13 @@ def master_token(client: ApiClient, bootstrap: bool) -> str:
 
 
 def find_user(client: ApiClient, token: str, realm: str, username: str) -> dict[str, Any] | None:
-    response = request(client, "GET", f"/admin/realms/{realm}/users", token=token)
+    # R-07: read with the filtered exact query, the way the tests do. The unfiltered admin
+    # user list is capped at Keycloak's default page (100), so a rerun against a realm grown
+    # past that page missed a bootstrap account, fell through to create and died on the
+    # uniqueness conflict (HTTP 409) after the admin gate had opened; the truncated read also
+    # silently limited the duplicate check.
+    query = urllib.parse.urlencode({"username": username, "exact": "true"})
+    response = request(client, "GET", f"/admin/realms/{realm}/users?{query}", token=token)
     matches = [item for item in response.body if item.get("username") == username]
     if len(matches) > 1:
         raise RuntimeError("duplicate synthetic bootstrap account")

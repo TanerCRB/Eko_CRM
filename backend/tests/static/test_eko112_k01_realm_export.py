@@ -70,12 +70,28 @@ def test_k01_application_token_contains_no_email_or_username_scope_or_mapper(
     assigned = set(application.get("defaultClientScopes", [])) | set(
         application.get("optionalClientScopes", [])
     )
-    assert assigned.isdisjoint({"email", "profile"})
+    assert assigned.isdisjoint({"email", "profile", "offline_access"})
+    # S-02: the scope set is checked exactly, so an unapproved capability cannot ride in
+    # through a list the earlier disjoint checks would not name. No accepted decision
+    # (ADR-0003/0005, Issue #53 K-01) assigns the application client an offline session.
+    assert application.get("optionalClientScopes", []) == [], (
+        "the application client carries optional scopes no accepted decision names"
+    )
     emitted = {
         mapper.get("config", {}).get("claim.name")
         for mapper in application.get("protocolMappers", [])
     }
     assert emitted.isdisjoint({"email", "preferred_username"})
+
+
+def test_k01_offline_access_on_the_application_client_fails_the_exact_set_guard(
+    realm: dict[str, Any],
+) -> None:
+    mutated = copy.deepcopy(realm)
+    application = client(mutated, "eko-backend")
+    application["optionalClientScopes"] = ["offline_access"]
+    with pytest.raises(AssertionError):
+        test_k01_application_token_contains_no_email_or_username_scope_or_mapper(mutated)
 
 
 def test_k01_names_are_admin_editable_only_and_account_console_roles_are_not_defaults(

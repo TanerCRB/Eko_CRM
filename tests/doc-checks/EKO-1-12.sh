@@ -113,8 +113,15 @@ k07_addendum() {
     'After the import has completed, verify that the live application' \
     'realm reports `bruteForceProtected` true' \
     'Only then open the public listener' || return 1
-  if git diff -- "$ADR" | grep -E '^-[^-]' | grep -q .; then
-    WHY="accepted ADR text was deleted or edited"
+  # R-08: the guard compares the fork point (origin/main, overridable with EKO112_ADR_BASE)
+  # against the working tree, not the worktree against the index. A bare `git diff -- ADR`
+  # is empty on a clean checkout and had already passed while accepted text had been edited
+  # in branch history; this form catches edits of previously accepted lines whether they are
+  # committed on this branch or still uncommitted. Addenda only append: any removed line is
+  # an edit of accepted text.
+  ADR_BASE="${EKO112_ADR_BASE:-$(git merge-base origin/main HEAD 2>/dev/null || echo HEAD)}"
+  if git diff "$ADR_BASE" -- "$ADR" | grep -E '^-[^-]' | grep -q .; then
+    WHY="accepted ADR text was deleted or edited (base $ADR_BASE)"
     return 1
   fi
 }

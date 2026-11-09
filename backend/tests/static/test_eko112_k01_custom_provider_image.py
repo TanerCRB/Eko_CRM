@@ -29,6 +29,12 @@ def test_k01_custom_provider_is_same_id_higher_order_jpa_subtype() -> None:
     assert "extends JpaEventStoreProvider" in store
     assert "super.onEvent(event)" in store
     assert "event.getDetails().remove(Details.CODE_ID)" in store
+    # G-01/S-01 (ADR-0005 addendum 2026-11-05, ADR-0007-C5): the versioned provider names the
+    # destination enforcement itself — the accepted exceptions are keyed on the application realm,
+    # and the prohibited fields are cleared outside them before the single inherited persist.
+    assert "event.setSessionId(null)" in store
+    assert "event.getDetails().remove(Details.USERNAME)" in store
+    assert "user_not_found" in store
     assert "event.clone()" not in store
     assert "extends JpaEventStoreProviderFactory" in factory
     assert "int order()" in factory and "return 100" in factory

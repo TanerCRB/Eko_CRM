@@ -374,3 +374,71 @@ def test_k03_admin_event_representations_identify_actor_and_exclude_password(
             )
     finally:
         master.close()
+
+
+def test_k03_client_secret_absent_from_stored_admin_events(keycloak_running: Started) -> None:
+    """U-01 closed by observation: neither store of admin events — the application realm's
+    (fed by the realm import and the post-import client PUT) nor master's — may hold the
+    OIDC client secret value. The reviewer with `view-events` on both management clients is
+    exactly the reader the prohibition names, so the check is the read, not the console."""
+    composition = keycloak_running.composition
+    master = RealmClient(composition, "master")
+    try:
+        token = master.direct_master_token(
+            fixtures.ACCOUNTS["breakglass_one"],
+            composition.env[fixtures.PASSWORD_VARIABLES["breakglass_one"]],
+        )
+        secret = composition.env["OIDC_CLIENT_SECRET"]
+        assert secret, "the synthetic environment carries no client secret to scan for"
+        for realm in ("eko", "master"):
+            events = master.admin_json(
+                token, "GET", "admin-events", realm=realm, params={"max": "500"}
+            )
+            assert events, f"no admin events stored in {realm}: the scan would pass on absence"
+            assert secret not in json.dumps(events), (
+                f"the OIDC client secret reached stored {realm}-realm admin events"
+            )
+            # The same secret never reaches the authentication-event store either.
+            auth_events = master.admin_json(
+                token, "GET", "events", realm=realm, params={"max": "500"}
+            )
+            assert secret not in json.dumps(auth_events), (
+                f"the OIDC client secret reached stored {realm}-realm events"
+            )
+    finally:
+        master.close()
+
+
+def test_k03_application_client_carries_no_offline_access_capability(
+    keycloak_running: Started,
+) -> None:
+    """S-02 closed: the live application client (after import and the post-import PUT) holds
+    no `offline_access` scope, so no authentication request through it can mint an offline
+    session; the U-02 offline refresh path is unreachable by configuration.
+
+    This is the live half of the guard (the versioned-export half is the exact-set check in
+    `tests/static/test_eko112_k01_realm_export.py`). With the scope unassigned there is no
+    request path through this client that can obtain an offline token; the request-shape
+    handling of an unassigned scope (drop or refuse) is Keycloak's own behavior, observed
+    and recorded for the fix round in `docs/evidence/EKO-1-12/offline-scope-removal.md`,
+    and it is not a capability the composition grants either way."""
+    composition = keycloak_running.composition
+    master = RealmClient(composition, "master")
+    try:
+        token = master.direct_master_token(
+            fixtures.ACCOUNTS["breakglass_one"],
+            composition.env[fixtures.PASSWORD_VARIABLES["breakglass_one"]],
+        )
+        clients = master.admin_json(
+            token, "GET", "clients", params={"clientId": "eko-backend"}, realm="eko"
+        )
+        assert len(clients) == 1
+        application = master.admin_json(token, "GET", f"clients/{clients[0]['id']}", realm="eko")
+        assigned = set(application.get("defaultClientScopes", [])) | set(
+            application.get("optionalClientScopes", [])
+        )
+        assert "offline_access" not in assigned, (
+            "the live application client carries the offline_access scope after import+PUT"
+        )
+    finally:
+        master.close()

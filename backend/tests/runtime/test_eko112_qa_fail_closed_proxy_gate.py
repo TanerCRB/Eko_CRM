@@ -1,15 +1,19 @@
-"""EKO-1-12 QA contrast (gate 2): the proxy gate is its markers, per gate, and open_gate's
-verification is load-bearing.
+"""EKO-1-12 QA contrast (gate 2): the proxy gate is its boot-bound markers, per gate, and
+open_gate's verification is load-bearing.
 
-The fail-closed mechanism (ADR-0004 addendum of 2026-11-02, proven by K-02 at the criterion
-level; this file is QA's independent contrast, not a restatement):
+The fail-closed mechanism (ADR-0004 addendum of 2026-11-02 at the criterion level, extended
+by the 2026-11-06 C29 addendum the fix round implements; this file is QA's independent
+contrast, not a restatement):
 
 - `proxy/entrypoint.sh` selects `Caddyfile.closed` — a configuration with no listener at all —
-  unless `/data/admin-open` / `/data/public-open` markers exist, and refuses to start with the
-  public marker while the admin marker is absent.
-- `scripts/keycloak-bootstrap.sh` removes both markers at start and `open_gate` writes each
-  gate's marker only after that gate's own preconditions, verifying with an in-container wget
-  that the listener actually serves before the script proceeds to the next gate.
+  unless `/data/admin-open` / `/data/public-open` markers exist AND each marker's content is
+  the boot identity the proxy observes for the running Keycloak container (assigned per
+  container creation), and refuses to start with the public marker while the admin marker is
+  absent.
+- `scripts/keycloak-bootstrap.sh` removes both markers at start; `open_gate` records each
+  gate's marker bound to the verified boot only after that gate's own preconditions, verifies
+  with an in-container wget that the listener actually serves, and removes the marker again
+  (re-closing the proxy) when that verification fails, recording the residual state.
 
 What each test pins:
 
@@ -17,14 +21,18 @@ What each test pins:
    level (socket death — no TLS handshake completes, not a 2xx/5xx behind a bound listener).
    Removing the marker selection from `proxy/entrypoint.sh` (always the full Caddyfile) turns
    this into served-502/503 responses and kills the test.
-2. The admin marker alone opens exactly the admin listener: admin serves while the auth
-   listener stays connection-dead. Each marker gates its own listener and nothing else.
+2. Marker gating per gate, and marker content as the gate's second half: a blind empty touch
+   does NOT open (it names no boot); the admin marker written with the current boot identity
+   opens exactly the admin listener while the auth listener stays connection-dead. Dropping
+   the entrypoint's identity comparison makes the blind touch serve and kills the test
+   (R-05/S-03); dropping the marker write kills the second half.
 3. `open_gate`'s verification is what stops the bootstrap before the later gate: with the
    admin listener unable to serve (broken `Caddyfile.admin` inside the proxy container), the
-   bootstrap must exit non-zero, must not record either gate as open, and the auth listener
-   must stay closed. Skipping the wget verification — touching the marker blindly and always
-   returning success — lets the bootstrap proceed, write the public marker too, and open the
-   auth listener on a composition whose admin gate never actually served: this test kills that
+   bootstrap must exit non-zero, must not record either gate as open, must remove the marker
+   of the gate it could not verify (R-06's residual state), and must keep the auth listener
+   closed. Skipping the wget verification — touching the marker blindly and always returning
+   success — lets the bootstrap proceed, write the public marker too, and open the auth
+   listener on a composition whose admin gate never actually served: this test kills that
    mutation twice (exit code and closed auth listener).
 """
 
@@ -35,7 +43,14 @@ import httpx
 import pytest
 
 from tests.runtime.conftest import Composition
-from tests.runtime.keycloak_client import listener_open, prepare, run_bootstrap
+from tests.runtime.keycloak_client import (
+    boot_identity,
+    listener_open,
+    marker_value,
+    prepare,
+    run_bootstrap,
+    write_gate_marker,
+)
 
 pytestmark = pytest.mark.runtime
 
@@ -105,7 +120,8 @@ def test_qa_both_listeners_are_closed_without_the_bootstrap(fresh: Composition) 
 
 
 def test_qa_admin_marker_opens_only_the_admin_listener(fresh: Composition) -> None:
-    """The marker is the gate, gate by gate: admin alone must leave auth connection-dead."""
+    """The marker is the gate, gate by gate — and a marker that names no current Keycloak
+    boot is not an open gate (R-05/S-03): admin alone must leave auth connection-dead."""
     prepare(fresh)
     assert_connection_death(fresh, "admin")
     assert_connection_death(fresh, "auth")
@@ -116,7 +132,17 @@ def test_qa_admin_marker_opens_only_the_admin_listener(fresh: Composition) -> No
     assert_connection_death(fresh, "admin")
     assert_connection_death(fresh, "auth")
 
+    # The blind touch is not a gate: an empty marker names no boot, so the entrypoint
+    # keeps every listener closed. Removing the entrypoint's identity comparison makes
+    # this phase serve instead and kills the test.
     fresh.compose("exec", "-T", "proxy", "touch", "/data/admin-open")
+    fresh.compose("restart", "proxy")
+    _ = fresh.inspect("proxy")["State"]  # the restart is synchronous; the container is up
+    assert_connection_death(fresh, "admin")
+
+    identity = boot_identity(fresh)
+    assert identity, "the proxy cannot observe the current Keycloak boot identity"
+    write_gate_marker(fresh, "admin", identity)
     fresh.compose("restart", "proxy")
     status = wait_for_serving(fresh, "admin")
     assert status == 200, f"admin listener answered {status} after its own marker"
@@ -172,5 +198,14 @@ def test_qa_open_gate_verification_stops_the_bootstrap_before_the_next_gate(
     )
     assert not any("public listener open" in line for line in events), (
         "the bootstrap recorded the public gate open although the admin gate never served"
+    )
+    # R-06: the gate that failed verification removes its own marker, so the recorded
+    # closed state and the wire agree, and a later proxy start cannot reopen on it. The
+    # failure record names the residual state.
+    assert marker_value(composition, "admin") == "", (
+        "the failed admin gate left its marker on the volume"
+    )
+    assert any("marker removed" in line for line in events), (
+        f"the bootstrap did not record the residual marker state: {events}"
     )
     assert_connection_death(composition, "auth")

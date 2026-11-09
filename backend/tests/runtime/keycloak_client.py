@@ -60,7 +60,11 @@ def run_bootstrap(
         encoding="utf-8",
         errors="replace",
         env=environment,
-        timeout=900,
+        # The bootstrap's own ceilings (compose --wait 420 s, gate reachability deadline
+        # 420 s) plus two gate cycles must fit under the harness timeout; the previous
+        # 900 s could fail the contrast runs that legitimately spend ~420 s verifying a
+        # listener that never serves.
+        timeout=1800,
     )
     logs = ""
     if result.returncode != expected:
@@ -325,3 +329,55 @@ def assert_absent(text: str, values: dict[str, str], destination: str) -> None:
 def keycloak_logs(started: Started) -> str:
     result = started.composition.compose("logs", "--no-color", "keycloak", check=False)
     return result.stdout + result.stderr
+
+
+# Gate markers bound to the verified Keycloak boot (ADR-0004 C29, addendum 2026-11-06):
+# open_gate records the boot identity the proxy container itself observes, and the proxy
+# entrypoint opens a listener only while the marker names the live boot. These helpers are
+# the same primitives the script and the entrypoint use, so a test can neither fake the
+# gate nor accidentally weaken it.
+IDENTITY_SCRIPT = "/usr/local/bin/eko-keycloak-boot-identity.sh"
+BOOT_IDENTITY = re.compile(r"[0-9a-f]{2}(?::[0-9a-f]{2}){5}")
+
+
+def boot_identity(composition: Composition) -> str:
+    """The boot identity the proxy container itself observes for the running Keycloak.
+
+    The helper inside the proxy image resolves the `keycloak` service, attempts one TCP
+    exchange (a refused attempt still resolves the ARP entry) and prints the hardware
+    address Docker assigned to that container creation; it exits non-zero and prints
+    nothing when Keycloak is unreachable."""
+    return composition.compose(
+        "exec", "-T", "proxy", "sh", IDENTITY_SCRIPT, check=False
+    ).stdout.strip()
+
+
+def marker_value(composition: Composition, gate: str) -> str:
+    """The marker's CONTENT, read through a one-off mount of the markers' volume: the proxy
+    container may be crash-looping (the exact state a failed gate check examines), where
+    `compose exec` fails and a naive reader would report "no marker" vacuously."""
+    assert gate in ("admin", "public"), gate
+    tag = f"{composition.project}-proxy:latest"
+    result = subprocess.run(
+        [
+            "docker", "run", "--rm", "-v", f"{composition.project}_proxy-data:/data",
+            "--entrypoint", "sh", tag, "-c",
+            f"cat /data/{gate}-open 2>/dev/null || true",
+        ],
+        capture_output=True, text=True, timeout=120,
+    )  # fmt: skip
+    assert result.returncode == 0, result.stderr[-500:]
+    return result.stdout.strip()
+
+
+def write_gate_marker(composition: Composition, gate: str, identity: str) -> None:
+    """The same primitive `open_gate` uses: a marker naming the verified boot."""
+    assert BOOT_IDENTITY.fullmatch(identity), "a boot identity, never a free-form value"
+    composition.compose(
+        "exec",
+        "-T",
+        "proxy",
+        "sh",
+        "-c",
+        f"printf '%s\\n' '{identity}' > '/data/{gate}-open'",
+    )

@@ -1,21 +1,21 @@
 {
   "title": "EKO-1-12 reset-timing record",
-  "date": "2026-11-06",
+  "date": "2026-11-09",
   "baseline_sha": "2dcb057f818fd9a1e4142fbf0c71276f542f6ffa",
   "environment": "local development composition and mail catcher only",
   "known_address": "eko112-timing@example.org",
   "unknown_address": "eko112-unknown@example.org",
   "known_ms": [
-    34.356,
-    30.126,
-    26.296,
-    30.117
+    268.661,
+    66.146,
+    34.393,
+    36.886
   ],
   "unknown_ms": [
-    19.759,
-    21.553,
-    21.563,
-    31.4
+    59.357,
+    35.178,
+    45.775,
+    62.416
   ],
   "known_mail_messages_per_request": [
     1,

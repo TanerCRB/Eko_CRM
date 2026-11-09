@@ -110,7 +110,13 @@ def assert_session_id_scope(
     for event in events:
         top_level = event.get("sessionId")
         code_id = event.get("details", {}).get("code_id")
-        if top_level is not None and destination == "application":
+        if top_level is not None:
+            if destination != "application":
+                # ADR-0005 addendum 2026-11-05 / ADR-0007-C5: the accepted top-level
+                # sessionId exception is limited to application-realm events; master-realm
+                # events and admin events hold no session identifier at all. The selected
+                # custom store clears the column before persisting those events.
+                raise AssertionError(f"session identifier at non-excepted {destination}:sessionId")
             if (
                 event["type"] in REQUIRED_AUTH_EVENT_TYPES
                 and isinstance(top_level, str)
@@ -119,9 +125,6 @@ def assert_session_id_scope(
                 accepted_matches += 1
             else:
                 raise AssertionError(f"session identifier at non-excepted {destination}:sessionId")
-        # A master/admin event's own sessionId column is part of Keycloak's event
-        # representation; the application's identifier may still only reach these stores
-        # through the accepted paths, enforced by the code_id rule and the equality scan.
         if code_id is not None:
             if (
                 destination == "application"
@@ -185,6 +188,14 @@ def test_k04_duplicate_session_exception_requires_same_nonempty_event_values() -
     for destination in ("master", "admin", "off-server", "container-log"):
         with pytest.raises(AssertionError):
             assert_session_id_scope([event], value, destination)
+    # The destination column rule is independent of the value: any non-empty top-level
+    # sessionId on a master/admin destination fails, even one that is not the application's
+    # (G-01/S-01: the prohibition names every session identifier there, not only values
+    # that match the application session).
+    column_leak = {"type": "LOGOUT", "sessionId": "an-other-session-value", "details": {}}
+    for destination in ("master", "admin"):
+        with pytest.raises(AssertionError):
+            assert_session_id_scope([copy.deepcopy(column_leak)], value, destination)
     with pytest.raises(AssertionError):
         assert_absent(value, {"session-id": value}, "Keycloak log")
     with pytest.raises(AssertionError):
@@ -329,8 +340,12 @@ def reach_password_form(client: RealmClient, start: httpx.Response) -> httpx.Res
 
 
 def reset_action_link(started: Started, public: RealmClient, address: str) -> str:
+    # R-03: bounded poll for this recipient's own message; the reset mail is queued
+    # asynchronously and a single snapshot races it (the standalone-cold red).
+    previous = len(recipient_messages(started, address))
     reset_response(public, address)
-    listing = [m for m in messages(started) if address in json.dumps(m)]
+    wait_for_recipient_message(started, address, previous)
+    listing = recipient_messages(started, address)
     assert listing, "the reset request produced no catcher message"
     newest = max(listing, key=lambda m: str(m.get("Created", "")))
     raw = public.composition.compose(
@@ -371,6 +386,41 @@ def messages(started: Started) -> list[dict[str, Any]]:
     )
     body: dict[str, Any] = json.loads(result.stdout)
     return cast(list[dict[str, Any]], body["messages"])
+
+
+def recipient_messages(started: Started, address: str) -> list[dict[str, Any]]:
+    """The catcher's messages addressed to this recipient only.
+
+    R-03: Keycloak hands the reset mail to its asynchronous task queue — the HTTP response
+    returns before delivery — so every mail assertion waits (bounded) for the recipient's
+    own message instead of racing one global snapshot, and the recipient filter keeps a
+    late message from being charged to the wrong request."""
+    return [m for m in messages(started) if address in json.dumps(m, ensure_ascii=False)]
+
+
+def wait_for_recipient_message(
+    started: Started, address: str, previous: int, timeout: float = 90.0, settle: float = 4.0
+) -> int:
+    """Poll until the catcher lists more messages for `address` than `previous`, then hold
+    until the recipient's count stops growing; return the settled count. A known-address
+    request that produced no message within `timeout` is the failure the criterion names."""
+    deadline = time.monotonic() + timeout
+    current = len(recipient_messages(started, address))
+    while current <= previous and time.monotonic() < deadline:
+        time.sleep(1.0)
+        current = len(recipient_messages(started, address))
+    assert current > previous, (
+        f"the reset request produced no catcher message for the address within {timeout}s"
+    )
+    stable = current
+    hold_until = time.monotonic() + settle
+    while time.monotonic() < hold_until:
+        time.sleep(1.0)
+        count = len(recipient_messages(started, address))
+        if count != stable:
+            stable = count
+            hold_until = time.monotonic() + settle
+    return stable
 
 
 def assert_refused_login(client: RealmClient, username: str, password: str) -> None:
@@ -608,18 +658,32 @@ def test_k04_reset_and_log_privacy(keycloak_running: Started) -> None:
             False,
         )
         assert known["enabled"] is True and disabled["enabled"] is False
-        before = len(messages(keycloak_running))
-        known_response = reset_response(public, fixtures.ADDRESSES["known"])
-        unknown_response = reset_response(public, fixtures.ADDRESSES["unknown"])
+        # R-03: every mail count is a recipient-scoped, settled observation — the queue is
+        # asynchronous, so a single global snapshot raced delivery and turned the criterion
+        # red standalone-cold while passing in-session by queue warmth.
+        known_address = fixtures.ADDRESSES["known"]
+        unknown_address = fixtures.ADDRESSES["unknown"]
+        before_known = len(recipient_messages(keycloak_running, known_address))
+        before_unknown = len(recipient_messages(keycloak_running, unknown_address))
+        known_response = reset_response(public, known_address)
+        unknown_response = reset_response(public, unknown_address)
         assert known_response[:2] == unknown_response[:2]
-        after_pair = messages(keycloak_running)
-        assert len(after_pair) == before + 1
-        # The catcher list order is not asserted; select the delivered message by recipient.
-        assert any(fixtures.ADDRESSES["known"] in json.dumps(message) for message in after_pair)
-        assert fixtures.ADDRESSES["unknown"].lower() not in json.dumps(after_pair).lower()
-        second_known = reset_response(public, fixtures.ADDRESSES["known"])
+        settled_known = wait_for_recipient_message(keycloak_running, known_address, before_known)
+        assert settled_known == before_known + 1, (
+            "exactly one message must reach the catcher for the existing address"
+        )
+        # The unknown-address request produced none: the recipient's own count is unchanged
+        # (and no message names the unknown address anywhere in the catcher).
+        assert len(recipient_messages(keycloak_running, unknown_address)) == before_unknown
+        assert unknown_address.lower() not in json.dumps(
+            messages(keycloak_running), ensure_ascii=False
+        ).lower()
+        second_known = reset_response(public, known_address)
         assert second_known[0] == known_response[0]
-        assert len(messages(keycloak_running)) == before + 2
+        settled_known = wait_for_recipient_message(keycloak_running, known_address, settled_known)
+        assert settled_known == before_known + 2, (
+            "two independent known-address requests each produce their own message"
+        )
         reset_response(public, fixtures.ADDRESSES["disabled"])
         assert_refused_login(public, fixtures.ACCOUNTS["disabled"], disabled_password)
 

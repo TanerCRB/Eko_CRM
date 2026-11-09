@@ -94,3 +94,60 @@ def test_k02_application_precondition_contrast_keeps_public_listener_closed(
     run_bootstrap(fresh)
     assert listener_open(fresh, "admin")
     assert listener_open(fresh, "auth")
+
+
+def test_k02_rerun_past_the_default_page_and_without_a_kcadm_session(
+    fresh: Composition, tmp_path: Path
+) -> None:
+    """R-07 + S-04 on the same bootstrapped composition.
+
+    R-07: the unfiltered `GET /admin/realms/{realm}/users` returns at most Keycloak's
+    default page (100 rows); a rerun against a realm grown past it must still find every
+    bootstrap account (`find_user` reads with the filtered `username`+`exact` query, the
+    way the tests do) rather than miss one, attempt a create and die on the uniqueness
+    conflict after the admin gate had opened. Seed the master realm past the page,
+    observe the page cap as the premise, and rerun.
+
+    S-04: the bootstrap authenticated kcadm for the realm import; the master-admin
+    session it persists (Keycloak 26.8.1 kcadm writes `$HOME/.keycloak/kcadm.config` inside
+    the long-lived Keycloak container — probed on this image) must be removed when the
+    import step finishes, the way `/tmp/eko112-realm.json` was. The script's own post-check
+    aborts the run if the removal misses, so this external read cannot pass vacuously.
+    """
+    prepare(fresh)
+    run_bootstrap(fresh)
+
+    leftover = fresh.compose(
+        "exec", "-T", "keycloak", "sh", "-c",
+        'test -e "${HOME}/.keycloak/kcadm.config" && echo kept || echo gone',
+    ).stdout.strip()  # fmt: skip
+    assert leftover == "gone", "the kcadm master-admin session survived the bootstrap"
+
+    master = RealmClient(fresh, "master")
+    try:
+        token = master.direct_master_token(
+            fixtures.ACCOUNTS["breakglass_one"],
+            fresh.env[fixtures.PASSWORD_VARIABLES["breakglass_one"]],
+        )
+        for index in range(150):
+            created = master.admin(
+                token,
+                "POST",
+                "users",
+                realm="master",
+                json_body={"username": f"eko112-page-{index:03d}", "enabled": False},
+            )
+            assert created.status_code == 201, created.status_code
+        page = master.admin_json(token, "GET", "users", realm="master")
+        assert len(page) == 100, (
+            f"the unfiltered endpoint showed no page cap ({len(page)} rows); this contrast "
+            "exercises nothing unless Keycloak truncates the list"
+        )
+    finally:
+        master.close()
+
+    evidence = tmp_path / "bootstrap-past-page.jsonl"
+    run_bootstrap(fresh, evidence)
+    assert "rerun existing volume live checks" in evidence.read_text(encoding="utf-8")
+    assert listener_open(fresh, "admin")
+    assert listener_open(fresh, "auth")

@@ -256,9 +256,7 @@
         "roles",
         "acr"
       ],
-      "optionalClientScopes": [
-        "offline_access"
-      ],
+      "optionalClientScopes": [],
       "attributes": {
         "pkce.code.challenge.method": "S256"
       },
