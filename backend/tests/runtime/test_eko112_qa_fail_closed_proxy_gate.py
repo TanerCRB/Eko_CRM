@@ -15,25 +15,39 @@ contrast, not a restatement):
   with an in-container wget that the listener actually serves, and removes the marker again
   (re-closing the proxy) when that verification fails, recording the residual state.
 
-What each test pins:
+What each phase carries — and, from the executed EKO-1-12/qa2-* mutations, what it does not
+(QA round-2 finding F-03: a contrast that survives a mutation is not protection for that
+mechanism, and this file must not read as if it were).
 
 1. Composition brought up without the bootstrap: both listeners are closed at the connection
-   level (socket death — no TLS handshake completes, not a 2xx/5xx behind a bound listener).
-   Removing the marker selection from `proxy/entrypoint.sh` (always the full Caddyfile) turns
-   this into served-502/503 responses and kills the test.
-2. Marker gating per gate, and marker content as the gate's second half: a blind empty touch
-   does NOT open (it names no boot); the admin marker written with the current boot identity
-   opens exactly the admin listener while the auth listener stays connection-dead. Dropping
-   the entrypoint's identity comparison makes the blind touch serve and kills the test
-   (R-05/S-03); dropping the marker write kills the second half.
-3. `open_gate`'s verification is what stops the bootstrap before the later gate: with the
-   admin listener unable to serve (broken `Caddyfile.admin` inside the proxy container), the
-   bootstrap must exit non-zero, must not record either gate as open, must remove the marker
-   of the gate it could not verify (R-06's residual state), and must keep the auth listener
-   closed. Skipping the wget verification — touching the marker blindly and always returning
-   success — lets the bootstrap proceed, write the public marker too, and open the auth
-   listener on a composition whose admin gate never actually served: this test kills that
-   mutation twice (exit code and closed auth listener).
+   level (socket death — no TLS handshake completes, not a 2xx/5xx behind a bound listener),
+   and a fresh volume carries no markers. NOT a carrier of the entrypoint's marker
+   selection: `prepare` keeps Keycloak out of the bring-up, so even an entrypoint always
+   selecting the full Caddyfile leaves the upstream unreachable and the connection still
+   dies at the transport level — this contrast PASSED under the EKO-1-12/qa2-9a always-open
+   mutation. It pins the fail-closed end state every other phase contrasts against, not the
+   mechanism that selects it.
+2. Carrier of the entrypoint's marker selection and boot-identity comparison. Marker gating
+   per gate, marker content as the gate's second half: a blind empty touch does NOT open (it
+   names no boot); the admin marker written with the current boot identity opens exactly the
+   admin listener while the auth listener stays connection-dead. Phases 1-2 of this test,
+   `test_k02_markers_are_bound_to_the_current_keycloak_boot` and phase 3 below are the file
+   set that carries the marker mechanism: this test FAILED under the dropped identity
+   comparison (EKO-1-12/qa2-3, once the blind-touch phase was hardened against the
+   restart bind race — finding F-04) and under the always-open entrypoint (qa2-9a).
+   Dropping the marker write kills the second half.
+3. The executed carrier of `open_gate`'s reachability verification and of its marker
+   cleanup on failure — of the contrasts run under those mutations, only this phase changed
+   color. With the admin listener unable to serve (broken `Caddyfile.admin` inside the
+   proxy container), the bootstrap must exit non-zero, must not record either gate as open,
+   must remove the marker of the gate it could not verify (R-06's residual state), and must
+   keep the auth listener closed. Skipping the wget verification — touching the marker
+   blindly and always returning success — lets the bootstrap proceed, write the public
+   marker too, and open the auth listener on a composition whose admin gate never actually
+   served: this phase kills that mutation twice (exit code and closed auth listener,
+   EKO-1-12/qa2-4) and killed the rm-on-fail removal (qa2-5). The K-02 precondition
+   contrasts do NOT carry the verification: they abort before `open_gate` runs and PASSED
+   under qa2-4 — see the docstring of test_eko112_k02_bootstrap_order.py.
 """
 
 import time
