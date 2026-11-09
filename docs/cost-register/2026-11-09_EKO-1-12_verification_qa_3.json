@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-09",
+  "task": "EKO-1-12",
+  "phase": "verification",
+  "role": "qa",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "aa1859a56c7664463",
+  "tokens": 6655218,
+  "tokenSplit": { "input",
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 87,
+  "seconds": 6189,
+  "fixRound": 2,
+  "reworkCause": null,
+  "notes": " 3977, "output": 69103, "cacheWrite": 486232, "cacheRead": 6095906 }:PROOF HOLDS (Q3-1 medium k06 regex gap, Q3-2 low format drift)"
+}
