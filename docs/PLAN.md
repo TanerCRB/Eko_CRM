@@ -359,6 +359,9 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   unbounded; the ADR-0004 text states the bound.
   **Out of scope (explicit):** the advisory-lock wait itself (accepted cost); retry after a failure;
   the off-server alert (EKO-1-08). After EKO-1-14.
+- [ ] **EKO-1-21** — Check EKO-1-15's "no change under `backup/`" claim against EKO-1-15's own change set (#109).
+  *Done when:* the manifest-digest runtime test no longer asserts the claim against the live branch; the claim is checked on EKO-1-15's fixed base/head pair, a branch that changes `backup/` passes, and a planted `backup/` change inside EKO-1-15's pair fails; the rest of `test_eko115_k02_manifest_names_the_release_digests` is unchanged.
+  **Out of scope (explicit):** any change to `backup/` (EKO-1-20); other live-base change-set tests (follow-up Issue). Before EKO-1-20's merge.
 
 ## EKO-2 — Access
 
