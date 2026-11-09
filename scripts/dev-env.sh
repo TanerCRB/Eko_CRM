@@ -29,6 +29,7 @@ dev_value() {
     PROXY_HTTPS_PORT) echo "8443" ;;
     PROXY_ADMIN_PORT) echo "9443" ;;
     BACKEND_IMAGE_TAG) echo "0.1.0-$CHECKOUT_ID" ;;
+    KC_BOOTSTRAP_ADMIN_USERNAME) echo "eko112-bootstrap-temporary" ;;
     # Under G-2 A no destination exists in development: the scheduled run fails visibly.
     BACKUP_DESTINATION) echo "sftp://eko-backup@destination.invalid:22/incoming" ;;
     *) return 1 ;;
@@ -53,6 +54,10 @@ write_env() {
   [ ! -e "$target" ] || { echo "dev-env: $target exists; remove it first" >&2; return 1; }
   local names; names="$(required_names "$compose")"
   [ -n "$names" ] || { echo "dev-env: no required variable found in $compose" >&2; return 2; }
+  names="$(printf '%s\n' "$names" \
+    KC_BOOTSTRAP_ADMIN_USERNAME KC_BOOTSTRAP_ADMIN_PASSWORD \
+    EKO112_BREAKGLASS_ONE_PASSWORD EKO112_BREAKGLASS_TWO_PASSWORD \
+    EKO112_REVIEWER_PASSWORD EKO112_ADMINISTRATOR_PASSWORD | sort -u)"
   CHECKOUT_ID="$(checkout_id "$compose")"
   local out="COMPOSE_PROJECT_NAME=eko-crm-$CHECKOUT_ID"$'\n'
   while IFS= read -r name; do

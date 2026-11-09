@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-09",
+  "task": "EKO-1-12",
+  "phase": "code",
+  "role": "developer-infrastructure",
+  "model": "mixed: qwen3.8-flash, <synthetic>",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "High",
+  "agentId": "ac1211306d1af8775",
+  "tokens": 376146805,
+  "tokenSplit": { "input": 9254, "output": 507544, "cacheWrite": 2346547, "cacheRead": 373283460 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 746,
+  "seconds": 85263,
+  "fixRound": 1,
+  "reworkCause": "fix round 1 caused by guardian G-01, reviewer R-01, auditor S-01 (Highs) + mediums; earlier role able to catch: Developer's own self-check for provider field coverage at master/admin destinations (inv-18 wrote the reinterpretation note the auditors disproved) and Caddyfile.admin log-parity (a static parity check existed for nothing before this round)",
+  "notes": "all 14 fix-map items implemented; image rebuilt 387f615a11a7...; died 3x on transport (ECONNREFUSED), never delivered its formal handback - closing cycle inv-22 took over from disk state; checkpoint eada866; weakening/leftovers/layer clean on it; 85263s wall includes ~14h stall windows; <synthetic> model entries = harness retry records"
+}

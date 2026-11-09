@@ -1824,3 +1824,88 @@ mirrors how `migrate` sets its timeouts (addendum of 2026-10-29, step 2). This i
 from ADR-0004: it decides what the addendum of 2026-10-30 leaves open (step 3 states no rule for a
 lock wait), and it changes no rule that addendum states. Approved by the human at gate 1 of
 EKO-1-20 (Issue #76), 2026-11-08.
+
+### 2026-11-02 — Bootstrap order: each listener opens only after its own brute-force precondition
+
+**Status:** Accepted 2026-11-02 (gate 1 of EKO-1-12, Issue #53; G-1 A accepted by the human in the driving session, recorded on the Issue).
+
+**What it changes.** *Bootstrap of the first administrator* completes master-realm brute-force
+configuration at step 2 and then starts `proxy`, but imports the application realm only at step 3.
+Starting both listeners at step 2 therefore opens the public listener before the application-realm
+import and the live check required by ADR-0004-C8. This is exception EKO-1-03/R-22. On acceptance,
+the listener-opening order of that section reads as follows:
+
+1. Complete step 2 with neither listener running, including the master-realm configuration it
+   names. Verify that the live master realm reports `bruteForceProtected` true and record the date
+   of the check. Only then open the admin listener. Until that verification has completed, the
+   admin listener stays closed.
+2. With the public listener still closed, import the application realm from the export under
+   `identity/` as step 3 requires. After the import has completed, verify that the live application
+   realm reports `bruteForceProtected` true and record the date of the check. Only then open the
+   public listener. Until both the import and that verification have completed, the public listener
+   stays closed.
+3. Continue with the first application-realm administrator and the reviewer's confirmation as
+   steps 4 and 5 require.
+
+A check that does not establish the live value as true is not a completed verification and does
+not open the corresponding listener. ADR-0004-C8 is unchanged: this order satisfies its two
+preconditions independently. Every other bootstrap duty, and every other rule and control of this
+decision, is unchanged.
+
+**Why.** The accepted order cannot meet ADR-0004-C8: it starts `proxy` after master-realm
+configuration but before application-realm import, so the application realm's brute-force state
+cannot be verified before the public listener opens. The correction also makes the master-realm
+check explicit before the admin listener opens, as C8 already requires. Recording the correction
+as an addendum is required by this decision's addendum of 2026-10-28, *Forwards to EKO-1-06
+reassigned after its split*. This is a declared deviation from the accepted bootstrap step order,
+submitted for human approval at gate 1 of EKO-1-12 (Issue #53).
+
+### 2026-11-06 — Custom Keycloak image build, startup verification, and recovery for event filtering
+
+**Status:** Accepted 2026-11-06
+
+**Condition.** This addendum takes effect only if the human accepts ADR-0007 option A and its paired
+ADR-0003 addendum of the same date. It does not select or implement A by itself.
+
+**What it changes.** On acceptance, the `keycloak` service uses the custom image described by that
+ADR-0003 addendum rather than directly referencing the official image. The custom image is built
+from the official Keycloak 26.8.1 base, includes the provider JAR under `/opt/keycloak/providers`
+before `kc.sh build`, and selects the event-store provider with the build-time
+`--spi-events-store--provider=jpa` setting. The custom factory must out-order the built-in factory
+so that the selected `jpa` entry is the custom implementation. Image references and release
+composition continue to use the full-version/digest rules of *Images* and ADR-0004-C2.
+
+No service, published port, named volume, environment secret, or persistent store is added. Events
+remain in the existing Keycloak database, so the existing backup set and restore database scope are
+unchanged. Deployment, rollback, and restore use the release's custom Keycloak image by digest;
+Keycloak's existing no-rollback rule and the restore rule against an image older than the manifest
+remain unchanged.
+
+**Startup and failure boundary.** The source assessment does not establish that a missing same-ID
+custom override fails closed: built-in `jpa` remains available. On every fresh bootstrap, restart,
+and restore, the selected custom factory and the required filtering behavior must therefore be
+verified before either listener opens. A missing, unselected, or unverified custom provider leaves
+both listeners closed. This verification is additional to, and does not reorder or weaken, the
+accepted 2026-11-02 brute-force preconditions. No claim of request-level failure-closed behavior is
+made without runtime evidence.
+
+**New control ADR-0004-C29:** When ADR-0007 option A is selected, the rendered shared composition
+retains the accepted service list, private networking, and named volumes; `keycloak` references the
+pinned custom image; fresh-bootstrap, restart, and restore checks establish the custom provider's
+selection and filtering before any listener opens; absence or failed verification of that provider
+keeps both listeners closed; and a backup/restore continues to contain the same required events in
+the existing Keycloak database with the ADR-0007 privacy boundary.
+
+**Why.** The official 26.8.1 container/provider guides establish the custom JAR and build direction,
+and the provider-loading source establishes selection and override behavior. They do not prove that
+a concrete provider is present or that its failure behavior protects the listeners. This addendum
+records the custom-image, release, startup, backup, and recovery boundary without treating source
+inspection as runtime proof.
+
+**Options requiring a human choice.**
+
+- **A — Accept this addendum together with ADR-0007 option A and the paired ADR-0003 draft.** This
+  accepts the custom-image release and verification duties without adding a service or store.
+- **B — Reject this addendum.** The accepted composition/image rules and EKO-1-12 STOP remain
+  unchanged; no custom image or provider is authorized.
+

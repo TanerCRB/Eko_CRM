@@ -625,3 +625,175 @@ shape it takes, a form body behind a `$ref`. It would also pass a credential sen
 URL, which ends up in logs. Restating an accepted control is a declared deviation. It follows the
 precedent of this decision's addendum of 2026-10-28 on ADR-0003-C4. Approved by the human at
 gate 1 of EKO-1-10 on 2026-10-29 (G-4 A, Issue #51).
+
+### 2026-11-04 — Application administrator: read-only client selection for application-role assignment
+
+**Status:** Accepted 2026-11-04 (repeated gate 1 of EKO-1-12, Issue #53; option A accepted by the human in the driving session, recorded on the Issue).
+
+**What it changes.** On acceptance, *Administrator permissions in Keycloak* and ADR-0003-C15 are
+amended as a declared deviation so that the application client role `administrator` is a composite
+whose composites are exactly these six client roles of the application realm's `realm-management`
+client, and not any other: `manage-users`, `view-users`, `query-users`, `query-groups`,
+`query-clients`, and `view-clients`. The sole addition is the read-only `view-clients` role, so the
+administrator can select a client and resolve its identifier when assigning or unassigning the
+application's roles.
+
+`view-clients` is removed from the exclusions only to the extent that it is held through the
+`administrator` composite. Every other excluded role remains forbidden: `realm-admin`,
+`impersonation`, `manage-realm`, `manage-clients`, `manage-events`, `manage-identity-providers`,
+`manage-authorization`, `create-client`, `view-realm`, `view-events`, `view-identity-providers`,
+and `view-authorization` remain excluded from `administrator` and held by no account or group of
+the application realm. No group and no other exported role includes a `realm-management` role.
+ADR-0003-C16 continues to require refusal of the authority outside this composite, including
+`realm-admin`, `impersonation`, `manage-realm`, `manage-clients`, and `view-events`.
+
+This addendum changes no reviewer or master-realm role. The reviewer's dedicated read-only account,
+the prohibition on reviewer administration, the break-glass account boundaries, and ADR-0004-C23
+and C24 remain unchanged. Every other rule and control of this decision is unchanged.
+
+**Why.** The local runtime stop record at `docs/evidence/EKO-1-12/console-role-stop.md` shows that
+an account holding only the exact five-role `administrator` composite could authenticate, create,
+disable, and enable a synthetic account, and set its password. `GET clients?clientId=eko-backend`
+then returned an empty list both without and with `search=true`. The account therefore could not
+resolve the client UUID needed to assign an application client role. The console-role stop rule
+fired, and no role was added. Adding only `view-clients` is the smallest correction that addresses
+the failed client-selection step without delegating client or realm administration.
+
+That record is local runtime evidence from uncommitted work, not independent QA proof or a
+shared-SHA verification. It does not prove that the amended composite succeeds; that remains to be
+verified after approval. Before implementation resumes, K-01 and K-03 must be amended to the
+six-role composite and the changed Issue scope and acceptance criteria must be relocked at a new
+gate 1. The previous scope lock does not authorize this expansion, and this addendum does not
+become accepted without the human's decision at that gate.
+
+### 2026-11-04 — Administrator role mapping: an explicit allow-list, not composite membership
+
+**Status:** Accepted 2026-11-04 (repeated gate 1 of EKO-1-12, Issue #53; accepted by the human in the driving session, recorded on the Issue).
+
+**What it changes.** The statement in *Administrator permissions in Keycloak* that Keycloak refuses
+to let an account grant a `realm-management` role it does not hold itself is withdrawn as incorrect
+for the Keycloak version in use. Membership in the accepted six-role `administrator` composite is
+not, by itself, a preventative boundary on which roles that account can assign.
+
+On acceptance, the six-role composite and every exclusion in its addendum of 2026-11-04 remain
+unchanged. The administrator may assign and unassign only the application client roles `rep`,
+`manager` and `administrator` of `eko-backend`, including on its own account. Every direct
+`realm-management` role mapping is refused, whether the requested role belongs to the composite or
+is excluded from it. This enforces the existing rule that accounts and groups hold no direct
+`realm-management` mappings; ADR-0003-C22 remains a recurring review, not a substitute for refusal.
+
+Keycloak's built-in fine-grained admin permissions are the permitted additional boundary. The
+versioned realm configuration carries an allow-list for exactly the three application roles above.
+No account receives an additional `realm-management` role, and no provider, service or image is
+added. If this built-in mechanism cannot satisfy the boundary, the task stops and returns to the
+human before another mechanism or any additional authority is introduced.
+
+ADR-0003-C16 is extended accordingly: the existing account-management, application-role and denial
+checks remain, and a live check attempts every direct `realm-management` role mapping available to
+the administrator. Each attempt must be refused and an independent privileged read must establish
+that no mapping persisted. A successful HTTP response without a persisted mapping does not count as
+a refusal. Every other rule and control of this decision is unchanged.
+
+**Why.** The authorized local diagnostic on EKO-1-12 found that the administrator's assignment of
+the excluded `view-authorization` role returned HTTP 204 and persisted, independently confirmed by
+administrator and break-glass reads. This conflicts with the preventative denial required by
+ADR-0003-C16 and with the prohibition on any account or group holding that role. Detection through
+admin events or ADR-0003-C22 would leave the grant active and therefore cannot replace denial.
+
+Keycloak's [Server Administration Guide](https://www.keycloak.org/docs/latest/server_admin/#_restrict_user_role_mapping)
+documents per-role and per-client `map-role`/`map-roles` policies for restricting which roles an
+administrator may assign. Its Users permission description says that user management permits role
+mapping but does not select which roles may be mapped; those privileges must be defined per role or
+per client role set. This establishes a candidate within the official image, not runtime proof that
+it satisfies this decision.
+
+**Options requiring a human choice.**
+
+- **A — Accept this addendum (recommended).** Keep the six-role composite and all exclusions, and
+  add the built-in allow-list boundary. This preserves preventative denial without new authority or
+  components; its cost is additional versioned authorization policy and fresh denial evidence.
+- **B — Reject it and require a different delegation model.** The current criteria remain stopped.
+  A new decision must establish that model before implementation, with possible changes to the
+  console-only and role-composite decisions.
+- **C — Permit out-of-composite grants and rely on after-the-fact review.** This abandons the
+  accepted exclusions and preventative security boundary, leaves privilege grants active until
+  detected, and would require separate explicit deviations from ADR-0003-C16 and C22. It is not
+  recommended.
+
+### 2026-11-04 — Administrator password-reset events: audit fields without credential representation
+
+**Status:** Accepted 2026-11-04 (repeated gate 1 of EKO-1-12, Issue #53; accepted by the human in the driving session, recorded on the Issue).
+
+**What it changes.** On acceptance, ADR-0003-C17 has one narrow exception to its representation
+rule, applying only to the administrator operation `PUT users/{id}/reset-password` recorded as an
+`ACTION` admin event. That event may have no representation. It must still identify the acting
+account, the affected account through its resource path, the operation and resource path, and the
+time. No field of the event may contain a password or another credential value.
+
+Every other account creation, change, enabling, disabling, deletion and application-role assignment
+or unassignment event must still have a non-empty representation, acting account and time.
+`adminEventsEnabled` and `adminEventsDetailsEnabled` remain true. The seven-day temporary-password
+review continues to use the event's time, and the reviewer continues to read these events. No other
+event type receives this exception. The paired ADR-0005 addendum of the same date is required so
+that off-server shipping applies the same narrow rule.
+
+**Why.** The authorized local diagnostic found no representation on reset-password `ACTION` events
+while admin-event details were enabled and the other probed CREATE, UPDATE and DELETE events had
+representations. The current ADR-0003-C17 wording therefore cannot be met by the observed behavior
+of the official image through that setting alone. No accepted configuration that adds the missing
+representation has been established.
+
+This is security evidence, not merely observability convenience: an administrator can reach another
+account by setting its password, so the reviewer needs a durable record of who changed whose
+password and when. The narrow exception preserves that record. It does not preserve the request
+representation, which describes a credential change and must never disclose the credential itself.
+
+**Options requiring a human choice.**
+
+- **A — Accept this addendum and its ADR-0005 pair (recommended).** Preserve actor, affected
+  account, operation, resource path and time while explicitly allowing no representation for this
+  one ACTION event. This keeps the audit and privacy duties without adding a component.
+- **B — Reject the exception and preserve the existing representation requirement.** EKO-1-12
+  remains stopped. A separate architecture and privacy decision must first establish a supported
+  mechanism that supplies a useful, credential-free representation; no provider, image, version or
+  custom extension is authorized or known to satisfy it by this assessment.
+
+### 2026-11-06 — Custom Keycloak image for authentication-event detail filtering
+
+**Status:** Accepted 2026-11-06
+
+**Condition.** This addendum takes effect only if the human accepts ADR-0007 option A and its paired
+ADR-0004 addendum of the same date. It does not select or implement A by itself.
+
+**What it changes.** On acceptance, *Identity server product* receives a declared deviation for
+EKO-1-12: the `keycloak` service uses a custom image built from the official Keycloak 26.8.1 image
+with a custom `EventStoreProvider` and factory. The custom factory uses Keycloak's documented
+same-ID, higher-order override of the built-in `jpa` factory. The custom store remains a
+`JpaEventStoreProvider` subtype, removes non-excepted `details.code_id` before the inherited JPA
+persist and subsequent local event delivery, and retains the inherited authentication/admin event,
+query, and expiry behavior. It uses the existing Keycloak database and `EVENT_ENTITY` store; no
+ordinary event listener, custom authenticator, added service, or new event store is substituted.
+
+Every event type and audit field required by ADR-0005 *Retention*, every administrator/reviewer
+permission, and every accepted local/off-server exception remains unchanged. Only non-excepted
+`details.code_id` is removed. ADR-0007 supplies the filtering and runtime acceptance boundary.
+
+**Compatibility and security boundary.** `EventStoreSpi` is internal and may change without prior
+notice. Every Keycloak release or provider/image change requires review and fresh verification of
+provider loading, selection, persistence, expiry, and recovery before deployment; the existing
+major-version addendum rule remains unchanged. Provider code is unsandboxed and receives the server
+process's privileges, so it is part of the trusted identity-image supply chain. No additional
+Keycloak authority or application role is granted.
+
+**Why.** ADR-0007's official 26.8.1 source assessment establishes that realm settings cannot filter
+the field before built-in JPA and that an ordinary listener runs too late. It also establishes the
+documented custom-provider override, session selection, JPA persistence, and expiry path above.
+That is architectural direction only: no concrete provider or custom image has been built or run.
+
+**Options requiring a human choice.**
+
+- **A — Accept this addendum together with ADR-0007 option A and the paired ADR-0004 draft.** This
+  permits the custom-image direction, with its internal-SPI and supply-chain costs, while retaining
+  all required audit and privacy boundaries. Runtime proof remains mandatory.
+- **B — Reject this addendum.** The official-image rule and EKO-1-12 STOP remain unchanged; no
+  custom provider or image is authorized.

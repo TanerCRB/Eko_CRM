@@ -124,7 +124,9 @@ services:
     restart: unless-stopped
 
   keycloak:
-    image: &keycloak-image quay.io/keycloak/keycloak:26.8.1
+    image: &keycloak-image localhost/eko-crm/keycloak:26.8.1-eko112
+    build:
+      context: ./identity
     depends_on:
       postgres:
         condition: service_healthy
@@ -152,6 +154,8 @@ services:
       KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: "true"
       KC_FEATURES_DISABLED: impersonation
+      KC_LOG_LEVEL: "info"
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?OIDC_CLIENT_SECRET is required}
     # Healthy only on readiness 200: the DOWN body (503) also holds nested "UP" checks.
     healthcheck:
       test:
