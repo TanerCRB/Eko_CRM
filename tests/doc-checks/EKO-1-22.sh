@@ -30,6 +30,8 @@
 # text by exactly one element (the fixtures live under one mktemp -d directory, removed on exit;
 # nothing else is ever written):
 #   K-01a  the original l.11-12 restored → caught.      K-01b  the rule sentence deleted → caught.
+#          A "pending" claim wrapped across two physical lines (QA contrast, added at the gate-2
+#          QA run: the per-line rule let it through) → caught by the fold-pair detector below.
 #   K-02   pending ADR-0007 with a Draft status → the rule passes; the same claim with an Accepted
 #          status → the rule fails; with no decision file at all → the rule reports "could not
 #          run", never a silent pass.
@@ -149,6 +151,16 @@ plant_pending_claim() {
       sub(/ADR-0002, ADR-0003, ADR-0005/, "ADR-0002, ADR-0003, pending ADR-0007"); d2 = 1 }
     { print }'
 }
+# plant_wrap — the register with the original claim re-added WRAPPED across two lines: "pending"
+# ends one line, "(ADR-0006)" starts the next (a markdown reflow of the very sentence this task
+# removed — the K-01a wrap contrast, QA run 2026-11-09; the per-line grep alone missed it).
+plant_wrap() {
+  awk '{ print } /when it is accepted[.][[:space:]]*$/ && !p {
+    print "Rows that mark a decision as \"pending\""; print "(ADR-0006) are governed by a decision not yet accepted."; p = 1 }'
+}
+# fold_pairs — every adjacent pair of lines joined into one; a claim split by a hard wrap is a
+# single-line claim again in its pair. Used by k01a's wrap detector and pending_claims.
+fold_pairs() { awk '{ if (NR > 1) print prev " " $0; prev = $0 } END { if (NR) print prev }'; }
 # slice_from_table — stdin to end of file from the register's first table line.
 slice_from_table() { awk 'ex || index($0, "| Path (glob) | Risk classes") { ex = 1; print }'; }
 # build_status_map <decisions dir> — ONE pass over the directory's ADR files, printing tab lines
@@ -215,17 +227,22 @@ has() { grep -Eiq -- "$2" <<< "$1"; }
 
 # pending_claims <register text> — the ADR identifiers a "pending <id>" marker names (marker
 # presence keys the lookup, C-3; the marker may be adjacent "pending ADR-0007" or the original
-# punctuation-separated form, up to six non-alphanumeric characters).
+# punctuation-separated form, up to six non-alphanumeric characters). Read through fold_pairs: a
+# claim split by a hard line wrap is extracted from its line pair (QA wrap contrast, 2026-11-09).
 pending_claims() {
-  printf '%s\n' "$1" | tr -d '*`' | grep -Eoi -- 'pending[^[:alnum:]]{0,6}ADR-[0-9]{4}' | grep -Eo 'ADR-[0-9]{4}' | sort -u
+  printf '%s\n' "$1" | fold_pairs | tr -d '*`' | grep -Eoi -- 'pending[^[:alnum:]]{0,6}ADR-[0-9]{4}' | grep -Eo 'ADR-[0-9]{4}' | sort -u
 }
 
 k01a() {
-  local hits fa
+  local hits fa fw fwp
   hits="$(printf '%s\n' "$REG" | tr -d '*`' | grep -Ei 'pending' | grep -E 'ADR-[0-9]{4}')"
   [ -z "$hits" ] || { WHY="a line claims a decision pending: $(printf '%s' "$hits" | head -n 1 | cut -c1-200)"; return 1; }
+  fw="$(printf '%s\n' "$REG" | fold_pairs | tr -d '*`' | grep -Eoi -- 'pending[^[:alnum:]]{0,6}ADR-[0-9]{4}' | head -n 1)"
+  [ -z "$fw" ] || { WHY="a pending claim is wrapped across lines (fold-pair hit): $fw"; return 1; }
   fa="$(printf '%s\n' "$REG" | restore_old | tr -d '*`' | grep -Ei 'pending' | grep -E 'ADR-[0-9]{4}')"
   [ -n "$fa" ] || { WHY="insensitive: the copy with the original l.11-12 restored is not caught either"; return 1; }
+  fwp="$(printf '%s\n' "$REG" | plant_wrap | fold_pairs | tr -d '*`' | grep -Eoi -- 'pending[^[:alnum:]]{0,6}ADR-[0-9]{4}' | head -n 1)"
+  [ -n "$fwp" ] || { WHY="insensitive: the copy with the pending claim wrapped across two lines is not caught"; return 1; }
 }
 check 'K-01a the register claims no decision pending' k01a
 
@@ -281,7 +298,7 @@ k02() {
   printf '**Status:** Draft — pending approval\n\n# ADR-0007 — fixture decision for the EKO-1-22 checks (not accepted)\n' > "$tmp/k02/decisions-a/ADR-0007-fixture.md"
   printf '**Status:** Accepted 2026-11-09\n\n# ADR-0007 — fixture decision for the EKO-1-22 checks (planted as accepted)\n' > "$tmp/k02/decisions-b/ADR-0007-fixture.md"
   reg_a="$(printf '%s\n' "$REG" | plant_pending_claim)"
-  claims="$(printf '%s\n' "$reg_a" | tr -d '*`' | grep -Eoi 'pending[^[:alnum:]]{0,6}ADR-[0-9]{4}' | grep -Eo 'ADR-[0-9]{4}' | sort -u)"
+  claims="$(pending_claims "$reg_a")"
   [ "$claims" = "ADR-0007" ] || { WHY="the fixture did not plant exactly the ADR-0007 pending claim (got: $(tr '\n' ' ' <<< "$claims"))"; return 1; }
   # live: the edited register holds no pending claim and the rule passes.
   pending_rule "$REG" "$DECISIONS"; rc=$?
