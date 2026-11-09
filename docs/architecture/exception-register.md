@@ -97,3 +97,8 @@ Accepted at gate 2 of EKO-1-19 in [PR #96](https://github.com/TanerCRB/Eko_CRM/p
 
 - Exception EKO-1-19/M17 — owner: @TanerCRB — reason: a branch on the resolved image name passes both modes, so the literal-name mode-branch grep cannot see it; left to review, follow-up #98 — blocks again: 2027-05-07
 - Exception EKO-1-19/M21 — owner: @TanerCRB — reason: weakening-check sees patterns, not a looser assertion; K-05 (b) is judged by evaluator review, which found none in this diff — blocks again: 2027-05-07
+
+Accepted at gate 2 of EKO-1-20 in [PR #113](https://github.com/TanerCRB/Eko_CRM/pull/113) (decided by the human on 2026-11-09, recorded on #76); follow-up #110:
+
+- Exception EKO-1-20/M3 — owner: @TanerCRB — reason: the surviving mutation removes a redundant mechanism, because psql under ON_ERROR_STOP already ends the control session on the 55P03 error — blocks again: 2027-05-09
+- Exception EKO-1-20/weakening-1 — owner: @TanerCRB — reason: the EKO-1-15 K-07 and EKO-1-19 K-03 existing-CI-job checks no longer report a changed integer job-level timeout-minutes or the one comment line directly above it, so the runtime jobs could be raised to 75 minutes (CI run 42591459348); removing or adding the key, a non-integer value and every other job change stay red (mutations EKO-1-20/M13–M18); the live-base defect itself is #110 — blocks again: 2027-05-09
