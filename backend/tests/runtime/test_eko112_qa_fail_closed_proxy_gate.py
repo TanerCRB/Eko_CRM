@@ -137,7 +137,18 @@ def test_qa_admin_marker_opens_only_the_admin_listener(fresh: Composition) -> No
     # this phase serve instead and kills the test.
     fresh.compose("exec", "-T", "proxy", "touch", "/data/admin-open")
     fresh.compose("restart", "proxy")
-    _ = fresh.inspect("proxy")["State"]  # the restart is synchronous; the container is up
+    # Wait until the proxy is actually running before asserting death: during the restart
+    # window Caddy has not bound yet and a refused connection would look like the closed
+    # gate even under an entrypoint that honors bare markers (found by the EKO-1-12/qa2-3
+    # mutation, which survived the original instant-after-restart assertion).
+    deadline = time.monotonic() + 30.0
+    started: dict[str, object] = {}
+    while time.monotonic() < deadline:
+        started = fresh.inspect("proxy")["State"]
+        if started.get("Running") and started.get("ExitCode") == 0:
+            break
+        time.sleep(1.0)
+    time.sleep(3.0)  # let Caddy bind whatever configuration the entrypoint selected
     assert_connection_death(fresh, "admin")
 
     identity = boot_identity(fresh)
