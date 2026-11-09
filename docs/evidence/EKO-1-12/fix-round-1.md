@@ -4,8 +4,13 @@ Date: 2026-11-08
 Baseline SHA: 2dcb057f818fd9a1e4142fbf0c71276f542f6ffa
 Worktree HEAD at the runs: 37adca49f5f7cf9dccfa3d94183847503c1cc5e8 (dirty worktree: this fix round's uncommitted implementation)
 Image under the runtime runs: `localhost/eko-crm/keycloak:26.8.1-eko112`
-(<image-digest after the provider rebuild>), rebuilt per `custom-image-build.md` with the
-provider field-enforcement extension (G-01/S-01); see `custom-image-build-fix1.md`.
+(image ID after the provider rebuild `sha256:387f615a11a75e6ee2289206f2e9098113933d83f3a9084bbd8c3882cbc631f8`,
+observed at build in `custom-image-build-fix1.md`; that artifact is no longer on the host, and
+the K-06 artifact walk was re-executed 2026-11-09 on the clean rebuild of the same committed
+`identity/` tree, image ID `sha256:1a1fd4d33b232ca9e312b28fc3bddd17a07b79acc82167b8a67b0184ea5a532f`,
+full layer-cache hit — see the "Re-inspection" section of `built-image-inspection.md`), rebuilt
+per `custom-image-build.md` with the provider field-enforcement extension (G-01/S-01); see
+`custom-image-build-fix1.md`.
 
 ## What this round changes (finding map)
 
@@ -21,7 +26,7 @@ provider field-enforcement extension (G-01/S-01); see `custom-image-build-fix1.m
 | R-04 = G-04 | Restore half of C29 executed: on-demand backup through the accepted path, `DROP DATABASE keycloak` + `pg_restore` of the set's keycloak dump, bootstrap rerun asserting the provider pair precedes both listener opens; break-glass divergence observed (env rotated → exit 1 with both listeners closed → matching env reopens) | runtime `test_eko112_k02_restore_reverification.py`; dated record `restore-reverification.md` |
 | G-03 | Inherited expiry paths probed through the custom store: `ClearExpiredEvents` → `EventStoreProvider.clearExpiredEvents()` (inherited unchanged) and `ClearExpiredAdminEvents` → the factory's `JPA_EVENT_STORE` invalidation handler that casts to `JpaEventStoreProvider` (the subtype satisfies the cast); expired rows removed at 30-day (eko auth) / 90-day (eko+master admin, master auth) while controls survive | runtime `test_eko112_k04_event_expiry.py`; dated record `event-expiry-probe.md`; mechanism pre-observed in a throwaway standalone Keycloak (same custom image) |
 | S-02 | `offline_access` dropped from the application client's `optionalClientScopes` (export + live read) | static exact-set guard in `test_eko112_k01_realm_export.py` (red before the export change); live assertion `test_k03_application_client_carries_no_offline_access_capability`; U-02 note in `offline-scope-removal.md` |
-| R-08 | doc-check accepted-text guard run against a diff base (`origin/main...HEAD`, overridable with `EKO112_DIFF_BASE`) | `tests/doc-checks/EKO-1-12.sh` |
+| R-08 | doc-check accepted-text guard run against a diff base (`origin/main...HEAD`, overridable with `EKO112_ADR_BASE`; the name `EKO112_DIFF_BASE` was a misstatement corrected in fix round 2 — the guard reads `EKO112_ADR_BASE`, see `tests/doc-checks/EKO-1-12.sh`) | `tests/doc-checks/EKO-1-12.sh` |
 | U-01 | OIDC client secret value asserted absent from stored eko-realm and master-realm admin events after both writes (import + PUT) | `test_eko112_k03_runtime_roles_and_events.py::test_k03_client_secret_absent_from_stored_admin_events`; result recorded in `admin-event-secret-probe.md` |
 | R-02 | no in-scope fix — needs the release workflow and a publishing decision | report section "For a human" |
 | G-02 | no code change possible — Keycloak does not emit what the locked criterion names (and 26.8.1's `EventType` has no `USER_DISABLED_BY_BRUTE_FORCE` constant at all; the real 26.8.1 lockout types are `USER_DISABLED_BY_PERMANENT_LOCKOUT`/`USER_DISABLED_BY_TEMPORARY_LOCKOUT`, neither in the accepted `enabledEventTypes`) | report section "For a human" |

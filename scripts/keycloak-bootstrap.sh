@@ -202,8 +202,24 @@ open_gate() {
     echo "keycloak-bootstrap: the $gate marker could not be removed after the failed gate" >&2
     return 1
   }
-  compose restart proxy >/dev/null || true
-  record "${gate} verification failed; marker removed; listeners closed"
+  # R-21 (reviewer re-review round 2): the residual state is GATE-SPECIFIC. The admin gate is
+  # the first marker written — its failure leaves no marker at all, so no listener serves and
+  # "listeners closed" is true. The public gate fails while the ADMIN marker still names the
+  # live boot: after the re-close the proxy selects Caddyfile.admin and the admin listener
+  # remains open, so the record must name that surviving state, not claim both listeners
+  # closed. The re-close restart is part of the claim: a failed restart (old configuration
+  # still loaded, marker gone) is recorded and ends the run — `|| true` swallowed exactly
+  # that disagreement.
+  local residual
+  case "$gate" in
+    public) residual="admin listener remains open" ;;
+    *) residual="listeners closed" ;;
+  esac
+  if compose restart proxy >/dev/null; then
+    record "${gate} verification failed; marker removed; ${residual}"
+  else
+    record "${gate} verification failed; marker removed; proxy re-close failed; listeners not confirmed closed"
+  fi
   return 1
 }
 

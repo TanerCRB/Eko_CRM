@@ -87,8 +87,13 @@ def test_k06_runtime_accounts_addresses_and_markers_are_the_declared_invented_se
 
 
 def test_k06_tracked_additions_have_no_literal_secret_environment_assignment() -> None:
+    # G-22 (guardian re-verification round 2): the scan follows the complete tracked change
+    # set of this task, which includes the runtime files added under `proxy/` (entrypoint,
+    # boot-identity helper) — a literal secret assignment there must fail this check too.
     for relative in tracked_files():
-        if not relative.startswith(("identity/", "docs/evidence/EKO-1-12/", "scripts/keycloak-")):
+        if not relative.startswith(
+            ("identity/", "proxy/", "docs/evidence/EKO-1-12/", "scripts/keycloak-")
+        ):
             continue
         text = read_text(relative)
         if text is None:

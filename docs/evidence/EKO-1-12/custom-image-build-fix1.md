@@ -48,5 +48,10 @@ image (R-02) is open and belongs to the human (see the fix round report).
 
 Runtime selection and filtering are proven by `bootstrap.md` + the fix-round runtime records
 rerun on this image; secret/personal-data freedom of the image is the K-06 walk +
-`built-image-inspection.md` (rebuilt-image re-inspection: <result>). Local build only; no
-registry push, no production claim.
+`built-image-inspection.md` (rebuilt-image re-inspection: executed 2026-11-09 on the clean
+rebuild of the committed `identity/` tree — image ID `sha256:1a1fd4d3…`, full cache-hit
+provenance — one provider jar 4706 B/644/epoch mtime, 0 test-class residue, 0 `.env*`, provider
+registered in `quarkus-application.dat`, same base lineage; see that file's "Re-inspection —
+rebuilt shipped image" section; the fix-round build ID `sha256:387f615a…` was no longer present
+on the host at re-inspection time, so the walk covers the current clean build of the same
+committed sources). Local build only; no registry push, no production claim.
