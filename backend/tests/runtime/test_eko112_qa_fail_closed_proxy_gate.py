@@ -266,7 +266,7 @@ def test_qa_keycloak_start_that_cannot_rotate_the_token_dies_loudly(
     # one-off docker-run technique `open_gate` uses for marker removal after a crash-loop):
     # hand the volume root to uid 0 and refuse writes to uid 1000.
     tag = f"{fresh.project}-proxy:latest"
-    reseed = subprocess.run(  # noqa: S603 - fixed docker argv, synthetic project name
+    reseed = subprocess.run(
         [
             "docker", "run", "--rm", "-v", f"{fresh.project}_keycloak-boot:/mnt",
             "--entrypoint", "sh", tag, "-c",
