@@ -367,6 +367,16 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
 - [ ] **EKO-1-22** — Correct the sensitive-paths register's stale "pending ADR-0006" preamble (#48).
   *Done when:* the preamble of `docs/architecture/architecture-sensitive-paths.md` names no decision as pending and every pending claim the file makes matches a decision whose status in `docs/architecture/decisions/` is not "Accepted" (none, ADR-0001..ADR-0006 all accepted); the table, class list and `scripts/risk-check.sh` are unchanged and the static tests that read the file pass unedited.
   **Out of scope (explicit):** other files with the same stale claim (the CLAUDE.md sentence — gate-1 call); re-pinning past doc-checks to the live register (follow-up #110); any change to the register's rows, classes or `scripts/risk-check.sh`.
+- [ ] **EKO-1-24** — Make migrate refuse a branched revision tree with a message that names the heads (#71).
+  *Done when:* a test running `env.py` on a two-head tree shows a "migrate refused:" line naming both
+  heads, the contrast shows an unresolvable identifier still reading "unknown destination revision",
+  the run still applies nothing and exits non-zero before connecting, and EKO-1-11's refusal tests
+  pass unchanged.
+  **Out of scope (explicit):** which commands `migrate` accepts (proven by EKO-1-11; change needs an
+  ADR-0004 addendum); the fix mechanism (Analyst's); `backend`/`worker` texts (already name the
+  heads); branched-image prevention (exists, CI one-head check); alerting on refusal (EKO-1-08).
+  After EKO-1-11.
+>>>>>>> origin/main
 
 ## EKO-2 — Access
 

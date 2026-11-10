@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-09",
+  "task": "EKO-1-12",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "a043877a2f5721c70",
+  "tokens": 3133694,
+  "tokenSplit": { "input",
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 25,
+  "seconds": 647,
+  "fixRound": 2,
+  "reworkCause": null,
+  "notes": " 3828, "output": 48314, "cacheWrite": 125217, "cacheRead": 2956335 }:PASS (G-30 low scan-comment drift)"
+}
