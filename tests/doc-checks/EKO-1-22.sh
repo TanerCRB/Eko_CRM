@@ -433,7 +433,12 @@ k04a() {
 # bytes_unchanged <base text> <candidate text> — THE byte-identity comparison (CR-normalized). The
 # k04b live loop and the sensitivity contrast both call this one helper: the contrast is not a copy
 # of the comparison's shape, so deleting or weakening the comparison breaks the contrast too.
-bytes_unchanged() { [ "$1" = "$2" ]; }
+# BC_CALLS self-evidences the LIVE use — the QA round-2 mutation EKO-1-22-M-11c (removing only the
+# live loop's call, contrast kept) left the check GREEN on a3beb36: the contrast proves the helper
+# works, nothing there proved the loop calls it. The helper now counts its invocations and k04b
+# demands all eight arms ran (4 live files + 4 contrast).
+BC_CALLS=0
+bytes_unchanged() { BC_CALLS=$((BC_CALLS + 1)); [ "$1" = "$2" ]; }
 k04b() {
   local f a b risk edit s sedit
   for f in "$RISK" "${STATIC[@]}"; do
@@ -455,6 +460,8 @@ k04b() {
   sedit="$(printf '%s\n' "$s" | awk 'NR == 1 { print "# x" $0; next } { print }')"
   bytes_unchanged "$s" "$s" || { WHY="the shared comparison calls an unedited copy changed (static-test leg)"; return 1; }
   bytes_unchanged "$s" "$sedit" && { WHY="insensitive: a one-character edit of ${STATIC[0]} passes the same comparison the live files are checked with"; return 1; }
+  # Every protected file must have been compared for real: 4 live + 4 contrast arms (M-11c fix).
+  [ "$BC_CALLS" -eq 8 ] || { WHY="insensitive: only $BC_CALLS byte-identity comparisons ran — the live loop must call the helper once per protected file"; return 1; }
   # The two negative-contrast lines above leave status 1 on the SUCCESS path (the comparison
   # correctly answers "changed", the && branch does not run) — the function must close with 0.
   return 0
