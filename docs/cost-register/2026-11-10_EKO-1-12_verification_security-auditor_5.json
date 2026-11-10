@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-10",
+  "task": "EKO-1-12",
+  "phase": "verification",
+  "role": "security-auditor",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "a034d8d3e6651ec24",
+  "tokens": 752669,
+  "tokenSplit": {"input":3326,"output":25617,"cacheWrite":87003,"cacheRead":636723},
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 29,
+  "seconds": 704,
+  "fixRound": 3,
+  "reworkCause": null,
+  "notes": "re-verification of the boot-identity correction at 25966f9 (#126/PR #135); PASS (0 findings; token strictly narrows ARP-era surface; cold-ordering window accepted by name)"
+}
