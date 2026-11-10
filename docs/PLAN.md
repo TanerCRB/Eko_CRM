@@ -376,7 +376,6 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   ADR-0004 addendum); the fix mechanism (Analyst's); `backend`/`worker` texts (already name the
   heads); branched-image prevention (exists, CI one-head check); alerting on refusal (EKO-1-08).
   After EKO-1-11.
->>>>>>> origin/main
 
 ## EKO-2 — Access
 
