@@ -1911,7 +1911,7 @@ inspection as runtime proof.
 
 ### 2026-11-10 — Gate-marker boot binding: the Keycloak container's own per-boot token replaces the ARP-observed hardware address
 
-**Status:** Draft — pending approval
+**Status:** Accepted 2026-11-10 — human gate 1 of the boot-identity correction, recorded on Issue #126 (refs #53): the two declared deviations, the boot-every-container-start semantics, control C33 and the CI timeout raise, all accepted as drafted; the separate dated numbering action this addendum records is the dated addendum that follows.
 
 **Condition.** This addendum exists because the mechanism the merged implementation of the
 2026-11-06 addendum chose for the marker's boot binding — the hardware address Docker assigns to
@@ -2022,4 +2022,33 @@ path is the only arrangement that is writable by Keycloak and readable by the en
 changing either service's user. The token is preferred over the container hostname-as-ID or a
 start timestamp because those survive a same-container start and so would not gate the reboot and
 restart cases the accepted sentence already names.
+
+### 2026-11-10 — *Controls*: the identifier printed "C29" in the addendum of 2026-11-06 is cited as C34
+
+**Status:** Accepted 2026-11-10 — human gate 1 of the boot-identity correction, recorded on Issue #126 (refs #53), decision 3: the numbering correction instructed as a separate dated action.
+
+**What it changes.** Two accepted texts of this decision print the same control identifier for
+different controls: the release addendum of 2026-11-04 declares "ADR-0004-C29" for what every
+published release composition carries (digest references, no `build:`, the `proxy` base digest),
+and the addendum of 2026-11-06 declares "New control ADR-0004-C29" for the custom-provider
+verification that must precede either listener opening. This addendum resolves the collision with
+one citation rule and no edit of either text: the verification-before-open control as printed in
+the 2026-11-06 addendum is hereafter cited **ADR-0004-C34**; **C29** belongs to the 2026-11-04
+digest-pinning control alone, which keeps every carrier that already names it — the release
+workflow, the release-composition renderer, the EKO-1-15 checks and their register rows. The
+2026-11-06 text, its printed identifier included, stands as the record of what was accepted on
+that date; this correction adds a name, it does not rewrite history. C33 — the marker-to-boot
+binding of the 2026-11-10 addendum above — is a distinct control: C33 names how the open state is
+observed, C34 names the verification it enforces before any listener opens; the substance of both
+accepted criteria is unchanged by this correction.
+
+**Consequence for the carriers.** Comments, docstrings and test headers that cite "C29" for the
+verification or the marker binding move to C34 or C33 in the correction's implementation pull
+request; the dated evidence records of EKO-1-12 keep their wording, as dated records are answered
+and never rewritten, and records written after this correction cite C33 and C34.
+
+**Why.** A silent renumber of accepted text is what this decision's addendum rule forbids; a
+separate dated action gives every carrier one name per control while the record keeps the name a
+gate used on the day it decided. The collision was found by the Architect's 2026-11-10 impact map
+and accepted with it at the same gate.
 
