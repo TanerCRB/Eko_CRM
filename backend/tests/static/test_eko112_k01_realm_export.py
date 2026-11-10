@@ -195,15 +195,14 @@ def test_k01_access_token_lifespan_leaves_a_positive_remainder(realm: dict[str, 
         ),
     ],
 )
-def test_k01_one_change_mutations_are_rejected(
-    realm: dict[str, Any], mutation: Any
-) -> None:
+def test_k01_one_change_mutations_are_rejected(realm: dict[str, Any], mutation: Any) -> None:
     mutated = copy.deepcopy(realm)
     mutation(mutated)
     assert mutated != realm
-    if mutated["registrationAllowed"] != realm["registrationAllowed"] or mutated[
-        "bruteForceProtected"
-    ] != realm["bruteForceProtected"]:
+    if (
+        mutated["registrationAllowed"] != realm["registrationAllowed"]
+        or mutated["bruteForceProtected"] != realm["bruteForceProtected"]
+    ):
         with pytest.raises(AssertionError):
             test_k01_registration_broker_and_brute_force_configuration(mutated)
     elif mutated["accessTokenLifespan"] != realm["accessTokenLifespan"]:

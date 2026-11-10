@@ -94,8 +94,8 @@ def assert_required_authentication_events(
     color for its own mechanism alone (finding F-01).
     """
     types = {event["type"] for event in events}
-    assert presence <= types, (
-        "missing required authentication event types: " + ", ".join(sorted(presence - types))
+    assert presence <= types, "missing required authentication event types: " + ", ".join(
+        sorted(presence - types)
     )
     assert types.isdisjoint(UNREACHABLE_ON_KEYCLOAK_26_8 | {"REFRESH_TOKEN", "CODE_TO_TOKEN"})
     for event in events:
@@ -109,9 +109,7 @@ def assert_required_authentication_events(
             assert event.get("error")
 
 
-def session_field_projection(
-    value: Any, session_id: str, path: str = ""
-) -> list[tuple[str, bool]]:
+def session_field_projection(value: Any, session_id: str, path: str = "") -> list[tuple[str, bool]]:
     if isinstance(value, dict):
         return [
             match
@@ -292,9 +290,9 @@ def ensure_account(
     account["firstName"] = "EKO112"
     account["lastName"] = "Synthetic"
     account["enabled"] = enabled
-    assert client.admin(
-        token, "PUT", f"users/{account['id']}", json_body=account
-    ).status_code == 204
+    assert (
+        client.admin(token, "PUT", f"users/{account['id']}", json_body=account).status_code == 204
+    )
     response = client.admin(
         token,
         "PUT",
@@ -385,7 +383,7 @@ def reset_action_link(started: Started, public: RealmClient, address: str) -> st
     plain = body.get("Text") or body.get("Snippet") or ""
     candidates = re.findall(r"https://\S+login-actions/action-token\S+", plain)
     assert candidates, "no reset link in the catcher message"
-    return html.unescape(candidates[-1]).rstrip('\\').rstrip('"').rstrip("'")
+    return html.unescape(candidates[-1]).rstrip("\\").rstrip('"').rstrip("'")
 
 
 def drive_reset_form(public: RealmClient, link: str, password: str, confirm: str) -> httpx.Response:
@@ -622,9 +620,7 @@ def test_k04_every_required_event_type_is_stored(keycloak_running: Started) -> N
             )
         assert_refused_login(public, fixtures.ACCOUNTS["locked"], locked_password)
         login_errors = [
-            event["type"]
-            for event in stored_events()
-            if event["type"] == "LOGIN_ERROR"
+            event["type"] for event in stored_events() if event["type"] == "LOGIN_ERROR"
         ]
         assert login_errors, "brute-force lockout produced no LOGIN_ERROR evidence"
 
@@ -707,9 +703,10 @@ def test_k04_reset_and_log_privacy(keycloak_running: Started) -> None:
         # The unknown-address request produced none: the recipient's own count is unchanged
         # (and no message names the unknown address anywhere in the catcher).
         assert len(recipient_messages(keycloak_running, unknown_address)) == before_unknown
-        assert unknown_address.lower() not in json.dumps(
-            messages(keycloak_running), ensure_ascii=False
-        ).lower()
+        assert (
+            unknown_address.lower()
+            not in json.dumps(messages(keycloak_running), ensure_ascii=False).lower()
+        )
         second_known = reset_response(public, known_address)
         assert second_known[0] == known_response[0]
         settled_known = wait_for_recipient_message(keycloak_running, known_address, settled_known)
