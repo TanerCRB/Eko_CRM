@@ -111,8 +111,9 @@ for f in "$RISK" "${STATIC[@]}"; do
 done
 
 tmp="$(mktemp -d)" || die "mktemp failed"
-# shellcheck disable=SC2064
-trap "rm -rf '$tmp'" EXIT
+# Deferred expansion: $tmp is read when the trap runs, inside double quotes — an apostrophe or a
+# space in a TMPDIR path cannot break the rm command or turn part of it into a repo-relative path.
+trap 'rm -rf "$tmp"' EXIT
 
 REG="$(content "$PATHS")" || die "cannot read $PATHS"
 
@@ -243,6 +244,7 @@ k01a() {
   [ -n "$fa" ] || { WHY="insensitive: the copy with the original l.11-12 restored is not caught either"; return 1; }
   fwp="$(printf '%s\n' "$REG" | plant_wrap | fold_pairs | tr -d '*`' | grep -Eoi -- 'pending[^[:alnum:]]{0,6}ADR-[0-9]{4}' | head -n 1)"
   [ -n "$fwp" ] || { WHY="insensitive: the copy with the pending claim wrapped across two lines is not caught"; return 1; }
+  return 0
 }
 check 'K-01a the register claims no decision pending' k01a
 
@@ -253,6 +255,7 @@ rule_sentence() {
   has "$pre" 'cites the decision that governs it' || { WHY="the preamble lacks the citation-rule opening: /cites the decision that governs it/"; return 1; }
   has "$pre" 'unmarked citation names an accepted decision' || { WHY="the preamble lacks the Accepted half: /unmarked citation names an accepted decision/"; return 1; }
   has "$pre" 'is rewritten by that decision.s own task when it is accepted' || { WHY="the preamble lacks the rewrite half: /is rewritten by that decision's own task when it is accepted/"; return 1; }
+  return 0
 }
 k01b() {
   rule_sentence "$REG" || return 1
@@ -261,6 +264,7 @@ k01b() {
     WHY="insensitive: the copy with the rule sentence deleted still contains it"
     return 1
   fi
+  return 0
 }
 check 'K-01b the preamble carries the citation-rule sentence' k01b
 
@@ -314,6 +318,7 @@ k02() {
   # fixture (c): the same claim, no decision file at all → could not run, never a silent pass.
   pending_rule "$reg_a" "$tmp/k02/decisions-c"; rc=$?
   [ $rc -eq 2 ] || { WHY="fixture (c): a pending claim naming no decision file must report could-not-run, got rc $rc: $RULE_MSG"; return 1; }
+  return 0
 }
 check 'K-02 pending claims are checked against the decisions directory, conditionally' k02
 
@@ -394,6 +399,7 @@ k03() {
   draft_map="$(build_status_map "$draftdir/decisions")"
   v="$(citations_check "$REG" "$draft_map" "$draftdir/decisions")" && { WHY="insensitive: ADR-0006 with a Draft head status passes the unmarked citations"; return 1; }
   grep -q 'ADR-0006' <<< "$v" || { WHY="the Draft-status contrast failed for the wrong reason: $v"; return 1; }
+  return 0
 }
 check 'K-03 every unmarked citation resolves to an Accepted decision' k03
 
@@ -424,20 +430,34 @@ k04a() {
   return 0
 }
 
+# bytes_unchanged <base text> <candidate text> — THE byte-identity comparison (CR-normalized). The
+# k04b live loop and the sensitivity contrast both call this one helper: the contrast is not a copy
+# of the comparison's shape, so deleting or weakening the comparison breaks the contrast too.
+bytes_unchanged() { [ "$1" = "$2" ]; }
 k04b() {
   local f a b risk edit s sedit
   for f in "$RISK" "${STATIC[@]}"; do
     a="$(at "$MB" "$f")"
     b="$(content "$f")" || { WHY="$f is not readable in the ${HEAD_REF:-working tree}"; return 1; }
     [ -n "$b" ] || { WHY="$f is gone from the ${HEAD_REF:-working tree}"; return 1; }
-    [ "$a" = "$b" ] || { WHY="$f is not byte-identical to the merge base (CR-normalized, as every reader here does)"; return 1; }
+    bytes_unchanged "$a" "$b" || { WHY="$f is not byte-identical to the merge base (CR-normalized, as every reader here does)"; return 1; }
   done
+  # Contrast through the same helper the live loop just used: an unedited copy of the base text
+  # reads unchanged (positive), the same text with one appended character reads changed (negative);
+  # the pair runs for risk-check.sh and for the first static test. A helper that always answers
+  # "unchanged" dies on a negative; one that always answers "changed" dies on a positive and on the
+  # live loop itself.
   risk="$(at "$MB" "$RISK")"
   edit="$(printf '%s\n' "$risk" | awk 'NR == 1 { print $0 " x"; next } { print }')"
-  [ "$risk" != "$edit" ] || { WHY="insensitive: a one-character edit of $RISK would read as unchanged"; return 1; }
+  bytes_unchanged "$risk" "$risk" || { WHY="the shared comparison calls an unedited copy changed — K-04b's live check would always fail"; return 1; }
+  bytes_unchanged "$risk" "$edit" && { WHY="insensitive: a one-character edit of $RISK passes the same comparison the live files are checked with"; return 1; }
   s="$(at "$MB" "${STATIC[0]}")"
   sedit="$(printf '%s\n' "$s" | awk 'NR == 1 { print "# x" $0; next } { print }')"
-  [ "$s" != "$sedit" ] || { WHY="insensitive: a one-character edit of ${STATIC[0]} would read as unchanged"; return 1; }
+  bytes_unchanged "$s" "$s" || { WHY="the shared comparison calls an unedited copy changed (static-test leg)"; return 1; }
+  bytes_unchanged "$s" "$sedit" && { WHY="insensitive: a one-character edit of ${STATIC[0]} passes the same comparison the live files are checked with"; return 1; }
+  # The two negative-contrast lines above leave status 1 on the SUCCESS path (the comparison
+  # correctly answers "changed", the && branch does not run) — the function must close with 0.
+  return 0
 }
 
 k04c() {
@@ -454,6 +474,7 @@ k04c() {
     d == 0 && $0 == r { print w; d = 1; next }
     { print }' <<< "$base")"
   [ "$base" != "$flip" ] || { WHY="insensitive: the planted class-cell flip reads as unchanged (a row-count comparison would pass it)"; return 1; }
+  return 0
 }
 
 # inert-after-merge: without --base, when origin/main already holds the new preamble, the base is
@@ -504,9 +525,13 @@ k05() {
     runner="uv run python -m pytest"
   fi
   [ -n "$runner" ] || { WHY="no pytest runner (python without pytest, uv not on PATH) — the static tests could not be run"; return 1; }
+  # Word-splitting of $runner below is deliberate: it holds exactly the one- or two-word command
+  # prefix chosen above ("python -m pytest" or "uv run python -m pytest") and must split into argv
+  # words; the path arguments are fixed literals. The suppression covers only that unquoted use.
   # shellcheck disable=SC2086
   out="$(cd backend && $runner tests/static/test_k05_workflow.py tests/static/test_k07_changeset.py tests/static/test_eko110_k07_changeset.py -q 2>&1)"; rc=$?
   [ $rc -eq 0 ] || { WHY="the static tests failed (exit $rc, runner: $runner): $(tail -n 8 <<< "$out" | tr '\n' ' ' | cut -c1-500)"; return 1; }
+  return 0
 }
 check 'K-05 the machine consumers still read the register' k05
 
