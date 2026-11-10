@@ -377,9 +377,10 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   heads); branched-image prevention (exists, CI one-head check); alerting on refusal (EKO-1-08).
   After EKO-1-11.
 
-- [ ] **EKO-1-23** — Recheck past tasks' change-set claims on their own base/head pair, not on the live branch (#110).
+- [x] **EKO-1-23** — Recheck past tasks' change-set claims on their own base/head pair, not on the live branch (#110).
   *Done when:* every test in the verified candidate list is classified live invariant (left, one-line docstring reason) or past claim (rechecked on that task's fixed pair); for each rechecked test a later branch touching the same paths passes and a planted change inside the original pair fails.
   **Out of scope (explicit):** `changed_paths()`/`merge_base()`; `.github/workflows/ci.yml`; past `tests/doc-checks/*.sh` (G-1, follow-up); any new or tightened rule.
+  **Done 2026-11-10:** merged in [PR #129](https://github.com/TanerCRB/Eko_CRM/pull/129), verified at `7d7c39b`: the PR body classifies every candidate — five live invariants left with a one-line docstring reason (`test_k07_changeset.py`, `test_eko119_k01_mode_parity.py`, `test_adr0005_eko113_changeset_adr_files_only_gain_addenda`); the EKO-1-13, EKO-1-15, EKO-1-19 and EKO-1-20 claims rechecked on their own PR merge-commit pairs (#81, #85, #96, #113) through `backend/tests/support/fixed_pair.py`, where a later-branch change passes and a one-change plant inside the pair or a missing pair commit fails; the guards of candidates 8, 9 and 12 confirmed already inert — `backend/tests/static/test_eko123_*.py`; the `backend` job of [run 42812654518](https://github.com/TanerCRB/Eko_CRM/actions/runs/42812654518) listed all 390 new and rechecked node IDs PASSED, none skipped (K-06, observed at gate 2). 23 mutation runs, 22 killed; M20c survived as an equivalent mutation of the permanently vacuous `test_k07_register_check_fails_on_any_other_edit` (exception EKO-1-23/M20c). Exception EKO-1-23/weakening-1. Follow-ups #116, #133.
 
 ## EKO-2 — Access
 
