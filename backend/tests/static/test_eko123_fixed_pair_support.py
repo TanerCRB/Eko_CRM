@@ -18,6 +18,8 @@ NEW_AND_RECHECKED = (
     "test_eko123_already_inert.py",
     "test_eko123_eko113_claims.py",
     "test_eko123_fixed_pair_support.py",
+    "test_eko123_qa_changeset_base_ignored.py",
+    "test_eko123_qa_surface_fixture_binding.py",
     "test_eko123_workflow_claims.py",
     "test_adr0005_eko113_changeset.py",
     "test_eko115_k07_unchanged.py",
