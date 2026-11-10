@@ -161,8 +161,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.runtime == 'true'
     runs-on: ubuntu-latest
-    # EKO-1-20 (#76): the control-lock-wait tests hold locks past the 180 s bound; 45 min no longer fits the suite.
-    timeout-minutes: 75
+    # EKO-1-20 (#76) 45 min no longer fits the lock-wait suite. EKO-1-12 boot-identity (#126, 2026-11-10): 78-83 min measured before cancellation at the 75 ceiling on both runtime jobs (suite ~45-50 + expiry 16:43 + r21 ~10 + restore ~6); 110 = ~30% margin; ceiling only, no assertion moves; rides with the determinism fix (a higher ceiling over the racy suite would only convert timing failures into cancellations).
+    timeout-minutes: 110
     # Reads the release record for ADR-0004-C13's previous-release half (EKO-1-15 K-06, C-3, C-4).
     permissions:
       contents: read
@@ -240,8 +240,8 @@ jobs:
     needs: [changes, checked-images]
     if: needs.changes.outputs.runtime == 'true'
     runs-on: ubuntu-latest
-    # EKO-1-20 (#76): the release-mode suite also runs the control-lock-wait tests; 60 min left no margin (57 min observed).
-    timeout-minutes: 75
+    # EKO-1-20 (#76): lock-wait tests, 57 min observed under 60. EKO-1-12 boot-identity (#126, 2026-11-10): 78-83 min measured before cancellation at the 75 ceiling on both runtime jobs (suite ~45-50 + expiry 16:43 + r21 ~10 + restore ~6); 110 = ~30% margin; same measurement, no assertion moves.
+    timeout-minutes: 110
     # Reads the release record for ADR-0004-C13's previous-release half, as the runtime job does.
     permissions:
       contents: read

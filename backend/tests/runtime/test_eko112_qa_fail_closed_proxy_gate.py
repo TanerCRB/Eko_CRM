@@ -2,18 +2,22 @@
 open_gate's verification is load-bearing.
 
 The fail-closed mechanism (ADR-0004 addendum of 2026-11-02 at the criterion level, extended
-by the 2026-11-06 C29 addendum the fix round implements; this file is QA's independent
-contrast, not a restatement):
+by the verification control ADR-0004-C34 of the addendum of 2026-11-06 — printed "C29" there,
+renumbered by the dated correction of 2026-11-10 — and bound to the running boot by
+ADR-0004-C33 of that correction; this file is QA's independent contrast, not a restatement):
 
 - `proxy/entrypoint.sh` selects `Caddyfile.closed` — a configuration with no listener at all —
   unless `/data/admin-open` / `/data/public-open` markers exist AND each marker's content is
-  the boot identity the proxy observes for the running Keycloak container (assigned per
-  container creation), and refuses to start with the public marker while the admin marker is
-  absent.
+  the boot token the proxy reads for the running Keycloak container (a per-boot UUID the
+  Keycloak entrypoint wrapper rotates as its first act, ADR-0004-C33), and refuses to start
+  with the public marker while the admin marker is absent.
 - `scripts/keycloak-bootstrap.sh` removes both markers at start; `open_gate` records each
   gate's marker bound to the verified boot only after that gate's own preconditions, verifies
   with an in-container wget that the listener actually serves, and removes the marker again
   (re-closing the proxy) when that verification fails, recording the residual state.
+- The Keycloak entrypoint wrapper's own precondition, carried by the last test here: a
+  container start that cannot rotate the boot token dies before Keycloak launches — a
+  loud, fail-closed refusal, never a silent unrotated boot.
 
 What each phase carries — and, from the executed EKO-1-12/qa2-* mutations, what it does not
 (QA round-2 finding F-03: a contrast that survives a mutation is not protection for that
@@ -50,6 +54,7 @@ mechanism, and this file must not read as if it were).
    under qa2-4 — see the docstring of test_eko112_k02_bootstrap_order.py.
 """
 
+import subprocess
 import time
 from pathlib import Path
 
@@ -58,6 +63,7 @@ import pytest
 
 from tests.runtime.conftest import Composition
 from tests.runtime.keycloak_client import (
+    BOOT_IDENTITY,
     boot_identity,
     listener_open,
     marker_value,
@@ -234,3 +240,104 @@ def test_qa_open_gate_verification_stops_the_bootstrap_before_the_next_gate(
         f"the bootstrap did not record the residual marker state: {events}"
     )
     assert_connection_death(composition, "auth")
+
+
+def test_qa_keycloak_start_that_cannot_rotate_the_token_dies_loudly(
+    fresh: Composition, tmp_path: Path
+) -> None:
+    """C33's wrapper precondition, carried offline on the real composition.
+
+    The honest variant named in the brief for "stub the wrapper rotation": rather than
+    re-implementing the entrypoint command, the token directory is made unwritable for
+    the Keycloak container's own user (uid 1000), so the REAL wrapper's first act fails
+    on the REAL composition. The claim carried: a start that cannot rotate dies before
+    `kc.sh` runs (the refusal line, not a Keycloak banner, is all the log ever shows);
+    the full bootstrap then fails closed at its own `up --wait` (exit non-zero), the
+    markers it wiped at its start stay absent, both listeners are connection-dead and
+    the helper reads no token. A silently unrotated boot would pass this phase with
+    Keycloak serving and the gates open. Removing the wrapper's refusal exit, or
+    rotating into an unprotected path, turns this test green-false — QA's mutation
+    target; against the withdrawn ARP primitive this scenario did not even exist (the
+    identity was never written by Keycloak at all)."""
+    prepare(fresh)
+    assert_connection_death(fresh, "admin")
+    assert_connection_death(fresh, "auth")
+    # The boot carrier exists at this point, seeded by the proxy's first attach (the same
+    # one-off docker-run technique `open_gate` uses for marker removal after a crash-loop):
+    # hand the volume root to uid 0 and refuse writes to uid 1000.
+    tag = f"{fresh.project}-proxy:latest"
+    reseed = subprocess.run(  # noqa: S603 - fixed docker argv, synthetic project name
+        [
+            "docker", "run", "--rm", "-v", f"{fresh.project}_keycloak-boot:/mnt",
+            "--entrypoint", "sh", tag, "-c",
+            "chown -R 0:0 /mnt && chmod 755 /mnt",
+        ],
+        capture_output=True, text=True, timeout=120,
+    )  # fmt: skip
+    assert reseed.returncode == 0, reseed.stderr[-500:]
+    result = run_bootstrap(fresh, tmp_path / "bootstrap-no-rotate.jsonl", expected=1)
+    assert result.returncode == 1
+    logs = fresh.compose("logs", "--tail", "400", "keycloak", check=False)
+    text = logs.stdout + logs.stderr
+    assert "boot token could not be rotated" in text, (
+        f"the unrotatable Keycloak start did not refuse loudly: {text[-2000:]}"
+    )
+    assert "Keycloak 26" not in text, "kc.sh started although the rotation refused"
+    assert marker_value(fresh, "admin") == ""
+    assert marker_value(fresh, "public") == ""
+    assert_connection_death(fresh, "admin")
+    assert_connection_death(fresh, "auth")
+    assert boot_identity(fresh) == "", (
+        "the helper observed a boot token on a composition whose rotation was refused"
+    )
+
+
+def test_qa_boot_carrier_seeds_keycloak_writable_ownership_in_either_attach_order(
+    fresh: Composition,
+) -> None:
+    """The seeded-ownership claim of the 2026-11-10 addendum, executed on the real
+    composition in the order no other test fixes: Keycloak attaches the empty volume
+    FIRST.
+
+    `prepare` brings the proxy up without Keycloak, so every other run in this set
+    exercises proxy-first seeding (and its keycloak rotation proves that volume root
+    writable by uid 1000). Here the reverse order runs: `up -d --wait keycloak` keeps
+    the proxy out of the bring-up, the volume root is seeded by the IDENTITY image, and
+    the wrapper's rotation succeeding under uid 1000 is the writability proof for that
+    seed. The proxy then attaches the already-initialized volume read-only and its
+    helper must read the same token. The observed ownership modes are recorded in
+    docs/evidence/EKO-1-12/fix-round-2-boot-identity.md; if the daemon inherited a
+    root-owned volume root despite the seed, this test is where it turns red.
+    """
+    fresh.compose(
+        "up", "-d", "--wait", "--wait-timeout", "600", "keycloak", timeout=700
+    )  # fmt: skip
+    root = fresh.compose(
+        "exec", "-T", "keycloak", "stat", "-c", "%u %g %a", "/etc/eko/keycloak-boot"
+    ).stdout.strip()
+    assert root == "1000 1000 755", (
+        f"keycloak-first seeding did not leave a keycloak-usable volume root: {root!r}"
+    )
+    # The rotation ran as the first act of this start, in a directory the identity
+    # image seeded: proof of writability, not of a permissive default.
+    token = fresh.compose(
+        "exec", "-T", "keycloak", "cat", "/etc/eko/keycloak-boot/token"
+    ).stdout.strip()
+    assert BOOT_IDENTITY.fullmatch(token), (
+        f"no rotated boot token on the keycloak-first volume: {token!r}"
+    )
+    seed = fresh.compose(
+        "exec", "-T", "keycloak", "cat", "/etc/eko/keycloak-boot/.seed", check=False
+    ).stdout.strip()
+    assert seed and not BOOT_IDENTITY.fullmatch(seed), (
+        "the seed placeholder is absent or indistinguishable from a real token"
+    )
+    # Proxy second: its image's seed is inert on the initialized volume; the helper
+    # reads the Keycloak-seeded token through the read-only mount.
+    fresh.compose(
+        "up", "-d", "--wait", "--wait-timeout", "600", "proxy", timeout=700
+    )  # fmt: skip
+    seen = boot_identity(fresh)
+    assert seen == token, f"the proxy helper read {seen!r} where the carrier holds {token!r}"
+    assert_connection_death(fresh, "admin")
+    assert_connection_death(fresh, "auth")

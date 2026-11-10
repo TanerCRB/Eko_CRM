@@ -1,7 +1,8 @@
-"""EKO-1-12 K-02 item 5 / ADR-0004-C29 (addendum 2026-11-06): the restore half of the
+"""EKO-1-12 K-02 item 5 / ADR-0004-C34 (the control printed "C29" in the addendum of
+2026-11-06, renumbered by the dated correction of 2026-11-10): the restore half of the
 listener boundary, run against the real composition.
 
-R-04 / G-04: the DoD and C29 require that after a restore through the accepted local backup
+R-04 / G-04: the DoD and C34 require that after a restore through the accepted local backup
 path, the selected custom factory and the required filtering are verified before either
 listener opens. This test:
 

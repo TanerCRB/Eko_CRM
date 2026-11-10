@@ -42,7 +42,7 @@ def test_k01_custom_provider_is_same_id_higher_order_jpa_subtype() -> None:
     assert registration.strip() == (
         "org.eko_crm.keycloak.events.FilteringJpaEventStoreProviderFactory"
     )
-    assert "String ID = \"jpa\"" not in factory
+    assert 'String ID = "jpa"' not in factory
     assert "EventListenerProvider" not in store
 
 
@@ -169,7 +169,9 @@ def test_k01_compose_uses_custom_image_without_adding_state_or_services(
     assert keycloak["image"] == "localhost/eko-crm/keycloak:26.8.1-eko112"
     assert len(compose_source["services"]) == 9
     assert len(rendered_shared["services"]) == 8
-    assert set(compose_source["volumes"]) == {"pgdata", "proxy-data"}
+    # C4 amended by the addendum of 2026-11-10: keycloak-boot joins the state volumes as the
+    # boot-token carrier (ADR-0004-C33); no service or published port is added.
+    assert set(compose_source["volumes"]) == {"pgdata", "proxy-data", "keycloak-boot"}
 
 
 def test_k01_provider_has_real_pre_persist_behavior_test() -> None:

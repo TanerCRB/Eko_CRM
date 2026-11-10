@@ -172,9 +172,11 @@ class RealmClient:
     ) -> dict[str, Any]:
         redirect_uri = "https://eko112.invalid/callback"
         verifier = secrets.token_urlsafe(64)
-        challenge = base64.urlsafe_b64encode(
-            hashlib.sha256(verifier.encode()).digest()
-        ).rstrip(b"=").decode()
+        challenge = (
+            base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
+            .rstrip(b"=")
+            .decode()
+        )
         query = httpx.QueryParams(
             {
                 "client_id": client_id,
@@ -185,18 +187,14 @@ class RealmClient:
                 "code_challenge_method": "S256",
             }
         )
-        login = self.request(
-            "GET", f"/realms/{self.realm}/protocol/openid-connect/auth?{query}"
-        )
+        login = self.request("GET", f"/realms/{self.realm}/protocol/openid-connect/auth?{query}")
         assert login.status_code == 200, f"login page status {login.status_code}"
         match = FORM_ACTION.search(login.text)
         assert match is not None, "login form not found"
         action = html.unescape(match.group(1))
         parsed = urlparse(action)
         path = parsed.path + ("?" + parsed.query if parsed.query else "")
-        submitted = self.request(
-            "POST", path, data={"username": username, "password": password}
-        )
+        submitted = self.request("POST", path, data={"username": username, "password": password})
         assert submitted.status_code in (302, 303), (
             f"login submission status {submitted.status_code}"
         )
@@ -281,9 +279,7 @@ class RealmClient:
         expected: int = 200,
         realm: str | None = None,
     ) -> Any:
-        response = self.admin(
-            token, method, path, json_body=json_body, params=params, realm=realm
-        )
+        response = self.admin(token, method, path, json_body=json_body, params=params, realm=realm)
         assert response.status_code == expected, f"{method} {path}: status {response.status_code}"
         if not response.content:
             return None
@@ -303,9 +299,7 @@ def matching_value_paths(value: Any, candidates: set[str], path: str = "") -> li
         return [
             match
             for key, item in value.items()
-            for match in matching_value_paths(
-                item, candidates, f"{path}.{key}" if path else key
-            )
+            for match in matching_value_paths(item, candidates, f"{path}.{key}" if path else key)
         ]
     if isinstance(value, list):
         return [
@@ -331,22 +325,24 @@ def keycloak_logs(started: Started) -> str:
     return result.stdout + result.stderr
 
 
-# Gate markers bound to the verified Keycloak boot (ADR-0004 C29, addendum 2026-11-06):
-# open_gate records the boot identity the proxy container itself observes, and the proxy
+# Gate markers bound to the verified Keycloak boot (ADR-0004-C33, addendum 2026-11-10):
+# open_gate records the boot identity the proxy container itself reads, and the proxy
 # entrypoint opens a listener only while the marker names the live boot. These helpers are
 # the same primitives the script and the entrypoint use, so a test can neither fake the
 # gate nor accidentally weaken it.
 IDENTITY_SCRIPT = "/usr/local/bin/eko-keycloak-boot-identity.sh"
-BOOT_IDENTITY = re.compile(r"[0-9a-f]{2}(?::[0-9a-f]{2}){5}")
+BOOT_IDENTITY = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}")
 
 
 def boot_identity(composition: Composition) -> str:
     """The boot identity the proxy container itself observes for the running Keycloak.
 
-    The helper inside the proxy image resolves the `keycloak` service, attempts one TCP
-    exchange (a refused attempt still resolves the ARP entry) and prints the hardware
-    address Docker assigned to that container creation; it exits non-zero and prints
-    nothing when Keycloak is unreachable."""
+    The helper inside the proxy image reads the per-boot token file from the shared boot
+    volume — the UUID the Keycloak entrypoint wrapper rotated as the first act of the
+    container's CURRENT start (ADR-0004-C33) — validates its shape and prints it. A
+    missing, empty or malformed token file exits non-zero and prints nothing; the
+    observation is a pure file read, no network lookup of Keycloak (the withdrawn
+    2026-11-06 primitive forced a TCP attempt and read the ARP table instead)."""
     return composition.compose(
         "exec", "-T", "proxy", "sh", IDENTITY_SCRIPT, check=False
     ).stdout.strip()
