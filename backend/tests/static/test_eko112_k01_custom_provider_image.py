@@ -42,7 +42,7 @@ def test_k01_custom_provider_is_same_id_higher_order_jpa_subtype() -> None:
     assert registration.strip() == (
         "org.eko_crm.keycloak.events.FilteringJpaEventStoreProviderFactory"
     )
-    assert "String ID = \"jpa\"" not in factory
+    assert 'String ID = "jpa"' not in factory
     assert "EventListenerProvider" not in store
 
 

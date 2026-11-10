@@ -172,9 +172,11 @@ class RealmClient:
     ) -> dict[str, Any]:
         redirect_uri = "https://eko112.invalid/callback"
         verifier = secrets.token_urlsafe(64)
-        challenge = base64.urlsafe_b64encode(
-            hashlib.sha256(verifier.encode()).digest()
-        ).rstrip(b"=").decode()
+        challenge = (
+            base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
+            .rstrip(b"=")
+            .decode()
+        )
         query = httpx.QueryParams(
             {
                 "client_id": client_id,
@@ -185,18 +187,14 @@ class RealmClient:
                 "code_challenge_method": "S256",
             }
         )
-        login = self.request(
-            "GET", f"/realms/{self.realm}/protocol/openid-connect/auth?{query}"
-        )
+        login = self.request("GET", f"/realms/{self.realm}/protocol/openid-connect/auth?{query}")
         assert login.status_code == 200, f"login page status {login.status_code}"
         match = FORM_ACTION.search(login.text)
         assert match is not None, "login form not found"
         action = html.unescape(match.group(1))
         parsed = urlparse(action)
         path = parsed.path + ("?" + parsed.query if parsed.query else "")
-        submitted = self.request(
-            "POST", path, data={"username": username, "password": password}
-        )
+        submitted = self.request("POST", path, data={"username": username, "password": password})
         assert submitted.status_code in (302, 303), (
             f"login submission status {submitted.status_code}"
         )
@@ -281,9 +279,7 @@ class RealmClient:
         expected: int = 200,
         realm: str | None = None,
     ) -> Any:
-        response = self.admin(
-            token, method, path, json_body=json_body, params=params, realm=realm
-        )
+        response = self.admin(token, method, path, json_body=json_body, params=params, realm=realm)
         assert response.status_code == expected, f"{method} {path}: status {response.status_code}"
         if not response.content:
             return None
@@ -303,9 +299,7 @@ def matching_value_paths(value: Any, candidates: set[str], path: str = "") -> li
         return [
             match
             for key, item in value.items()
-            for match in matching_value_paths(
-                item, candidates, f"{path}.{key}" if path else key
-            )
+            for match in matching_value_paths(item, candidates, f"{path}.{key}" if path else key)
         ]
     if isinstance(value, list):
         return [
