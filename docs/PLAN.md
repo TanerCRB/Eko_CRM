@@ -374,6 +374,10 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   heads); branched-image prevention (exists, CI one-head check); alerting on refusal (EKO-1-08).
   After EKO-1-11.
 
+- [ ] **EKO-1-23** — Recheck past tasks' change-set claims on their own base/head pair, not on the live branch (#110).
+  *Done when:* every test in the verified candidate list is classified live invariant (left, one-line docstring reason) or past claim (rechecked on that task's fixed pair); for each rechecked test a later branch touching the same paths passes and a planted change inside the original pair fails.
+  **Out of scope (explicit):** `changed_paths()`/`merge_base()`; `.github/workflows/ci.yml`; past `tests/doc-checks/*.sh` (G-1, follow-up); any new or tightened rule.
+
 ## EKO-2 — Access
 
 - [ ] **EKO-2-01** — Require login for the whole application.
