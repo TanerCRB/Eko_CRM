@@ -106,3 +106,8 @@ Accepted at gate 2 of EKO-1-20 in [PR #113](https://github.com/TanerCRB/Eko_CRM/
 Accepted at gate 2 of EKO-1-22 in [PR #132](https://github.com/TanerCRB/Eko_CRM/pull/132) (decided by the human on 2026-11-10, recorded on #48); follow-up #131:
 
 - Exception EKO-1-22/M-05-narrow — owner: @TanerCRB — reason: the surviving mutation removes guards whose job the retained Accepted-comparison already does (duplicate-file and Status-less citations both fail there; QA proved it by hand at `27fe842`), and planting the missing contrasts would open a third fix round against the two-round limit — blocks again: 2027-01-15
+
+Accepted at gate 2 of EKO-1-23 in [PR #129](https://github.com/TanerCRB/Eko_CRM/pull/129) (decided by the human on 2026-11-10, recorded on #110):
+
+- Exception EKO-1-23/weakening-1 — owner: @TanerCRB — reason: the five findings in backend/tests/static/test_eko120_ci_timeout_retune.py (:38, :52, :113, :220, :228) keep the same assertions and only move their input from the live worktree to EKO-1-20's own PR #113 base/head pair, which is the change this Story makes — blocks again: 2026-12-10
+- Exception EKO-1-23/M20c — owner: @TanerCRB — reason: the surviving mutation removes the is_eko_1_06_change_set() guard of test_k07_register_check_fails_on_any_other_edit, an equivalent mutation because without the guard the test still asserts that every register variant is flagged and every variant is; hardening that permanently vacuous test is out of scope by gate 1 — blocks again: 2026-12-10
