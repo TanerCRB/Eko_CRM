@@ -35,9 +35,9 @@
 #   K-02   pending ADR-0007 with a Draft status → the rule passes; the same claim with an Accepted
 #          status → the rule fails; with no decision file at all → the rule reports "could not
 #          run", never a silent pass.
-#   K-03   a row citing ADR-0007 with no file → fails; a fixture decisions directory holding an
-#          exact copy of the real one → passes; the same copy with ADR-0006's head status set to
-#          Draft → fails.
+#   K-03   a row citing a decision with no file (id ADR-9999) → fails; a fixture decisions directory
+#          holding an exact copy of the real one → passes; the same copy with ADR-0006's head
+#          status set to Draft → fails.
 #   K-04a  planted paths (README.md, CLAUDE.md — refused by C-1 gate-1 A — the sibling register,
 #          risk-check.sh) → refused; the allow list's own four paths → accepted.
 #   K-04b  a one-character edit of risk-check.sh / of a static test → read as changed.
@@ -379,10 +379,13 @@ k03() {
   # one map per decisions directory; the live walk and the flip1 contrast share the live map.
   live_map="$(build_status_map "$DECISIONS")"
   v="$(citations_check "$REG" "$live_map" "$DECISIONS")" || { WHY="a live citation does not resolve: $v"; return 1; }
-  # contrast 1: one cell's ADR-0005 flipped to ADR-0007 — no such decision file → fails.
-  flip1="$(sed 's/ADR-0002, ADR-0003, ADR-0005/ADR-0002, ADR-0003, ADR-0007/' <<< "$REG")"
+  # contrast 1: one cell's ADR-0005 flipped to an id no decision file bears → fails. The criterion
+  # names the SEMANTIC (an unresolvable citation must be caught), not the instance id: the id was
+  # ADR-0007 until main accepted it (EKO-1-12, merged into this branch 2026-11-10), and is now
+  # ADR-9999 — chosen because no ADR-99xx file exists in docs/architecture/decisions/.
+  flip1="$(sed 's/ADR-0002, ADR-0003, ADR-0005/ADR-0002, ADR-0003, ADR-9999/' <<< "$REG")"
   if citations_check "$flip1" "$live_map" "$DECISIONS" >/dev/null; then
-    WHY="insensitive: a row citing ADR-0007 with no decision file passes"; return 1
+    WHY="insensitive: a row citing a decision with no file (ADR-9999) passes"; return 1
   fi
   # fixture dirs: an exact copy of the real decisions directory (sanity: the live rows pass there
   # too) and the same copy with ADR-0006's head status set to Draft (one changed element).
