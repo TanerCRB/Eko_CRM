@@ -387,6 +387,10 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   *Done when:* on `main`, both runtime jobs of a CI run at this task's merge conclude success or failure within their `timeout-minutes` (run URL in the PR); the cause of the jump is named from a job log; any bound change is justified by observed durations; no runtime test is removed, skipped or weakened to fit.
   **Out of scope (explicit):** splitting the runtime suite beyond what the cause requires; reopening EKO-1-23; re-judging PRs merged while the jobs were cancelled; raising the bound without a named cause.
 
+- [ ] **EKO-1-26** — Integrate the custom Keycloak image into the release flow (EKO-1-12/R-02 successor) (#118).
+  *Done when:* the release-mode CI runtime job reaches its K-04 image guard green on a CI run — the checked-images family covers `localhost/eko-crm/keycloak:26.8.1-eko112` so no runtime test builds it in session; the release pipeline names the custom Keycloak image the route ADR-0004 requires; PR #135 rebased on this merge goes green.
+  **Out of scope (explicit):** the boot-identity mechanism of PR #135; the remaining release-mode red tests #140-#144; `backup/` content; the ADR-0004 image-table row moves only through this task's gate 3.
+
 ## EKO-2 — Access
 
 - [ ] **EKO-2-01** — Require login for the whole application.
