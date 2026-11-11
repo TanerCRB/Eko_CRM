@@ -9,7 +9,7 @@
   "complexity": "High",
   "agentId": "a56c226ab1ca25dad",
   "tokens": 33657673,
-  "tokenSplit": { "input": 5412, "output": 158016, "cacheWrite": 576079, "cacheRead": 31665319 },
+  "tokenSplit": { "input": 5436, "output": 164418, "cacheWrite": 889235, "cacheRead": 32598584 },
   "tokensSource": "transcript",
   "measured": "record",
   "toolCalls": 199,
