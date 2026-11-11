@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-11",
+  "task": "EKO-1-12",
+  "phase": "code",
+  "role": "developer-infrastructure",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "High",
+  "agentId": "a0109fc2422ac95bb",
+  "tokens": 36556948,
+  "tokenSplit": { "input": 5097, "output": 205451, "cacheWrite": 1085677, "cacheRead": 35260723 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 196,
+  "seconds": 8935,
+  "fixRound": 3,
+  "reworkCause": "release-mode CI cluster (marker_value/cannot_rotate <project>-proxy:latest assumption + proxy_routing stale against C33 marker semantics + k02/qa settle gaps) first seen on PR #135 run 42897088542; earlier role able to catch: QA4 ran everything in build mode only - checked-image mode was never exercised locally in any round until this invocation reproduced it",
+  "notes": "boundary-check: clean (T31, allowed backend/tests+scripts+ci.yml+evidence); overturned the single-race hypothesis with reproduction under EKO_CHECKED_IMAGES; Config.Image fix, write_gate_marker fix for proxy_routing (in-scope decision recorded), wait_for_closed_selection (positive entrypoint-refusal proof, no clock), script exit-127 fix; default 1746 exit 0, all greens on disk, evidence no-PENDING; first release-mode CI run remains the ubuntu judge (bind windows + 140 ceiling); report delivered via transcript extraction after 3 refused handbacks; lesson memory filed (no interim handbacks; plain-text final; extract via node)"
+}
