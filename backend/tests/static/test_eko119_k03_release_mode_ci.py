@@ -4,7 +4,10 @@ runs, and nothing in it writes to the registry. Each check fails on a one-change
 
 The unchanged-job and unchanged-release checks are EKO-1-19's claims and are judged on PR #96's
 parents (EKO_1_19_BASE, EKO_1_19_HEAD), read through Git objects only (EKO-1-23, #110): never
-`$CHANGESET_BASE`, `origin/main` or the working tree. "Builds once" stays judged on the live file.
+`$CHANGESET_BASE`, `origin/main` or the working tree. "Builds once" stays judged on the live file:
+EKO-1-26 widened that live invariant to the five project images, and its carrier is the dedicated
+test below, so EKO-1-19's pair claims stay insensitive to the working tree (EKO-1-23's harness
+K-05 block judges that carrier with a swapped live tree).
 """
 
 import copy
@@ -117,6 +120,13 @@ def test_eko119_k03_every_existing_ci_job_is_byte_identical() -> None:
 def test_eko119_k06_release_workflow_unchanged() -> None:
     base, head = eko_1_19_pair(RELEASE)
     assert base is not None and base == head
+
+
+def test_eko126_k04_live_release_builds_the_five_project_images_once() -> None:
+    """EKO-1-19's "builds once", judged on the live `release.yml` — what every head must meet
+    (ADR-0004-C31). EKO-1-26 K-04 widened the family to the custom Keycloak image; the live half
+    moves out of the pair-identical check here so the pair stays the pair and this stays live.
+    EKO-1-23's harness K-05 block reads exactly this carrier with a swapped live tree."""
     assert rw.build_once_violations(release()) == []
 
 
@@ -198,6 +208,22 @@ def _build_flag(flow: Workflow) -> None:
     step["run"] = step["run"].replace("backup\n", "backup --no-cache\n")
 
 
+def _save_without_keycloak(flow: Workflow) -> None:
+    """EKO-1-26 K-04: the archive loses the custom Keycloak image — drift between the files."""
+    step = rm._step(flow, rm.BUILD_JOB, "docker save")[1]
+    step["run"] = step["run"].replace(" eko-crm/keycloak:checked", "")
+
+
+def _keycloak_id_dropped(flow: Workflow) -> None:
+    """EKO-1-26 K-04: an identity step that is not given the keycloak ID verifies four of five."""
+    steps = [s for s in _job(flow)["steps"] if rw.IDENTITY in str(s.get("run", ""))]
+    del steps[0]["env"]["KEYCLOAK_ID"]
+
+
+def _keycloak_id_output_dropped(flow: Workflow) -> None:
+    del _job(flow, rm.BUILD_JOB)["outputs"]["keycloak-id"]
+
+
 def _setup_uv_in_build(flow: Workflow) -> None:
     _job(flow, rm.BUILD_JOB)["steps"].insert(1, {"uses": "astral-sh/setup-uv@" + "0" * 40})
 
@@ -209,6 +235,10 @@ PLANTS: dict[str, Callable[[Workflow], None]] = {
     "checked-images-empty": _env("EKO_CHECKED_IMAGES", ""),
     "checked-images-three": _env(
         "EKO_CHECKED_IMAGES", " ".join(p for p in rm.CHECKED_PAIRS if "backup" not in p)
+    ),
+    # EKO-1-26 K-04: the family list missing only keycloak (the fourth pair kept) is drift.
+    "checked-images-no-keycloak": _env(
+        "EKO_CHECKED_IMAGES", " ".join(p for p in rm.CHECKED_PAIRS if not p.startswith("keycloak"))
     ),
     "pytest-narrowed": _narrowed,
     "pull-request-only": _set_job("if", PR_ONLY),
@@ -223,6 +253,10 @@ PLANTS: dict[str, Callable[[Workflow], None]] = {
     "build-flag-added": _build_flag,
     "no-save": _drop_step(rm.BUILD_JOB, "docker save"),
     "setup-uv-in-build": _setup_uv_in_build,
+    # EKO-1-26 K-04: keycloak prepared in one place only must not drift from the release run.
+    "save-drops-keycloak": _save_without_keycloak,
+    "identity-drops-keycloak-id": _keycloak_id_dropped,
+    "build-drops-keycloak-id-output": _keycloak_id_output_dropped,
     # K-04 (i), (ii) wiring
     "no-identity-after-tests": _last_identity_dropped,
     "no-snapshot": _drop_step(rm.RELEASE_MODE_JOB, rm.SNAPSHOT),

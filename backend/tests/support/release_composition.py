@@ -2,14 +2,16 @@
 digest form (ADR-0004 addendum 2026-11-04, *The release composition*; ADR-0004-C29).
 
     uv run python -m tests.support.release_composition render --tag T --digests FILE \
-        --postgres sha256:... --keycloak sha256:... --out FILE
+        --postgres sha256:... --out FILE
     uv run python -m tests.support.release_composition check --composition FILE
 
 `render` edits the composition's text, so comments, anchors and every `${NAME:?…}` stay as
 written; no environment value is substituted. Project images name
-`ghcr.io/tanercrb/eko-crm/<name>:<tag>@<digest>`; `postgres` and `keycloak` keep their tag and
-gain the digest the release run's runtime tests pulled; `build:` (and the `pull_policy: build`
-that goes with it) is removed from every shared-profile service.
+`ghcr.io/tanercrb/eko-crm/<name>:<tag>@<digest>` — the five the release run builds and pushes,
+including the custom Keycloak image (EKO-1-26 route A, ADR-0004 addendum draft); its digest comes
+from the run's own pushes, in the same `--digests` file as the other four. `postgres` keeps its
+tag and gains the digest the release run's runtime tests pulled; `build:` (and the
+`pull_policy: build` that goes with it) is removed from every shared-profile service.
 
 Exit codes: 0 = written or the rules hold; 1 = a rule is broken; 2 = the command itself failed.
 """
@@ -26,9 +28,11 @@ from tests.support.image_refs import DIGEST, parse
 from tests.support.repo import REPO_ROOT
 
 PROJECT_REGISTRY = "ghcr.io/tanercrb/eko-crm"
-PROJECT_IMAGES = ("backend", "frontend", "proxy", "backup")
+# EKO-1-26 (route A): the custom Keycloak image is the fifth project image — the release run
+# builds it from `identity/`, checks and pushes it, and the composition names it by that digest.
+PROJECT_IMAGES = ("backend", "frontend", "proxy", "backup", "keycloak")
 ON_BACKEND_IMAGE = ("backend", "migrate", "worker")
-THIRD_PARTY = ("postgres", "keycloak")
+THIRD_PARTY = ("postgres",)
 SERVICE = re.compile(r"^  (?P<name>[a-z][a-z0-9_-]*):\s*$")
 KEY = re.compile(r"^    (?P<key>[a-z_]+):(?P<rest>.*)$")
 IMAGE_VALUE = re.compile(r"^(?P<anchor>\s*&\S+)?\s*(?P<ref>\S.*?)\s*$")
@@ -56,8 +60,8 @@ def _image_for(service: str, current: str | None, tag: str, digests: dict[str, s
 
 
 def render(compose: str, tag: str, digests: dict[str, str]) -> str:
-    """The release composition of `tag`; `digests` maps backend, frontend, proxy, backup,
-    postgres and keycloak to the digest the release names."""
+    """The release composition of `tag`; `digests` maps the five project images and postgres
+    to the digest the release names (EKO-1-26: keycloak among the project images)."""
     if not RELEASE_TAG.fullmatch(tag):
         raise ValueError(f"{tag!r} is not a release tag")
     shared = {
@@ -176,7 +180,6 @@ def main(argv: list[str], out: TextIO = sys.stdout) -> int:
     make.add_argument("--tag", required=True)
     make.add_argument("--digests", required=True, help="name=sha256:... lines of the pushes")
     make.add_argument("--postgres", required=True)
-    make.add_argument("--keycloak", required=True)
     make.add_argument("--out", required=True)
     check = commands.add_parser("check")
     check.add_argument("--composition", required=True)
@@ -184,8 +187,10 @@ def main(argv: list[str], out: TextIO = sys.stdout) -> int:
     compose = (REPO_ROOT / "compose.yaml").read_text(encoding="utf-8")
     try:
         if args.command == "render":
+            # EKO-1-26 K-03: the custom keycloak image is a pushed project image; its digest
+            # arrives in the pushes' file, so the command names no `--keycloak` reference.
             digests = read_digests(Path(args.digests))
-            digests.update(postgres=args.postgres, keycloak=args.keycloak)
+            digests.update(postgres=args.postgres)
             Path(args.out).write_text(render(compose, args.tag, digests), encoding="utf-8")
             report(out, f"release-composition: rendered {args.tag}")
             return 0

@@ -294,6 +294,10 @@ def test_eko123_eko120_retune_claim_contrast_a_retuned_timeout_on_the_pair_passe
 
 
 # K-05: "builds once" stays judged on the live release.yml ---------------------------------------
+# EKO-1-26 widened that live invariant to the five project images; its carrier is the dedicated
+# EKO-1-23-visible function below, so the pair claims stay insensitive to the working tree while
+# this half still fails on any live release.yml that builds twice or forgets an image of the
+# current family.
 
 
 def test_eko123_eko119_release_claim_still_fails_on_a_live_release_that_builds_twice(
@@ -304,11 +308,11 @@ def test_eko123_eko119_release_claim_still_fails_on_a_live_release_that_builds_t
     monkeypatch.setattr(m119, "REPO_ROOT", throwaway.work)
     assert "docker build -t planted" in (k07.in_worktree(RELEASE) or ""), "precondition: the plant"
     with pytest.raises(AssertionError, match="builds an image"):
-        m119.test_eko119_k06_release_workflow_unchanged()
+        m119.test_eko126_k04_live_release_builds_the_five_project_images_once()
 
 
 def test_eko123_eko119_release_claim_contrast_the_live_release_without_the_plant_passes() -> None:
-    m119.test_eko119_k06_release_workflow_unchanged()
+    m119.test_eko126_k04_live_release_builds_the_five_project_images_once()
 
 
 # K-04: the pair is the real one, and a missing commit fails ---------------------------------------

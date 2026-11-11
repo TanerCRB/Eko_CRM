@@ -118,7 +118,12 @@ def registry_login_violations(flows: dict[str, Workflow]) -> list[str]:
 IMAGES_JOB = "images"
 RUNTIME_JOB = "runtime"
 CHECK_JOBS = ("admission", "backend", "frontend", IMAGES_JOB, RUNTIME_JOB)
-PROJECT_IMAGES = ("backend", "frontend", "proxy", "backup")
+# EKO-1-26 route A: the custom Keycloak image is the fifth project image.
+PROJECT_IMAGES = ("backend", "frontend", "proxy", "backup", "keycloak")
+# The build context of each project image: `keycloak` is built from `identity/` (compose.yaml
+# `build: context: ./identity`); the others build from the directory of their own name. The
+# once-built check asserts the context too, so a keycloak build from a different path is caught.
+BUILD_CONTEXT = {"keycloak": "identity"}
 BUILD = re.compile(
     r"\bdocker\s+(?:buildx\s+)?(?:image\s+)?build\b|\bcompose\b[^\n]*\bbuild\b|--build\b"
     r"|build-push-action|\bbuildah\b|\bkaniko\b|\bbake\b"
@@ -161,10 +166,32 @@ def build_once_violations(flow: Workflow) -> list[str]:
     builds = " ".join(_runs(flow, IMAGES_JOB))
     for name in PROJECT_IMAGES:
         made = re.findall(rf"docker build -t {re.escape(checked(name))} (\S+)", builds)
-        if made != [name]:
+        if made != [BUILD_CONTEXT.get(name, name)]:
             problems.append(f"{IMAGES_JOB}: {name} is built {len(made)} times, not once")
     if len(BUILD.findall(builds)) != len(PROJECT_IMAGES):
-        problems.append(f"{IMAGES_JOB}: builds other than the four project images")
+        problems.append(f"{IMAGES_JOB}: builds other than the five project images")
+    # EKO-1-26 K-04: every recorded ID reaches every `check-identity`/`push` step of the release
+    # run — the CI side is pinned by equality with `release_mode_ci.ID_ENV`; a step of the
+    # release workflow missing one (keycloak included) would verify the family without it.
+    recorded = ((flow.get("jobs") or {}).get(IMAGES_JOB) or {}).get("outputs") or {}
+    for name in PROJECT_IMAGES:
+        if _expression(recorded.get(f"{name}-id")) != f"${{{{steps.ids.outputs.{name}}}}}":
+            problems.append(f"{IMAGES_JOB}: output {name}-id is not the build's recorded ID")
+    id_env = {
+        f"{name.upper()}_ID": f"${{{{needs.{IMAGES_JOB}.outputs.{name}-id}}}}"
+        for name in PROJECT_IMAGES
+    }
+    for job in (RUNTIME_JOB, PUBLISH_JOB):
+        for step in _steps_of(flow, job):
+            text = str(step.get("run", ""))
+            if IDENTITY not in text and PUSH not in text:
+                continue
+            env = step.get("env") or {}
+            problems += [
+                f"{job}: step {step.get('name')!r} is not given {variable} (K-04)"
+                for variable, source in id_env.items()
+                if _expression(env.get(variable)) != source
+            ]
     image_check = [r for r in _runs(flow, IMAGES_JOB) if "scripts/image-check.sh" in r]
     if len(image_check) != 1 or not all(checked(n) in image_check[0] for n in PROJECT_IMAGES):
         problems.append(f"{IMAGES_JOB}: the image checks do not run on every checked image")
@@ -195,7 +222,9 @@ def _expression(text: Any) -> str:
 
 
 def third_party_digest_violations(flow: Workflow) -> list[str]:
-    """K-02: the composition's postgres and keycloak digests are those the runtime tests pulled."""
+    """K-02: the composition's postgres digest is the one the runtime tests pulled. EKO-1-26
+    route A: keycloak left this rule with the third-party family — its digest is the run's own
+    push, pinned by `pushed_project_digest_violations`."""
     steps = _steps_of(flow, RUNTIME_JOB)
     recorders = [i for i, s in enumerate(steps) if PULLED in str(s.get("run", ""))]
     if len(recorders) != 1 or recorders[0] < _index(flow, RUNTIME_JOB, "pytest"):
@@ -204,7 +233,7 @@ def third_party_digest_violations(flow: Workflow) -> list[str]:
     outputs = ((flow.get("jobs") or {}).get(RUNTIME_JOB) or {}).get("outputs") or {}
     render = [s for s in _steps_of(flow, PUBLISH_JOB) if RENDER in str(s.get("run", ""))]
     problems = []
-    for name in ("postgres", "keycloak"):
+    for name in ("postgres",):
         if _expression(outputs.get(name)) != f"${{{{steps.{step_id}.outputs.{name}}}}}":
             problems.append(f"{RUNTIME_JOB}: output {name} is not the recorded pulled digest")
         variable = f"{name.upper()}_DIGEST"
@@ -217,6 +246,37 @@ def third_party_digest_violations(flow: Workflow) -> list[str]:
         ]
         if len(render) != 1 or not wired:
             problems.append(f"{PUBLISH_JOB}: the {name} digest is not the runtime tests' one")
+    return problems
+
+
+def pushed_project_digest_violations(flow: Workflow) -> list[str]:
+    """EKO-1-26 K-03: no step names a registry digest for a project image that the run did not
+    push. The five project images — the custom keycloak among them — take their digests from the
+    publish job's own push record (`build_once_violations` pins the push file feeding the render);
+    none may be re-pointed at a runtime pull: no project image is a runtime output, the render
+    takes no project image by flag, and none by a `*_DIGEST` environment of its own."""
+    outputs = ((flow.get("jobs") or {}).get(RUNTIME_JOB) or {}).get("outputs") or {}
+    problems = [
+        f"{RUNTIME_JOB}: output {name} records a pulled digest for a pushed image"
+        for name in PROJECT_IMAGES
+        if name in outputs
+    ]
+    for step in _steps_of(flow, PUBLISH_JOB):
+        if RENDER not in str(step.get("run", "")):
+            continue
+        run = str(step.get("run", ""))
+        env = step.get("env") or {}
+        problems += [
+            f"{PUBLISH_JOB}: the render takes the {name} digest by flag, not from the pushes"
+            for name in PROJECT_IMAGES
+            if f"--{name} " in run
+        ]
+        problems += [
+            f"{PUBLISH_JOB}: the render is given a {variable} of its own, not the pushes' record"
+            for name in PROJECT_IMAGES
+            for variable in (f"{name.upper()}_DIGEST",)
+            if variable in env
+        ]
     return problems
 
 

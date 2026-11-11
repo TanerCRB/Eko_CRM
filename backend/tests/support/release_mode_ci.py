@@ -72,7 +72,8 @@ def condition_violations(ci: Workflow) -> list[str]:
 
 
 def build_job_violations(ci: Workflow, release: Workflow) -> list[str]:
-    """The release workflow's four builds, ID record and save, on Docker alone (ADR-0001-C4)."""
+    """The release workflow's five builds, ID record and save, on Docker alone (ADR-0001-C4;
+    EKO-1-26: the custom Keycloak image is the fifth project image)."""
     job = _jobs(ci).get(BUILD_JOB)
     if job is None:
         return [f"no {BUILD_JOB} job"]
@@ -89,7 +90,7 @@ def build_job_violations(ci: Workflow, release: Workflow) -> list[str]:
     if _step(ci, BUILD_JOB, "docker image inspect")[1].get("id") != "ids":
         problems.append(f"{BUILD_JOB}: the image IDs are not recorded by a step with id 'ids'")
     if job.get("outputs") != ID_OUTPUTS:
-        problems.append(f"{BUILD_JOB}: outputs {job.get('outputs')!r}, not the four image IDs")
+        problems.append(f"{BUILD_JOB}: outputs {job.get('outputs')!r}, not the five image IDs")
     ours = _step(ci, BUILD_JOB, "actions/upload-artifact@")[1]
     theirs = _step(release, rw.IMAGES_JOB, "actions/upload-artifact@")[1]
     if not theirs or ours != theirs:

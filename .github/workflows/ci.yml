@@ -192,9 +192,10 @@ jobs:
           RELEASE_RECORD_TOKEN: ${{ github.token }}
         run: uv run pytest -m "runtime or previous_release" tests/runtime -v
 
-  # EKO-1-19 (#95): release mode wherever the runtime tests run. The four project images are built
-  # once in this run as release.yml's images job builds them (ADR-0004-C31), with Docker only
-  # (ADR-0001-C4), and reach the next job as this run's own artifact; nothing is pushed.
+  # EKO-1-19 (#95): release mode wherever the runtime tests run. The five project images are
+  # built once in this run as release.yml's images job builds them (ADR-0004-C31; EKO-1-26 adds the
+  # custom Keycloak image, built from identity/), with Docker only (ADR-0001-C4), and reach the
+  # next job as this run's own artifact; nothing is pushed.
   checked-images:
     name: checked image builds (release mode)
     needs: changes
@@ -206,6 +207,7 @@ jobs:
       frontend-id: ${{ steps.ids.outputs.frontend }}
       proxy-id: ${{ steps.ids.outputs.proxy }}
       backup-id: ${{ steps.ids.outputs.backup }}
+      keycloak-id: ${{ steps.ids.outputs.keycloak }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -216,15 +218,16 @@ jobs:
           docker build -t eko-crm/frontend:checked frontend
           docker build -t eko-crm/proxy:checked proxy
           docker build -t eko-crm/backup:checked backup
+          docker build -t eko-crm/keycloak:checked identity
       - name: Record image IDs
         id: ids
         shell: bash
         run: |
-          for name in backend frontend proxy backup; do
+          for name in backend frontend proxy backup keycloak; do
             echo "$name=$(docker image inspect --format '{{.Id}}' "eko-crm/$name:checked")" >> "$GITHUB_OUTPUT"
           done
       - name: Save the checked images
-        run: docker save -o "$RUNNER_TEMP/checked-images.tar" eko-crm/backend:checked eko-crm/frontend:checked eko-crm/proxy:checked eko-crm/backup:checked
+        run: docker save -o "$RUNNER_TEMP/checked-images.tar" eko-crm/backend:checked eko-crm/frontend:checked eko-crm/proxy:checked eko-crm/backup:checked eko-crm/keycloak:checked
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: checked-images
@@ -262,6 +265,7 @@ jobs:
           FRONTEND_ID: ${{ needs.checked-images.outputs.frontend-id }}
           PROXY_ID: ${{ needs.checked-images.outputs.proxy-id }}
           BACKUP_ID: ${{ needs.checked-images.outputs.backup-id }}
+          KEYCLOAK_ID: ${{ needs.checked-images.outputs.keycloak-id }}
         run: |
           docker load -i "$RUNNER_TEMP/checked-images.tar"
           bash scripts/release-images.sh check-identity
@@ -284,7 +288,7 @@ jobs:
       - name: Runtime tests on the checked images (K-01, K-02, K-03, K-04)
         working-directory: backend
         env:
-          EKO_CHECKED_IMAGES: "backend=eko-crm/backend:checked frontend=eko-crm/frontend:checked proxy=eko-crm/proxy:checked backup=eko-crm/backup:checked"
+          EKO_CHECKED_IMAGES: "backend=eko-crm/backend:checked frontend=eko-crm/frontend:checked proxy=eko-crm/proxy:checked backup=eko-crm/backup:checked keycloak=eko-crm/keycloak:checked"
           RELEASE_RECORD_TOKEN: ${{ github.token }}
         run: uv run pytest -m "runtime or previous_release" tests/runtime -v
       - name: The checked images are still the ones built (K-04)
@@ -294,6 +298,7 @@ jobs:
           FRONTEND_ID: ${{ needs.checked-images.outputs.frontend-id }}
           PROXY_ID: ${{ needs.checked-images.outputs.proxy-id }}
           BACKUP_ID: ${{ needs.checked-images.outputs.backup-id }}
+          KEYCLOAK_ID: ${{ needs.checked-images.outputs.keycloak-id }}
         run: bash scripts/release-images.sh check-identity
       - name: No image built by the tests (K-04)
         working-directory: backend
