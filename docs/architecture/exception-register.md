@@ -46,7 +46,6 @@ entry conditions of EKO-1-08 (#36) and, for R-22, EKO-1-12 (#53):
 - Exception EKO-1-03/R-19 — owner: @TanerCRB — reason: an entered but not yet performed approval fails the monthly record comparison; corrected in EKO-1-08 (#36) — blocks again: 2027-03-31
 - Exception EKO-1-03/R-20 — owner: @TanerCRB — reason: restore step 10 names the console, which only regenerates the client secret, instead of the admin REST API; corrected in EKO-1-08 (#36) — blocks again: 2027-03-31
 - Exception EKO-1-03/R-21 — owner: @TanerCRB — reason: restore step 9 says "the previous value" where two rotations since the backup need the value in effect at the backup's time; corrected in EKO-1-08 (#36) — blocks again: 2027-03-31
-- Exception EKO-1-03/R-22 — owner: @TanerCRB — reason: bootstrap opens the public listener before the application realm import and the C8 check; corrected in EKO-1-12 (#53), moved from EKO-1-06 (#19) at its gate 1 — blocks again: 2027-03-31
 
 Accepted at gate 2 of EKO-1-04 in [PR #44](https://github.com/TanerCRB/Eko_CRM/pull/44); fixed by
 an ADR-0005 addendum tracked in #43:
@@ -116,3 +115,12 @@ Accepted at gate 2 of EKO-1-24 in [PR #125](https://github.com/TanerCRB/Eko_CRM/
 
 - Exception EKO-1-24/M5 — owner: @TanerCRB — reason: the widened-gate mutant is equivalent on every surface K-01..K-04 pin and differs only in the dual-failure corner the Story declares out of scope — blocks again: 2027-05-10
 - Exception EKO-1-24/B-01 — owner: @TanerCRB — reason: no charset rule binds revision identifiers reaching the pre-existing plain-text refusal sink; the same actor can already ship arbitrary migration code — blocks again: 2027-02-10
+
+Accepted at gate 2 of EKO-1-12 in [PR #117](https://github.com/TanerCRB/Eko_CRM/pull/117) (decided by the human on 2026-11-09, recorded on #53); the boot-identity correction [PR #135](https://github.com/TanerCRB/Eko_CRM/pull/135) added no new exception and removed none; entry conditions: #118 (R-02), #119 (R-32), #120 (Q3-1):
+
+- Exception EKO-1-12/qa2-7 — owner: @TanerCRB — reason: the async-mail race behind the pre-fix snapshot shape is host-time-dependent and did not reproduce on demand; the recorded red-before history (QA round 1, reviewer, dev) stands as the evidence for the bounded poll — blocks again: 2026-12-15
+- Exception EKO-1-12/G-02 — owner: @TanerCRB — reason: Keycloak 26.8.1 emits neither RESET_PASSWORD nor any brute-force-disable event under the accepted configuration; the reachable-set encoding is sanctioned by the gate-3 ADR-0005 Retention amendment — blocks again: 2026-11-30
+- Exception EKO-1-12/Q3-1 — owner: @TanerCRB — reason: the tracked-additions secret scan fires only on diff-form lines; raw-format teeth are the named follow-up Issue, no live secret exists today — blocks again: 2026-12-15
+- Exception EKO-1-12/S-03 — owner: @TanerCRB — reason: a proxy kept running across a Keycloak recreation is not revoked — host-tier race accepted inside the operator trust tier of EKO-1-03/B-02 until EKO-1-08 — blocks again: 2027-01-31
+- Exception EKO-1-12/R-02 — owner: @TanerCRB — reason: the release-flow integration and publishing decision for the custom image are carried by the named successor Issue, not by this composition task — blocks again: 2026-12-15
+- Exception EKO-1-12/R-32 — owner: @TanerCRB — reason: the re-close-failed branch is proven loud by the executed stub but has no committed regression guard; follow-up Issue names the forced-fail mode — blocks again: 2026-12-15
