@@ -111,3 +111,8 @@ Accepted at gate 2 of EKO-1-23 in [PR #129](https://github.com/TanerCRB/Eko_CRM/
 
 - Exception EKO-1-23/weakening-1 — owner: @TanerCRB — reason: the five findings in backend/tests/static/test_eko120_ci_timeout_retune.py (:38, :52, :113, :220, :228) keep the same assertions and only move their input from the live worktree to EKO-1-20's own PR #113 base/head pair, which is the change this Story makes — blocks again: 2026-12-10
 - Exception EKO-1-23/M20c — owner: @TanerCRB — reason: the surviving mutation removes the is_eko_1_06_change_set() guard of test_k07_register_check_fails_on_any_other_edit, an equivalent mutation because without the guard the test still asserts that every register variant is flagged and every variant is; hardening that permanently vacuous test is out of scope by gate 1 — blocks again: 2026-12-10
+
+Accepted at gate 2 of EKO-1-24 in [PR #125](https://github.com/TanerCRB/Eko_CRM/pull/125) (decided by the human on 2026-11-10, recorded on #71); follow-ups #127, #128:
+
+- Exception EKO-1-24/M5 — owner: @TanerCRB — reason: the widened-gate mutant is equivalent on every surface K-01..K-04 pin and differs only in the dual-failure corner the Story declares out of scope — blocks again: 2027-05-10
+- Exception EKO-1-24/B-01 — owner: @TanerCRB — reason: no charset rule binds revision identifiers reaching the pre-existing plain-text refusal sink; the same actor can already ship arbitrary migration code — blocks again: 2027-02-10
