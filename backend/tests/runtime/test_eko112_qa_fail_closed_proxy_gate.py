@@ -107,6 +107,44 @@ def wait_for_serving(composition: Composition, listener: str, deadline_seconds: 
     raise AssertionError(f"the {listener} listener never became reachable: {last_failure}")
 
 
+CLOSED_DECISION_LINE = "gate markers do not name the running Keycloak boot; serving closed"
+
+
+def closed_decision_count(composition: Composition) -> int:
+    """How many closed-decision lines the proxy's recent log window carries.
+
+    A bounded tail, not `--since`: an occurrence delta compares one daemon's own writes
+    with each other and cannot be skewed by a host-clock difference to the log timestamps
+    (Docker Desktop's VM clock vs the host is the local case; the point is not to rely on
+    either agreeing). Between a baseline read and the post-restart check only this
+    container's own start lines land in the window — tens, against the 500-line tail."""
+    logs = composition.compose("logs", "--tail", "500", "proxy", check=False)
+    return (logs.stdout + logs.stderr).count(CLOSED_DECISION_LINE)
+
+
+def wait_for_closed_selection(composition: Composition, before: int, seconds: int = 120) -> None:
+    """Wait until the proxy logs carry one more of the entrypoint's closed-decision lines
+    than the `before` baseline taken just before the restart.
+
+    The positive bind proof for the state `wait_for_serving` cannot prove: both listeners
+    are supposed to stay closed, nothing answers, and inside the restart-bind window a
+    refused connection would fake the closed gate (finding F-04, the shape the qa2-3
+    mutation exposed). `proxy/entrypoint.sh` prints this exact line in the same process
+    immediately before it `exec`s caddy with the closed configuration, so seeing it — once
+    the container reports Running — settles what the entrypoint decided, not what the bind
+    window hides. `seconds` reuses `wait_for_proxy_running`'s proven container budget (no
+    new timeout): the line follows the start by only the entrypoint's own file reads."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if closed_decision_count(composition) > before:
+            return
+        time.sleep(1.0)
+    raise AssertionError(
+        f"the proxy did not record its closed-configuration decision within {seconds}s of "
+        f"the restart (baseline {before}): {composition.inspect('proxy')['State']}"
+    )
+
+
 @pytest.fixture
 def bootstrap_broken_proxy(fresh: Composition) -> Composition:
     """`prepare` the composition, then make `Caddyfile.admin` unparseable inside the proxy.
@@ -239,6 +277,26 @@ def test_qa_open_gate_verification_stops_the_bootstrap_before_the_next_gate(
     assert any("marker removed" in line for line in events), (
         f"the bootstrap did not record the residual marker state: {events}"
     )
+    # The bootstrap's re-close restart of the proxy returned at container start; before
+    # reading the auth listener's silence, wait out the same restart-bind window every
+    # sibling here proved on these runners (finding F-04): Running state, then the settle
+    # the blind-touch phase above uses (neither bound is new). With no marker left, the
+    # entrypoint prints no decision line, so the socket itself cannot carry the positive
+    # proof — the mutation carriers of this test remain the exit code (`run_bootstrap
+    # expected=1`) and the event asserts above; this settle only keeps the wire check
+    # from passing vacuously inside the window.
+    deadline = time.monotonic() + 120.0
+    while time.monotonic() < deadline:
+        state = composition.inspect("proxy")["State"]
+        if state.get("Running") and state.get("ExitCode") == 0:
+            break
+        time.sleep(1.0)
+    else:
+        raise AssertionError(
+            f"the proxy did not return to a running state after the re-close within 120s: "
+            f"{composition.inspect('proxy')['State']}"
+        )
+    time.sleep(3.0)
     assert_connection_death(composition, "auth")
 
 
@@ -264,8 +322,12 @@ def test_qa_keycloak_start_that_cannot_rotate_the_token_dies_loudly(
     assert_connection_death(fresh, "auth")
     # The boot carrier exists at this point, seeded by the proxy's first attach (the same
     # one-off docker-run technique `open_gate` uses for marker removal after a crash-loop):
-    # hand the volume root to uid 0 and refuse writes to uid 1000.
-    tag = f"{fresh.project}-proxy:latest"
+    # hand the volume root to uid 0 and refuse writes to uid 1000. The image is the
+    # composition's own proxy image (`Config.Image`, the `marker_value` rule — a guessed
+    # local build tag exists only in the composition job; the release job loaded checked
+    # images and this test died on `docker run` before the rotation was ever attempted,
+    # run 42897088542).
+    tag = fresh.inspect("proxy")["Config"]["Image"]
     reseed = subprocess.run(
         [
             "docker", "run", "--rm", "-v", f"{fresh.project}_keycloak-boot:/mnt",

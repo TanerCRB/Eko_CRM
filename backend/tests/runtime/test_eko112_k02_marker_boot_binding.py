@@ -27,6 +27,17 @@ open" is withdrawn by the addendum; its hardware-address observation keyed the i
 container creation, so a reboot or restart re-opened listeners the bootstrap had never
 re-verified. R-05/S-03 scenarios (image swap, force recreate, any bring-up that creates a
 new container) stay covered by the phase above.
+
+Hardening 2026-11-11 (CI runs 42897088542, 42711869762; red in the release job ONLY): the
+failure was not a listener bound late but a reader never bound at all — `marker_value` ran a
+one-off of the locally built `<project>-proxy:latest` image, which a release run does not
+have (EKO-1-15 K-02 resets the build and loads `eko-crm/proxy:checked`); the helper now runs
+the composition's own proxy image. Both stale-marker phases additionally gained
+`wait_for_closed_selection` (the entrypoint's own closed-decision line as the positive bind
+proof where no listener may answer) and the sibling-proven settle, closing the qa2-3
+false-pass shape a single-shot death read left inside the restart window; the recreate read
+now uses the file's existing bounded rotation wait instead of a single shot. Every bound
+reused here is a constant this family proved green on the same runners.
 """
 
 import time
@@ -41,7 +52,11 @@ from tests.runtime.keycloak_client import (
     prepare,
     run_bootstrap,
 )
-from tests.runtime.test_eko112_qa_fail_closed_proxy_gate import assert_connection_death
+from tests.runtime.test_eko112_qa_fail_closed_proxy_gate import (
+    assert_connection_death,
+    closed_decision_count,
+    wait_for_closed_selection,
+)
 
 pytestmark = pytest.mark.runtime
 
@@ -103,16 +118,26 @@ def test_k02_markers_are_bound_to_the_current_keycloak_boot(fresh: Composition) 
         "up", "-d", "--force-recreate", "--wait", "--wait-timeout", "600", "keycloak",
         timeout=700,
     )  # fmt: skip
-    recreated = boot_identity(fresh)
-    assert recreated and recreated != identity, (
-        "the recreated Keycloak container kept the same boot identity: the contrast would "
-        "exercise nothing (the marker could match a container nobody verified)"
-    )
+    # The bounded wait every rotation observation in this file uses (90 s, its own
+    # documented budget): `up --wait` returns at the health gate, but the marker half of
+    # the scenario needs the NEW token already readable — the wrapper rotates it before
+    # kc.sh, so the wait normally costs one poll and turns a slow runner into a settle,
+    # not into a single-shot `assert recreated != identity` failing on an unread volume.
+    wait_for_rotated_identity(fresh, identity)
 
     # A later proxy start (host reboot, restart policy, or a plain restart) re-reads the
-    # markers: they name the previous boot, so both listeners must stay closed.
+    # markers: they name the previous boot, so both listeners must stay closed. The reads
+    # are not one-shot-after-restart (finding F-04): container Running, then the
+    # entrypoint's own closed-decision line (the positive proof, since here nothing is
+    # supposed to answer), then the sibling-proven bind settle — only then the sockets.
+    # Without the decision line an entrypoint that ignored marker content would select an
+    # open configuration a few seconds later, and the instant death read would pass
+    # vacuously (the qa2-3 mutation's shape).
+    before = closed_decision_count(fresh)
     fresh.compose("restart", "proxy")
     wait_for_proxy_running(fresh)
+    wait_for_closed_selection(fresh, before)
+    time.sleep(3.0)
     assert not listener_open(fresh, "admin"), "the admin listener served on a stale marker"
     assert not listener_open(fresh, "auth"), "the public listener served on a stale marker"
     assert_connection_death(fresh, "admin")
@@ -142,8 +167,17 @@ def test_k02_markers_are_bound_to_the_current_keycloak_boot(fresh: Composition) 
     fresh.compose("restart", "keycloak")
     restarted = wait_for_rotated_identity(fresh, current)
     assert restarted != current
+    # Same restart-bind discipline as the recreate phase above: the marker now names the
+    # OLD boot (keycloak restarted, token rotated, no bootstrap ran), so the entrypoint
+    # selects the closed configuration and prints the decision line. Wait for the container,
+    # the decision line, and the bind settle before reading the sockets — otherwise a slow
+    # bind fakes the dead gate and the mutation (dropped identity comparison) slips a false
+    # pass, the exact qa2-3 finding.
+    before = closed_decision_count(fresh)
     fresh.compose("restart", "proxy")
     wait_for_proxy_running(fresh)
+    wait_for_closed_selection(fresh, before)
+    time.sleep(3.0)
     assert not listener_open(fresh, "admin"), (
         "the admin listener served after a keycloak restart no bootstrap verified"
     )

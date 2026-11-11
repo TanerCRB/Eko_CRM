@@ -351,9 +351,21 @@ def boot_identity(composition: Composition) -> str:
 def marker_value(composition: Composition, gate: str) -> str:
     """The marker's CONTENT, read through a one-off mount of the markers' volume: the proxy
     container may be crash-looping (the exact state a failed gate check examines), where
-    `compose exec` fails and a naive reader would report "no marker" vacuously."""
+    `compose exec` fails and a naive reader would report "no marker" vacuously.
+
+    The one-off runs the image the composition's own proxy container uses — its
+    `Config.Image` — not a guessed local build tag: a release run (EKO-1-15 K-02, the
+    checked images) resets the build config and loads `eko-crm/proxy:checked`, so a
+    `<project>-proxy:latest` name simply does not exist there. CI runs 42897088542 and
+    42711869762 showed every marker reader dying in release mode alone
+    (`Unable to find image ...`) while green in the composition job — this helper, or the
+    same tag pattern inlined in the rotation-refusal test, was the single cause of four
+    release-mode reds and the boot-identity-carrier ERROR. The container object exists and
+    is inspectable even while crash-looping (`compose ps -a` finds it), which is exactly
+    the state this reader exists for; the one-off needs an image with `sh` and the mount,
+    and the proxy image is that image in both modes."""
     assert gate in ("admin", "public"), gate
-    tag = f"{composition.project}-proxy:latest"
+    tag = composition.inspect("proxy")["Config"]["Image"]
     result = subprocess.run(
         [
             "docker", "run", "--rm", "-v", f"{composition.project}_proxy-data:/data",

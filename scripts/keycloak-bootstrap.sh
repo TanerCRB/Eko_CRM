@@ -345,9 +345,21 @@ open_gate() {
   # one-off mount of the markers' own volume — a failing proxy may be crash-looping, and
   # `compose exec` cannot reach it between restart attempts; a marker that survives a failed
   # gate must end the run, not be papered over.
-  local proxy_image
-  proxy_image="$(docker image ls --format '{{.Repository}}:{{.Tag}}' \
-    --filter "reference=${COMPOSE_PROJECT_NAME}-proxy:latest" | head -n 1)"
+  # The image is the one the composition's own proxy CONTAINER runs (`Config.Image` of the
+  # project's proxy container, read through `ps -a` so it resolves while the entrypoint
+  # crash-loops), not the `${COMPOSE_PROJECT_NAME}-proxy:latest` build-tag list: a release
+  # run (EKO-1-15 K-02, on the checked images) loads `eko-crm/proxy:checked` with the build
+  # config reset, no such tag exists, and the marker removal — the fail-closed half of this
+  # very branch — died at image resolution and left the failed gate's marker on the volume
+  # (CI runs 42897088542 and 42711869762, release job: the qa fail-closed and r21 reds;
+  # reproduced red locally with the pre-fix line restored under the same env — the residual
+  # marker survived the failed gate, exactly the state this branch promises is impossible).
+  # Resolution still fails closed: no container, no image, no removal, the run ends.
+  local proxy_image="" proxy_container=""
+  proxy_container="$(compose ps -a -q proxy | head -n 1)"
+  if [ -n "$proxy_container" ]; then
+    proxy_image="$(docker inspect --format '{{.Config.Image}}' "$proxy_container")" || proxy_image=""
+  fi
   [ -n "$proxy_image" ] || {
     echo "keycloak-bootstrap: cannot resolve the proxy image to remove the $gate marker" >&2
     return 1

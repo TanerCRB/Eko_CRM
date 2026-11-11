@@ -6,17 +6,34 @@ Before this file these rules were probed by hand only:
   the same request for another realm is refused by `proxy` (403), not by Keycloak;
 - the account console is refused on the public listener;
 - the admin listener forwards from the company network and refuses (403) any other source; the
-  contrast is a second `proxy`, identical except for COMPANY_NETWORK_CIDRS, with nothing behind it,
-  so a request it forwarded would be a 502;
+  contrast is the same `proxy` with COMPANY_NETWORK_CIDRS pointed at TEST-NET-1 and an
+  un-bootstrapped Keycloak behind the listener, so a request the refusal did not block would
+  be Keycloak's own status (503 "Bootstrap in progress", later 200) — never a proxy 403;
 - plain HTTP on the application host redirects to HTTPS.
+
+Hardening 2026-11-11 (CI runs 42897088542 and 42711869762: this test was red in BOTH runtime
+jobs on this branch, reproduced red locally before the change): the EKO-1-12 boot-identity
+correction (ADR-0004-C33, addendum 2026-11-10) made a gate marker only open while its CONTENT
+names the current Keycloak boot, but this file's marker phase still blind-touched an empty
+marker — an existence-only marker is no longer a gate, so the listener never bound and the
+poll failed on "never became reachable", not on anything about the network rule. The phase now
+starts Keycloak (its entrypoint wrapper rotates the boot token as the first act of every
+start — no bootstrap needed, and none can run here: the script's own gate check arrives from
+inside the composition network, which the foreign CIDR set refuses) and writes the marker
+through `write_gate_marker`, the same primitive `open_gate` uses. The restart is followed by
+the eko112 family's proven waits (`wait_for_proxy_running`, `wait_for_serving`) replacing the
+old one-shot-after-restart probe — the same finding F-04 race class, which here would have
+turned the refusal poll into a 60 s timeout.
 """
 
 import time
 
-import httpx
 import pytest
 
 from tests.runtime.conftest import Composition, Started, read_env, write_env
+from tests.runtime.keycloak_client import boot_identity, write_gate_marker
+from tests.runtime.test_eko112_k02_marker_boot_binding import wait_for_proxy_running
+from tests.runtime.test_eko112_qa_fail_closed_proxy_gate import wait_for_serving
 
 pytestmark = pytest.mark.runtime
 
@@ -72,23 +89,39 @@ def test_adr0004_admin_listener_refuses_a_source_outside_the_company_network(
     values["COMPANY_NETWORK_CIDRS"] = FOREIGN_NETWORK
     write_env(fresh.env_file, values)
     fresh.compose("up", "-d", "--build", "--no-deps", "--wait", "proxy", timeout=600)
-    # EKO-1-12 (ADR-0004 addendum): the listener answers only behind its gate marker, and the
-    # bootstrap cannot open it in this environment — its own gate check arrives from inside the
-    # composition network, which the foreign CIDR set above refuses (TEST-NET-1 holds no Docker
-    # or host address). This contrast therefore opens the marker the bootstrap would write,
-    # with nothing running behind the listener at all.
-    fresh.compose("exec", "-T", "proxy", "touch", "/data/admin-open")
+    # Start Keycloak so a boot token exists: the entrypoint wrapper rotates it as the FIRST
+    # act of the start, before kc.sh, and `--wait` returns only past the server's own health
+    # gate, so a single read here names a rotation the health chain already proves. No
+    # bootstrap: its gate check would arrive from inside the composition network, which the
+    # foreign CIDR set above refuses (TEST-NET-1 holds no Docker or host address), and none
+    # of the routing contrast needs verified providers — only an open gate the entrypoint
+    # accepts, written exactly the way `open_gate` writes one.
+    fresh.compose(
+        "up", "-d", "--wait", "--wait-timeout", "600", "keycloak", timeout=700
+    )  # fmt: skip
+    identity = boot_identity(fresh)
+    assert identity, (
+        "the proxy cannot observe a boot token after a started Keycloak: the marker below "
+        "could not name a current boot"
+    )
+    write_gate_marker(fresh, "admin", identity)
     fresh.compose("restart", "proxy", timeout=120)
-    refused: httpx.Response | None = None
-    deadline = time.monotonic() + 60
-    while refused is None and time.monotonic() < deadline:
-        try:
-            refused = fresh.through_proxy("admin", DISCOVERY.format(realm="master"))
-        except (httpx.HTTPError, OSError):
-            time.sleep(1)
-    assert refused is not None, "the admin listener never became reachable behind its marker"
-    # 403 is proxy's refusal; a forwarded request would find no keycloak and be a 502.
-    assert refused.status_code == 403
+    # The finding F-04 wait pattern every eko112 sibling carries: `compose restart` returns
+    # at container start, not at Caddy bind. First the container state (budget: the same
+    # 120 s `wait_for_proxy_running` proved on these runners), then the listener's first
+    # real HTTP answer (budget: `wait_for_serving`'s 90 s proven ceiling — it replaced this
+    # test's own one-shot 60 s window). The status is then the bound configuration's reply,
+    # not the bind window's silence.
+    wait_for_proxy_running(fresh)
+    refused_status = wait_for_serving(fresh, "admin")
+    # 403 is proxy's refusal; a request the network matcher let through would reach the
+    # un-bootstrapped Keycloak behind it — 503 until its internal bootstrap completes, 200
+    # after — and the 403 assertion below turns that into the same red.
+    assert refused_status == 403, (
+        f"the admin listener answered {refused_status} to a source outside the company "
+        "network; 403 is the only proxy-side refusal status (a forwarded request carries "
+        "Keycloak's own 503/200)"
+    )
 
 
 def test_adr0004_plain_http_redirects_to_https(running: Started) -> None:
