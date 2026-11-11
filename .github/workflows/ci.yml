@@ -161,8 +161,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.runtime == 'true'
     runs-on: ubuntu-latest
-    # EKO-1-20 (#76): the control-lock-wait tests hold locks past the 180 s bound; 45 min no longer fits the suite.
-    timeout-minutes: 75
+    # EKO-1-25 (#133): the runtime suite grew with EKO-1-12's runtime tests; 360 is GitHub's job maximum, chosen at gate 1 (C-5).
+    timeout-minutes: 360
     # Reads the release record for ADR-0004-C13's previous-release half (EKO-1-15 K-06, C-3, C-4).
     permissions:
       contents: read
@@ -240,8 +240,8 @@ jobs:
     needs: [changes, checked-images]
     if: needs.changes.outputs.runtime == 'true'
     runs-on: ubuntu-latest
-    # EKO-1-20 (#76): the release-mode suite also runs the control-lock-wait tests; 60 min left no margin (57 min observed).
-    timeout-minutes: 75
+    # EKO-1-25 (#133): the release-mode runtime suite grew with EKO-1-12's runtime tests; 360 is GitHub's job maximum, chosen at gate 1 (C-5).
+    timeout-minutes: 360
     # Reads the release record for ADR-0004-C13's previous-release half, as the runtime job does.
     permissions:
       contents: read

@@ -383,6 +383,10 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** `changed_paths()`/`merge_base()`; `.github/workflows/ci.yml`; past `tests/doc-checks/*.sh` (G-1, follow-up); any new or tightened rule.
   **Done 2026-11-10:** merged in [PR #129](https://github.com/TanerCRB/Eko_CRM/pull/129), verified at `7d7c39b`: the PR body classifies every candidate — five live invariants left with a one-line docstring reason (`test_k07_changeset.py`, `test_eko119_k01_mode_parity.py`, `test_adr0005_eko113_changeset_adr_files_only_gain_addenda`); the EKO-1-13, EKO-1-15, EKO-1-19 and EKO-1-20 claims rechecked on their own PR merge-commit pairs (#81, #85, #96, #113) through `backend/tests/support/fixed_pair.py`, where a later-branch change passes and a one-change plant inside the pair or a missing pair commit fails; the guards of candidates 8, 9 and 12 confirmed already inert — `backend/tests/static/test_eko123_*.py`; the `backend` job of [run 42812654518](https://github.com/TanerCRB/Eko_CRM/actions/runs/42812654518) listed all 390 new and rechecked node IDs PASSED, none skipped (K-06, observed at gate 2). 23 mutation runs, 22 killed; M20c survived as an equivalent mutation of the permanently vacuous `test_k07_register_check_fails_on_any_other_edit` (exception EKO-1-23/M20c). Exception EKO-1-23/weakening-1. Follow-ups #116, #133.
 
+- [ ] **EKO-1-25** — Restore the CI runtime jobs: name why they hit their 75-minute timeout since PR #117 and make them complete (#133).
+  *Done when:* on `main`, both runtime jobs of a CI run at this task's merge conclude success or failure within their `timeout-minutes` (run URL in the PR); the cause of the jump is named from a job log; any bound change is justified by observed durations; no runtime test is removed, skipped or weakened to fit.
+  **Out of scope (explicit):** splitting the runtime suite beyond what the cause requires; reopening EKO-1-23; re-judging PRs merged while the jobs were cancelled; raising the bound without a named cause.
+
 ## EKO-2 — Access
 
 - [ ] **EKO-2-01** — Require login for the whole application.
