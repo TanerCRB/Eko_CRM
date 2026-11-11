@@ -89,14 +89,32 @@ def job_blocks(text: str) -> dict[str, str]:
     return trimmed
 
 
+def masked_block(name: str, block: str) -> str:
+    """A job's block for the byte comparison: a retuned `timeout-minutes` is masked on every job
+    (EKO-1-20), the exact keycloak pre-build block is dropped once from the release-mode job only
+    (EKO-1-12 fix round 3, the F-1 pattern of the parsed half in rw._revert_allowed)."""
+    masked = wc.timeout_lines_masked(block)
+    if name == rw.RELEASE_MODE_CI_JOB:
+        masked = wc.keycloak_prebuild_lines_masked(masked)
+    return masked
+
+
 def assert_existing_jobs_unchanged(base: str, head: str) -> None:
-    """Byte-identical but for a retuned `timeout-minutes` (wc.timeout_lines_masked, EKO-1-20)."""
-    before = {n: wc.timeout_lines_masked(b) for n, b in job_blocks(base).items()}
-    after = {n: wc.timeout_lines_masked(b) for n, b in job_blocks(head).items()}
+    """Byte-identical but for a retuned `timeout-minutes` (wc.timeout_lines_masked, EKO-1-20) and
+    the one exact keycloak pre-build block (wc.keycloak_prebuild_lines_masked, EKO-1-12)."""
+    before = {n: masked_block(n, b) for n, b in job_blocks(base).items()}
+    after = {n: masked_block(n, b) for n, b in job_blocks(head).items()}
     assert {name: after.get(name) for name in before} == before
     base_flow, head_flow = yaml.safe_load(base), yaml.safe_load(head)
-    base_jobs = {name: wc.timeout_masked(job) for name, job in base_flow["jobs"].items()}
-    assert {name: wc.timeout_masked(head_flow["jobs"].get(name)) for name in base_jobs} == base_jobs
+    base_jobs = {
+        name: wc.timeout_masked(rw.drop_keycloak_prebuild(name, job))
+        for name, job in base_flow["jobs"].items()
+    }
+    now_jobs = {
+        name: wc.timeout_masked(rw.drop_keycloak_prebuild(name, head_flow["jobs"].get(name)))
+        for name in base_jobs
+    }
+    assert now_jobs == base_jobs
     head_keys = {k: v for k, v in head_flow.items() if k != "jobs"}
     assert head_keys == {k: v for k, v in base_flow.items() if k != "jobs"}
 
@@ -202,6 +220,17 @@ def _setup_uv_in_build(flow: Workflow) -> None:
     _job(flow, rm.BUILD_JOB)["steps"].insert(1, {"uses": "astral-sh/setup-uv@" + "0" * 40})
 
 
+def _prebuild_after_snapshot(flow: Workflow) -> None:
+    """The EKO-1-12 keycloak pre-build step moved after the K-04 snapshot (EKO-1-12 fix round 3):
+    the session would then build the image itself and K-04 would flag its new name."""
+    steps = _job(flow)["steps"]
+    prebuild_at = rm._step(flow, rm.RELEASE_MODE_JOB, rm.KEYCLOAK_PREBUILD)[0]
+    assert prebuild_at >= 0, "the keycloak pre-build step in ci.yml"
+    step = steps.pop(prebuild_at)
+    snapshot_at = rm._step(flow, rm.RELEASE_MODE_JOB, rm.SNAPSHOT)[0]
+    steps.insert(snapshot_at + 1, step)
+
+
 PR_ONLY = f"github.event_name == 'pull_request' && {wc.TRIGGER_CONDITION}"
 PLANTS: dict[str, Callable[[Workflow], None]] = {
     # K-03 (a), (b), (c)
@@ -227,6 +256,8 @@ PLANTS: dict[str, Callable[[Workflow], None]] = {
     "no-identity-after-tests": _last_identity_dropped,
     "no-snapshot": _drop_step(rm.RELEASE_MODE_JOB, rm.SNAPSHOT),
     "no-session-check": _drop_step(rm.RELEASE_MODE_JOB, rm.SESSION_CHECK),
+    # K-04 (iii) (EKO-1-12 fix round 3): the keycloak pre-build before the snapshot
+    "prebuild-after-snapshot": _prebuild_after_snapshot,
     # K-06 (b)
     "docker-push": _append_run("docker push eko-crm/backend:checked"),
     "tag-for-registry": _append_run("docker tag eko-crm/backend:checked ghcr.io/tanercrb/x:1"),

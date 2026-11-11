@@ -325,22 +325,24 @@ def keycloak_logs(started: Started) -> str:
     return result.stdout + result.stderr
 
 
-# Gate markers bound to the verified Keycloak boot (ADR-0004 C29, addendum 2026-11-06):
-# open_gate records the boot identity the proxy container itself observes, and the proxy
+# Gate markers bound to the verified Keycloak boot (ADR-0004-C33, addendum 2026-11-10):
+# open_gate records the boot identity the proxy container itself reads, and the proxy
 # entrypoint opens a listener only while the marker names the live boot. These helpers are
 # the same primitives the script and the entrypoint use, so a test can neither fake the
 # gate nor accidentally weaken it.
 IDENTITY_SCRIPT = "/usr/local/bin/eko-keycloak-boot-identity.sh"
-BOOT_IDENTITY = re.compile(r"[0-9a-f]{2}(?::[0-9a-f]{2}){5}")
+BOOT_IDENTITY = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}")
 
 
 def boot_identity(composition: Composition) -> str:
     """The boot identity the proxy container itself observes for the running Keycloak.
 
-    The helper inside the proxy image resolves the `keycloak` service, attempts one TCP
-    exchange (a refused attempt still resolves the ARP entry) and prints the hardware
-    address Docker assigned to that container creation; it exits non-zero and prints
-    nothing when Keycloak is unreachable."""
+    The helper inside the proxy image reads the per-boot token file from the shared boot
+    volume — the UUID the Keycloak entrypoint wrapper rotated as the first act of the
+    container's CURRENT start (ADR-0004-C33) — validates its shape and prints it. A
+    missing, empty or malformed token file exits non-zero and prints nothing; the
+    observation is a pure file read, no network lookup of Keycloak (the withdrawn
+    2026-11-06 primitive forced a TCP attempt and read the ARP table instead)."""
     return composition.compose(
         "exec", "-T", "proxy", "sh", IDENTITY_SCRIPT, check=False
     ).stdout.strip()
@@ -349,9 +351,21 @@ def boot_identity(composition: Composition) -> str:
 def marker_value(composition: Composition, gate: str) -> str:
     """The marker's CONTENT, read through a one-off mount of the markers' volume: the proxy
     container may be crash-looping (the exact state a failed gate check examines), where
-    `compose exec` fails and a naive reader would report "no marker" vacuously."""
+    `compose exec` fails and a naive reader would report "no marker" vacuously.
+
+    The one-off runs the image the composition's own proxy container uses — its
+    `Config.Image` — not a guessed local build tag: a release run (EKO-1-15 K-02, the
+    checked images) resets the build config and loads `eko-crm/proxy:checked`, so a
+    `<project>-proxy:latest` name simply does not exist there. CI runs 42897088542 and
+    42711869762 showed every marker reader dying in release mode alone
+    (`Unable to find image ...`) while green in the composition job — this helper, or the
+    same tag pattern inlined in the rotation-refusal test, was the single cause of four
+    release-mode reds and the boot-identity-carrier ERROR. The container object exists and
+    is inspectable even while crash-looping (`compose ps -a` finds it), which is exactly
+    the state this reader exists for; the one-off needs an image with `sh` and the mount,
+    and the proxy image is that image in both modes."""
     assert gate in ("admin", "public"), gate
-    tag = f"{composition.project}-proxy:latest"
+    tag = composition.inspect("proxy")["Config"]["Image"]
     result = subprocess.run(
         [
             "docker", "run", "--rm", "-v", f"{composition.project}_proxy-data:/data",

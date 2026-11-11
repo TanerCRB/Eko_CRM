@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-10",
+  "task": "EKO-1-12",
+  "phase": "code",
+  "role": "developer-infrastructure",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "a3b19901252905756",
+  "tokens": 3757020,
+  "tokenSplit": { "input": 3920, "output": 55314, "cacheWrite": 202514, "cacheRead": 3495272 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 63,
+  "seconds": 3774,
+  "fixRound": 3,
+  "reworkCause": "carrier re-planned from static to runtime after inv-28 found the helper hardcodes its token path (no seam); the design-review of the correction could have foreseen a static behavioral carrier is impossible without a path seam",
+  "notes": "boundary-check: clean for the role (verify showed only HEAD-move + my own inv-28 cost row - both driving-session bookkeeping, not a role write); 11-passed carrier green, RED under qa4-5 (6 length shapes flip to accepted), restored green; found+fixed its OWN empty-write hole (missing -i -> silent empty token) via read-back + branch-naming asserts; module-scope deviation A-04 noted; full default suite re-run by driver at 5ae66a4"
+}

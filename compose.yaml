@@ -50,6 +50,10 @@ services:
         host_ip: ${PROXY_ADMIN_BIND:?PROXY_ADMIN_BIND is required}
     volumes:
       - proxy-data:/data
+      # The boot-token carrier (ADR-0004-C33), read-only here: the entrypoint compares each
+      # gate marker against the token the running Keycloak rotated at its current start,
+      # through the helper shipped in this image — a pure file read, no network lookup.
+      - keycloak-boot:/etc/eko/keycloak-boot:ro
     restart: unless-stopped
 
   # Contract with frontend/Dockerfile: static SPA build served over plain HTTP on port 8080 by a
@@ -130,17 +134,35 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    # Refuses an empty password before Keycloak starts; Compose's `:?` refuses an unset one.
+    # Rotation is the FIRST act of every container start (ADR-0004-C33, addendum 2026-11-10):
+    # a fresh token from the kernel's per-boot source, written to a per-PID temp file and
+    # renamed atomically over the token path the proxy helper reads, so no reader ever sees a
+    # partial value. A start that cannot rotate dies loudly here — before Keycloak launches,
+    # before the empty-password refusal, with nothing listening and no marker naming the boot;
+    # never a silent unrotated start. Then: refuse an empty password before Keycloak starts;
+    # Compose's `:?` refuses an unset one.
     entrypoint:
       - /bin/bash
       - -c
       - >-
+        boot_tmp="/etc/eko/keycloak-boot/token.tmp.$$$$";
+        if { boot_uuid="$(cat /proc/sys/kernel/random/uuid)" &&
+        printf '%s\n' "$${boot_uuid}" > "$${boot_tmp}" &&
+        mv -f "$${boot_tmp}" /etc/eko/keycloak-boot/token; }; then :; else
+        rm -f "$${boot_tmp}" 2>/dev/null;
+        echo "configuration error: the Keycloak boot token could not be rotated; refusing to start" >&2;
+        exit 1; fi;
         if [ -z "$${KC_DB_PASSWORD//[[:space:]]/}" ]; then
         echo "configuration error: missing or empty environment variable: KEYCLOAK_DB_PASSWORD" >&2;
         exit 1; fi;
         exec /opt/keycloak/bin/kc.sh "$$@"
       - kc
     command: ["start"]
+    volumes:
+      # rw: the rotation above is this container's own act. Both images seed the path at
+      # uid/gid 1000 (identity/Dockerfile, proxy/Dockerfile), so whichever container first
+      # attaches the empty named volume leaves the other one a usable directory.
+      - keycloak-boot:/etc/eko/keycloak-boot
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
@@ -292,6 +314,13 @@ services:
 volumes:
   pgdata:
   proxy-data:
+  # The gate-marker boot-token carrier (ADR-0004-C33; the declared deviation from C4 and from
+  # the 2026-11-06 addendum's "no named volume" sentence, accepted 2026-11-10). Its only
+  # content is the per-boot random token plus a seed placeholder: no event, no personal data,
+  # no credential, no session value, never logged. Out of the backup/restore scope by design:
+  # a restore's Keycloak start rotates the token, so the gates re-close until a bootstrap
+  # re-verifies — exactly what C33 requires.
+  keycloak-boot:
 
 configs:
   # ADR-0004-C28: inline init content, run by the image only on an empty data directory. No
