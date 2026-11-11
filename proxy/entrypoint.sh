@@ -6,15 +6,19 @@ if [ -f /data/public-open ] && [ ! -f /data/admin-open ]; then
 	exit 1
 fi
 
-# A gate marker records its gate only for the Keycloak boot the bootstrap verified (ADR-0004
-# C29, addendum 2026-11-06: the provider pair is verified before either listener opens on
-# every bootstrap, restart and restore). The marker's value is the boot identity — the
-# hardware address Docker assigns to the Keycloak container at creation — so a plain
-# `compose up`, an image swap or a host reboot re-reads the markers against the CURRENT
-# boot: a marker that no longer names it is not an open gate, and every listener stays
-# closed until scripts/keycloak-bootstrap.sh verifies the running boot again (R-05/S-03).
-# The observation is the same the bootstrap itself used to write the marker (the helper in
-# this image), so no host-level or credential-level state enters the proxy.
+# A gate marker records its gate only for the Keycloak boot the bootstrap verified (the
+# provider-pair verification before either listener opens is ADR-0004-C34). The marker's
+# value is the boot token — the per-boot UUID the Keycloak container itself rotated as the
+# FIRST act of its current start, read here as a plain file from the shared named volume
+# (ADR-0004-C33, addendum 2026-11-10). Boot means every container start: `compose up`,
+# `compose restart keycloak`, an image swap, a restore bring-up or a host reboot rotates
+# the token, so the next proxy start re-reads the markers against the CURRENT boot: a
+# marker that no longer names it is not an open gate, and every listener stays closed
+# until scripts/keycloak-bootstrap.sh verifies the running boot again (R-05/S-03). The
+# observation is the same the bootstrap itself used to write the marker (the helper in
+# this image), is a pure file read — no DNS, no TCP, no ARP, no retry — and names no
+# value on stderr, only the state, so no network lookup, host-level or credential-level
+# state enters the proxy.
 identity="$(sh /usr/local/bin/eko-keycloak-boot-identity.sh 2>/dev/null)" || identity=""
 
 marker_names_current_boot() {

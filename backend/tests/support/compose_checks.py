@@ -24,7 +24,10 @@ DEV_SERVICES = {
 }
 SHARED_SERVICES = DEV_SERVICES - {"mailcatcher"}
 MAIL_CATCHER_IMAGES = re.compile(r"(mailpit|mailhog|mailcatcher|maildev|smtp4dev|greenmail)", re.I)
-STATE_VOLUMES = {"pgdata", "proxy-data"}
+# ADR-0004-C4 as amended by the addendum of 2026-11-10 (gate-marker boot binding): the token
+# carrier `keycloak-boot` joins the two state volumes. The rule's substance is unchanged —
+# persistent state in named volumes only, no host path into postgres/keycloak/backend/migrate.
+STATE_VOLUMES = {"pgdata", "proxy-data", "keycloak-boot"}
 NO_HOST_PATH_SERVICES = ("postgres", "keycloak", "backend", "migrate", "worker", "backup")
 CLOUD_LOG_DRIVERS = {"awslogs", "gcplogs", "logentries", "splunk", "etwlogs"}
 UNSPECIFIED_ADDRESSES = {"", "0.0.0.0", "::", "[::]"}
@@ -101,7 +104,8 @@ def c3_admin_bind_declared(source: dict[str, Any]) -> list[str]:
 
 
 def c4_state(rendered: Rendered) -> list[str]:
-    """ADR-0004-C4: only pgdata and proxy-data, no host path, no cloud logging driver."""
+    """ADR-0004-C4 (as amended 2026-11-10): only the three named state volumes, no host
+    path, no cloud logging driver."""
     problems = []
     declared = set(rendered.get("volumes", {}) or {})
     if declared != STATE_VOLUMES:

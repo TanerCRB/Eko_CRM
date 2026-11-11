@@ -1,46 +1,46 @@
 #!/bin/sh
-# The boot identity of the running Keycloak container, as seen from inside this network:
-# the hardware address Keycloak's service name resolves to. Docker assigns it per container
-# creation, so it names the current boot exactly: a recreated Keycloak (image swap, force
-# recreate) has a different identity even when everything else looks the same.
-#
-# The identity is obtained by resolving `keycloak`, forcing one TCP attempt to its HTTP port
-# (an attempt that is refused still completes the ARP resolution), and reading the resolved
-# hardware address back out of the kernel's ARP table. No credential, token or host value
-# appears in the output; the result is a MAC address. An unresolvable or unreachable
-# Keycloak prints nothing and exits non-zero — callers fail closed on that.
-#
-# The two small retry loops only cover start-up races (compose may start the proxy moments
-# before the Keycloak container exists or its ARP entry resolves). A wrong-but-present
-# identity is still a mismatch and keeps the gate closed, so retries cannot open anything.
+# The boot identity of the running Keycloak container (ADR-0004-C33, addendum 2026-11-10):
+# the per-boot token the Keycloak entrypoint wrapper rotated as the FIRST act of its current
+# container start, read here from the shared named volume mounted read-only at this path.
+# This replaced the 2026-11-06 primitive (a TCP attempt plus an ARP-table lookup of the
+# hardware address) because that observation was not reliably available: a restarted proxy
+# sandbox starts with an empty neighbour table and under CI load the resolution/flag timing
+# missed, false-closing a verified boot's admin window. There is no network lookup of
+# Keycloak here at all: no getent, no wget, no ARP, no retry loop, no sleep. A missing,
+# empty or malformed token file names no boot — exit 1 with empty stdout, and the callers
+# fail closed. The token is not a secret: it is a drift detector, never an authentication
+# factor (EKO-1-03/B-02 records the host-control tier), and it never reaches stderr or any
+# log; the marker's writer (scripts/keycloak-bootstrap.sh `open_gate`) and the proxy's
+# entrypoint both call this same helper, so a marker and a start compare one observation.
 set -eu
 
-TARGET="${EKO_KEYCLOAK_HOST:-keycloak}"
+TOKEN_FILE=/etc/eko/keycloak-boot/token
 
-ip=""
-attempt=0
-while [ "$attempt" -lt 5 ]; do
-	attempt=$((attempt + 1))
-	ip="$(getent hosts "$TARGET" 2>/dev/null | awk '$1 !~ /:/ { print $1; exit }')" || ip=""
-	[ -n "$ip" ] && break
-	sleep 1
-done
-if [ -z "$ip" ]; then
-	echo "boot-identity: cannot resolve $TARGET" >&2
+# `-s`: exists and non-empty. The seed placeholder (`.seed`) is deliberately NOT a token
+# file: on a composition whose Keycloak has not started (so has not rotated), this path
+# holds nothing and the observation fails closed.
+if [ ! -s "$TOKEN_FILE" ]; then
+	echo "boot-identity: no boot token at $TOKEN_FILE" >&2
 	exit 1
 fi
 
-hw=""
-attempt=0
-while [ "$attempt" -lt 5 ]; do
-	attempt=$((attempt + 1))
-	wget -q -T 3 -O /dev/null "http://$TARGET:8080/" 2>/dev/null || true
-	hw="$(awk -v ip="$ip" '$1 == ip && $3 == "0x2" { print $4; exit }' /proc/net/arp)"
-	[ -n "$hw" ] && break
-	sleep 1
-done
-if [ -z "$hw" ]; then
-	echo "boot-identity: no resolved ARP entry for $ip" >&2
+identity="$(cat "$TOKEN_FILE")"
+token="$identity"
+malformed() {
+	echo "boot-identity: malformed boot token at $TOKEN_FILE" >&2
 	exit 1
-fi
-printf '%s\n' "$hw"
+}
+# Lower-case hex and hyphens only (also refuses whitespace, embedded newlines, any other
+# byte); then the exact UUID segment lengths 8-4-4-4-12. The validation is what the callers
+# rely on, not trust in the writer: open_gate re-guards the same alphabet before any
+# marker write.
+case "$token" in
+'' | *[!0-9a-f-]*) malformed ;;
+esac
+for want in 8 4 4 4; do
+	field="${token%%-*}"
+	[ "${#field}" -eq "$want" ] || malformed
+	token="${token#*-}"
+done
+[ "${#token}" -eq 12 ] || malformed
+printf '%s\n' "$identity"

@@ -382,6 +382,36 @@ CI_LOGIN_STEP: dict[str, Any] = {
 }
 CI_RUNTIME_RUN = 'uv run pytest -m "runtime or previous_release" tests/runtime -v'
 CI_COMPAT_RUN = "uv run python -m tests.support.openapi_compat --from-record"
+# EKO-1-12 K-04 (fix round 3, 2026-11-11), on the login step's F-1 precedent (C-4 of #56): the one
+# step ci.yml's release-mode job (`runtime-checked`, the rm.RELEASE_MODE_JOB of EKO-1-19) may gain,
+# listed exactly; drop-if-present on both sides, so the step is allowed once and in this job only —
+# a second copy, any mutation of its text or the step in another job stays a changed job, while
+# the allowance is inert once the step is on the base.
+RELEASE_MODE_CI_JOB = "runtime-checked"
+CI_KEYCLOAK_PREBUILD_RUN = (
+    'bash scripts/dev-env.sh "$RUNNER_TEMP/keycloak-prebuild.env"\n'
+    'docker compose -p eko-ci-keycloak-prebuild --env-file "$RUNNER_TEMP/keycloak-prebuild.env"'
+    " --profile dev build keycloak\n"
+)
+CI_KEYCLOAK_PREBUILD_STEP: dict[str, Any] = {
+    "name": "Build the keycloak composition image before the K-04 snapshot",
+    "shell": "bash",
+    "run": CI_KEYCLOAK_PREBUILD_RUN,
+}
+
+
+def drop_keycloak_prebuild(name: str, job: Any) -> Any:
+    """The job with one exact copy of the listed pre-build step dropped, for the byte-identical
+    comparisons (the F-1 symmetric revert of the same list in `_revert_allowed`)."""
+    if name != RELEASE_MODE_CI_JOB or not isinstance(job, dict):
+        return job
+    steps: list[dict[str, Any]] = list(job.get("steps") or [])
+    if CI_KEYCLOAK_PREBUILD_STEP not in steps:
+        return job
+    steps.remove(CI_KEYCLOAK_PREBUILD_STEP)
+    return {**job, "steps": steps}
+
+
 # (job, the step's run at the base) -> the run allowed at the head.
 ALLOWED_RUNS = {
     ("runtime", "uv run pytest -m runtime tests/runtime -v"): CI_RUNTIME_RUN,
@@ -399,6 +429,8 @@ def _revert_allowed(name: str, job: dict[str, Any]) -> dict[str, Any]:
     steps: list[dict[str, Any]] = list(reverted.get("steps") or [])
     if CI_LOGIN_STEP in steps:
         steps.remove(CI_LOGIN_STEP)
+    if name == RELEASE_MODE_CI_JOB and CI_KEYCLOAK_PREBUILD_STEP in steps:
+        steps.remove(CI_KEYCLOAK_PREBUILD_STEP)
     for step in steps:
         options = step.get("with") or {}
         if (

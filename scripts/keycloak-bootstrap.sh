@@ -122,12 +122,17 @@ self_test() {
     fi
   }
   identity_case "an empty boot identity keeps the gate marker unwritten" "" reject
-  # The embedded command stays data: its invalid characters are outside the [0-9a-f:] class,
-  # it must be refused before any marker write, and its target file must not appear.
+  # The embedded command stays data: its invalid characters are outside the UUID character
+  # class, it must be refused before any marker write, and its target file must not appear.
   identity_case "a malformed boot identity is refused and stays inert" \
-    "02:42:de:ad:be:ef \$(touch '$root/identity/evil-marker')" reject
-  identity_case "a valid hex:colon boot identity is accepted and reaches the marker write" \
-    "02:42:ac:12:00:03" accept
+    "123e4567-e89b-12d3-a456-426614174000 \$(touch '$root/identity/evil-marker')" reject
+  # ADR-0004-C33 (addendum 2026-11-10): a marker names the per-boot UUID token the Keycloak
+  # container rotated at its current start, so the ARP-era hardware-address form is not a
+  # usable identity and must be refused before any marker write.
+  identity_case "a hardware-address boot identity is refused before the marker write" \
+    "02:42:ac:12:00:03" reject
+  identity_case "a valid UUID boot identity is accepted and reaches the marker write" \
+    "123e4567-e89b-12d3-a456-426614174000" accept
 
   # (d) The whole self-test re-run from a scratch directory: nothing is left there, and the
   # repository's working state is byte-identical before and after (git porcelain, read-only).
@@ -292,12 +297,14 @@ verify_custom_provider() {
 }
 
 keycloak_boot_identity() {
-  # ADR-0004 C29 (addendum 2026-11-06): every gate marker names the Keycloak boot whose
-  # provider pair this run verified. The identity is the hardware address the running
-  # Keycloak container answers with on the composition network (assigned per container
-  # creation); the proxy's own helper observes it, so the marker and the entrypoint compare
-  # the same view. A later proxy start against a recreated Keycloak finds a mismatch and
-  # keeps every listener closed until a bootstrap runs again (R-05/S-03).
+  # ADR-0004-C33 (addendum 2026-11-10; verification-before-open itself is C34): every gate
+  # marker names the Keycloak boot whose provider pair this run verified. The identity is
+  # the per-boot token the running Keycloak container rotated as the first act of its
+  # current start (compose.yaml entrypoint wrapper); the proxy's own helper reads it from
+  # the shared carrier volume — a pure file read, no network lookup of Keycloak — so the
+  # marker and the entrypoint compare the same observation. A later proxy start against a
+  # restarted or recreated Keycloak finds a mismatch and keeps every listener closed until
+  # a bootstrap runs again (R-05/S-03).
   compose exec -T proxy sh /usr/local/bin/eko-keycloak-boot-identity.sh
 }
 
@@ -308,7 +315,11 @@ open_gate() {
     return 1
   }
   case "$identity" in
-    *[!0-9a-f:]* | '')
+    # The boot token's alphabet: lower-case hex and hyphens (a UUID, ADR-0004-C33). The
+    # guard runs before any marker write; anything else — empty, a hardware address, an
+    # embedding attempt — keeps the gate closed (the helper validated the shape too; this
+    # is the second, marker-writer-side half).
+    *[!0-9a-f-]* | '')
       echo "keycloak-bootstrap: unusable Keycloak boot identity for the $gate gate" >&2
       return 1
       ;;
@@ -334,9 +345,21 @@ open_gate() {
   # one-off mount of the markers' own volume — a failing proxy may be crash-looping, and
   # `compose exec` cannot reach it between restart attempts; a marker that survives a failed
   # gate must end the run, not be papered over.
-  local proxy_image
-  proxy_image="$(docker image ls --format '{{.Repository}}:{{.Tag}}' \
-    --filter "reference=${COMPOSE_PROJECT_NAME}-proxy:latest" | head -n 1)"
+  # The image is the one the composition's own proxy CONTAINER runs (`Config.Image` of the
+  # project's proxy container, read through `ps -a` so it resolves while the entrypoint
+  # crash-loops), not the `${COMPOSE_PROJECT_NAME}-proxy:latest` build-tag list: a release
+  # run (EKO-1-15 K-02, on the checked images) loads `eko-crm/proxy:checked` with the build
+  # config reset, no such tag exists, and the marker removal — the fail-closed half of this
+  # very branch — died at image resolution and left the failed gate's marker on the volume
+  # (CI runs 42897088542 and 42711869762, release job: the qa fail-closed and r21 reds;
+  # reproduced red locally with the pre-fix line restored under the same env — the residual
+  # marker survived the failed gate, exactly the state this branch promises is impossible).
+  # Resolution still fails closed: no container, no image, no removal, the run ends.
+  local proxy_image="" proxy_container=""
+  proxy_container="$(compose ps -a -q proxy | head -n 1)"
+  if [ -n "$proxy_container" ]; then
+    proxy_image="$(docker inspect --format '{{.Config.Image}}' "$proxy_container")" || proxy_image=""
+  fi
   [ -n "$proxy_image" ] || {
     echo "keycloak-bootstrap: cannot resolve the proxy image to remove the $gate marker" >&2
     return 1

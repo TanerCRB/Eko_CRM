@@ -1909,3 +1909,146 @@ inspection as runtime proof.
 - **B — Reject this addendum.** The accepted composition/image rules and EKO-1-12 STOP remain
   unchanged; no custom image or provider is authorized.
 
+### 2026-11-10 — Gate-marker boot binding: the Keycloak container's own per-boot token replaces the ARP-observed hardware address
+
+**Status:** Accepted 2026-11-10 — human gate 1 of the boot-identity correction, recorded on Issue #126 (refs #53): the two declared deviations, the boot-every-container-start semantics, control C33 and the CI timeout raise, all accepted as drafted; the separate dated numbering action this addendum records is the dated addendum that follows.
+
+**Condition.** This addendum exists because the mechanism the merged implementation of the
+2026-11-06 addendum chose for the marker's boot binding — the hardware address Docker assigns to
+the Keycloak container at creation, observed from the proxy network by an ARP resolution
+(`proxy/keycloak-boot-identity.sh`) — is not reliably observable. It was proven wrong at the wire,
+not in theory: `backend/tests/runtime/test_eko112_k04_admin_listener_log_privacy.py::test_k04_admin_only_window_logs_the_console_redirect_restricted`
+fails on both CI runtime jobs and locally under load ("the admin listener closed in its own open
+window" — the entrypoint's fresh read races the restarted proxy's empty ARP table, and a
+wrong-but-present read keeps a verified boot's gate closed), and
+`backend/tests/runtime/test_eko112_k02_marker_boot_binding.py` is red on the release-mode
+(checked-images) job. A drift detector that mis-observes is worse than a hole: it false-closes a
+verified boot and makes the accepted K-02 evidence unrunnable on CI. This addendum changes the
+observable, not the rule.
+
+**What it changes.**
+
+- **The boot identity.** The identity a gate marker names is no longer read from the network. It is
+  the value the Keycloak container itself writes as the first act of every container start, before
+  the Keycloak process launches and before the empty-password refusal: a per-boot random token
+  generated inside the container from the kernel's per-boot UUID source, stored in a
+  Docker-managed named volume at one well-known path, replaced by atomic rename so no reader ever
+  sees a partial value. A start that cannot rotate the token fails — the failure is loud and
+  fail-closed; it cannot open anything. **Boot means every Keycloak container start.** A restart,
+  a recreation, an image swap, a restore bring-up and a host reboot each rotate the token and
+  therefore invalidate markers from the previous boot; a restart of `proxy` alone against an
+  unchanged Keycloak start keeps them valid. The accepted sentence of the 2026-11-06 addendum —
+  verification "on every fresh bootstrap, restart, and restore" before either listener opens — is
+  now enforced by the mechanism and not only by procedure: the hardware-address reading ties the
+  identity to the container creation rather than to the container start, so on the test docstring's
+  own claim that a same-container `compose restart keycloak` "keeps the verified boot identity and
+  the listeners open", a boot no run re-verified reopens its listeners through the restart
+  procedure alone, with the ARP table's grace as the only thing between a stale marker and a live
+  listener. That docstring claim is withdrawn by this addendum and replaced by an assertion that
+  such a restart keeps every listener closed until a bootstrap re-verifies the pair for the
+  current boot.
+- **Determinism.** The writer of the marker (`open_gate`, through the proxy's own helper) and the
+  reader at every proxy start (`proxy/entrypoint.sh`, through the same helper in the same image)
+  both read the same file. No DNS resolution, no TCP attempt, no ARP table, no retry loop and no
+  sleep enters either observation path; comparing a marker against the current boot is as
+  reliable as a file read, on every host, under any load. A missing, empty or malformed token file
+  names no boot, and the entrypoint keeps selecting the closed configuration, as it does today.
+- **Declared deviations from accepted text.** (1) The 2026-11-06 addendum states: "No service,
+  published port, named volume, environment secret, or persistent store is added." One named
+  volume is now added — the token's carrier. It holds no event, no personal data, no credential
+  and no session value; its only content is the per-boot random token (plus a seed placeholder),
+  it is meaningless once the boot it names is not the running one, and it is never logged. The
+  service list, published ports, environment, secrets, databases, backup set and restore scope
+  are unchanged, and events remain in the existing Keycloak database. (2) ADR-0004-C4 states the
+  rendered composition "declares only the named volumes `pgdata` and `proxy-data` for persistent
+  state"; the composition now declares a third named volume. C4's rule — persistent state only in
+  named volumes, no host path mounted into `postgres`, `keycloak`, `backend` or `migrate` — is
+  kept exactly: the token travels in a Docker-managed named volume, never a host bind, and this
+  is what keeps the observation credential-free and free of host-tier state. The two static
+  checks that pin the volume set (`backend/tests/static/test_eko112_k01_custom_provider_image.py`,
+  `backend/tests/static/test_k04_composition.py` and its fixtures) move with acceptance of this
+  addendum, not before it.
+- **What does not change.** The accepted bootstrap order of 2026-11-02, every per-gate
+  precondition, the provider verification before each `open_gate`, the marker paths and the
+  failed-gate marker removal, the proxy's non-revocation limit ("a proxy process that keeps
+  running across a Keycloak recreation" — already recorded as not gated; a bring-up ordering in
+  which the proxy reads before the current Keycloak start has rotated still lands in this same
+  recorded class), the entrypoint's public-without-admin refusal, and EKO-1-03/B-02's finding
+  that the proxy is a drift detector, not a security boundary against a host-tier attacker: the
+  token is not a secret. Nothing in the accepted text naming "hardware address" needed editing,
+  because no accepted ADR-0004 text names it — the phrase exists only in code comments, test
+  helpers and the dated evidence record `docs/evidence/EKO-1-12/marker-boot-binding.md`, which
+  stays as its dated record and is answered by a new one.
+
+**New control ADR-0004-C33:** A gate marker is an open gate only while its content exactly equals
+the boot token the running Keycloak container wrote at its own current start, read as a file by
+both the marker's writer and the proxy's entrypoint through the same shipped helper; any Keycloak
+container start (restart, recreation, image swap, restore bring-up, host reboot) invalidates every
+marker from a previous boot before a later proxy start consults it, and no listener opens from a
+stale marker; neither observation path performs any network lookup of Keycloak; a fixture with a
+stale marker on a recreated Keycloak keeps both listeners closed at the connection level, and the
+same composition reopens them only through a bootstrap run that re-verifies the provider pair for
+the current boot.
+
+**Controls unchanged; a recorded numbering defect.** The 2026-11-06 addendum's control as printed
+("New control ADR-0004-C29") is unchanged in substance: verification before either listener opens.
+It is noted for the human that this identifier collides with the release addendum of 2026-11-04,
+whose own table also carries "ADR-0004-C29" (digest pinning) — two accepted texts print the same
+control number for different controls. Accepted text is not silently renumbered; a correction is a
+separate dated action for the human. The comment lines that cite "ADR-0004 C29" for the marker
+binding are redirected by the Developer to C33 (as accepted) when they are rewritten.
+
+**Options requiring a human choice.**
+
+- **A — Accept this addendum.** The Developer replaces the ARP primitive with the per-boot token
+  volume under the mechanical contract of the impact map; the runtime suite becomes deterministic
+  and restart/reboot drift is actually gated. Closes off: keeping the hardware-address reading.
+- **B — Reject; keep the ARP primitive and retry wider.** The race remains: local Docker Desktop
+  usually wins it, ubuntu runners lose it; the K-02/K-04 evidence stays unrunnable on CI and the
+  accepted verification-before-open boundary has no runnable proof. Not recommended.
+- **C — Reject; bound the ARP retries.** Retries cannot fix a primitive whose wrong-but-present
+  read mis-closes a verified boot; this was the observed failure, not a missing retry. Not
+  recommended.
+
+**Why.** Constraints the replacement must keep — fail-closed drift detection across image swap,
+recreation, restore and reboot; determinism (no network probe in the proxy's startup path); one
+observation on both sides with no docker.sock, credential or host-tier state; a proxy-only restart
+still serving an unchanged boot; drift-detector-not-authentication — admit exactly one carrier for
+a live boot observation that is neither the network nor the Docker API: a file written by the
+observed container itself. The named-volume carrier was chosen over mounting the existing marker
+volume into `keycloak` because the volume's root is created for `proxy`'s image (root-owned) and
+the Keycloak container runs as uid 1000; a dedicated volume seeded by both images at one owned
+path is the only arrangement that is writable by Keycloak and readable by the entrypoint without
+changing either service's user. The token is preferred over the container hostname-as-ID or a
+start timestamp because those survive a same-container start and so would not gate the reboot and
+restart cases the accepted sentence already names.
+
+### 2026-11-10 — *Controls*: the identifier printed "C29" in the addendum of 2026-11-06 is cited as C34
+
+**Status:** Accepted 2026-11-10 — human gate 1 of the boot-identity correction, recorded on Issue #126 (refs #53), decision 3: the numbering correction instructed as a separate dated action.
+
+**What it changes.** Two accepted texts of this decision print the same control identifier for
+different controls: the release addendum of 2026-11-04 declares "ADR-0004-C29" for what every
+published release composition carries (digest references, no `build:`, the `proxy` base digest),
+and the addendum of 2026-11-06 declares "New control ADR-0004-C29" for the custom-provider
+verification that must precede either listener opening. This addendum resolves the collision with
+one citation rule and no edit of either text: the verification-before-open control as printed in
+the 2026-11-06 addendum is hereafter cited **ADR-0004-C34**; **C29** belongs to the 2026-11-04
+digest-pinning control alone, which keeps every carrier that already names it — the release
+workflow, the release-composition renderer, the EKO-1-15 checks and their register rows. The
+2026-11-06 text, its printed identifier included, stands as the record of what was accepted on
+that date; this correction adds a name, it does not rewrite history. C33 — the marker-to-boot
+binding of the 2026-11-10 addendum above — is a distinct control: C33 names how the open state is
+observed, C34 names the verification it enforces before any listener opens; the substance of both
+accepted criteria is unchanged by this correction.
+
+**Consequence for the carriers.** Comments, docstrings and test headers that cite "C29" for the
+verification or the marker binding move to C34 or C33 in the correction's implementation pull
+request; the dated evidence records of EKO-1-12 keep their wording, as dated records are answered
+and never rewritten, and records written after this correction cite C33 and C34.
+
+**Why.** A silent renumber of accepted text is what this decision's addendum rule forbids; a
+separate dated action gives every carrier one name per control while the record keeps the name a
+gate used on the day it decided. The collision was found by the Architect's 2026-11-10 impact map
+and accepted with it at the same gate.
+

@@ -180,3 +180,49 @@ def timeout_lines_masked(block: str) -> str:
             line = f"    {TIMEOUT_KEY}: {TIMEOUT_MASK}"
         lines.append(line)
     return "\n".join(lines)
+
+
+# The keycloak pre-build step block (EKO-1-12 K-04, fix round 3, 2026-11-11) -------------------
+# The text half of the same exact-listed tolerance release_workflow.CI_KEYCLOAK_PREBUILD_STEP
+# gives the parsed half: the step's comment line and the step's own lines, as bytes. The mask
+# drops the block once per side and only this byte-exact copy — a second copy, a byte different
+# anywhere in it, is not the block and stays a difference.
+
+CI_KEYCLOAK_PREBUILD_LINES: tuple[str, ...] = (
+    (
+        "      # EKO-1-12 fix-round-3 (2026-11-11): keycloak has no checked image "
+        "(scripts/release-images.sh NAMES=backend frontend proxy backup; its digest "
+        "integration is deferred to #118), so under EKO_CHECKED_IMAGES the session's "
+        "first compose up built localhost/eko-crm/keycloak:26.8.1-eko112 after the "
+        "K-04 snapshot (#135 run 130307698397); building it before the snapshot makes "
+        "the session reuse the reference, and K-04 still flags every image whose name "
+        "first appears during the session."
+    ),
+    "      - name: Build the keycloak composition image before the K-04 snapshot",
+    "        shell: bash",
+    "        run: |",
+    '          bash scripts/dev-env.sh "$RUNNER_TEMP/keycloak-prebuild.env"',
+    (
+        "          docker compose -p eko-ci-keycloak-prebuild --env-file "
+        '"$RUNNER_TEMP/keycloak-prebuild.env" --profile dev build keycloak'
+    ),
+)
+
+
+def keycloak_prebuild_lines_masked(block: str) -> str:
+    """A job's lines in the file with the exact keycloak pre-build block dropped once, for
+    comparison only: applied to both sides, it holds while the step is the change set and once
+    the step is on the base (the F-1 shape), and a second copy of the block is not dropped."""
+    lines = block.split("\n")
+    step = list(CI_KEYCLOAK_PREBUILD_LINES)
+    kept: list[str] = []
+    index = 0
+    dropped = False
+    while index < len(lines):
+        if not dropped and lines[index : index + len(step)] == step:
+            index += len(step)
+            dropped = True
+            continue
+        kept.append(lines[index])
+        index += 1
+    return "\n".join(kept)
