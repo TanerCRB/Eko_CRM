@@ -161,8 +161,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.runtime == 'true'
     runs-on: ubuntu-latest
-    # EKO-1-20 (#76) 45 min no longer fits the lock-wait suite. EKO-1-12 boot-identity (#126, 2026-11-11): run 42897088542 cancelled both runtime jobs at the 110 ceiling — this one at 97% (the suite grew: carrier, r21, restore, marker-binding, each with real boot cost); 140 = measured need + margin; ceiling only, no assertion moves; rides with the restart-bind hardening (a higher ceiling over the racy wait would only convert timing failures into cancellations).
-    timeout-minutes: 140
+    # EKO-1-25 (#133): the runtime suite grew with EKO-1-12's runtime tests; 360 is GitHub's job maximum, chosen at gate 1 (C-5).
+    timeout-minutes: 360
     # Reads the release record for ADR-0004-C13's previous-release half (EKO-1-15 K-06, C-3, C-4).
     permissions:
       contents: read
@@ -240,8 +240,8 @@ jobs:
     needs: [changes, checked-images]
     if: needs.changes.outputs.runtime == 'true'
     runs-on: ubuntu-latest
-    # EKO-1-20 (#76): lock-wait tests, 57 min observed under 60. EKO-1-12 boot-identity (#126, 2026-11-11): run 42897088542 cancelled both runtime jobs at the 110 ceiling — this one at 66%, so 140 is the approved margin on the composition job's 97% and is not yet measured here (residual: a second cancellation is the signal to retune, not a failure of these tests); ceiling only, no assertion moves.
-    timeout-minutes: 140
+    # EKO-1-25 (#133): the release-mode runtime suite grew with EKO-1-12's runtime tests; 360 is GitHub's job maximum, chosen at gate 1 (C-5).
+    timeout-minutes: 360
     # Reads the release record for ADR-0004-C13's previous-release half, as the runtime job does.
     permissions:
       contents: read

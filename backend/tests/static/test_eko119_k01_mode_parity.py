@@ -121,5 +121,6 @@ def test_eko119_k01_runtime_node_ids_are_the_same_in_both_modes_and_every_sessio
 
 
 def test_eko119_k01_change_set_adds_no_mode_branch_to_the_runtime_tests() -> None:
+    """Live invariant: the two modes run the same runtime tests, so no branch adds a mode branch."""
     diff = git("diff", "--unified=0", merge_base(), "--", "backend/tests/runtime/")
     assert mp.mode_branch_lines(diff) == []

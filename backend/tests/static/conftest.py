@@ -1,11 +1,12 @@
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
 
+from tests.support.fixed_pair import leaked, snapshot
 from tests.support.repo import REPO_ROOT, read_text, render, tracked_files, write_synthetic_env
 
 COMPOSE = REPO_ROOT / "compose.yaml"
@@ -109,3 +110,11 @@ def source_case(mutated: Callable[[str], Path]) -> Callable[[str], dict[str, Any
         return loaded
 
     return apply
+
+
+@pytest.fixture(scope="module")
+def real_repository_untouched() -> Iterator[None]:
+    """EKO-1-23 K-07: a module's plants leave this worktree, its HEAD and the plant refs alone."""
+    before = snapshot()
+    yield
+    assert leaked(before, snapshot()) == []
