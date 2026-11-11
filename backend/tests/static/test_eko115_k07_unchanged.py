@@ -2,6 +2,10 @@
 today, with no permission added except `packages: read`; the development profile builds its
 project images locally and names no image of the project registry.
 
+The closed list of allowed differences also holds, since EKO-1-12 fix round 3 (2026-11-11) and on
+the EKO-1-15 F-1 precedent, exactly one step: the keycloak pre-build of the release-mode job,
+listed as `release_workflow.CI_KEYCLOAK_PREBUILD_STEP` and dropped once from each side.
+
 Base: $CHANGESET_BASE, else origin/main (tests/static/test_k07_changeset.py). The runtime half
 (the development profile started with the project registry unreachable) is not here.
 """

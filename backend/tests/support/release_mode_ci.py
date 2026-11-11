@@ -27,6 +27,11 @@ RELEASE_MODE_PERMISSIONS = {"contents": "read", "packages": "read"}
 FOREIGN_ARTIFACT_INPUTS = ("run-id", "github-token", "repository")
 SNAPSHOT = "uv run python -m tests.support.session_images snapshot"
 SESSION_CHECK = "uv run python -m tests.support.session_images check"
+# EKO-1-12 K-04 (fix round 3, 2026-11-11): keycloak has no checked counterpart (release-images.sh
+# NAMES is the four project images; the digest join is deferred to #118), so its composition image
+# must already exist when the snapshot is taken, never be built by the session's first compose up.
+# The project name below is the listed step's own (release_workflow.CI_KEYCLOAK_PREBUILD_STEP).
+KEYCLOAK_PREBUILD = "eko-ci-keycloak-prebuild"
 # K-06: what would write to the registry or the repository from a pull request's run.
 PUSHES = re.compile(
     r"\bdocker\s+(?:image\s+)?push\b|\bdocker\s+(?:image\s+)?tag\b[^\n]*ghcr\.io"
@@ -137,6 +142,9 @@ def release_mode_job_violations(ci: Workflow, release: Workflow) -> list[str]:
     check_at = _step(ci, RELEASE_MODE_JOB, SESSION_CHECK)[0]
     if not 0 <= snapshot_at < pytest_at < check_at:
         problems.append(f"{RELEASE_MODE_JOB}: no image snapshot before and image check after")
+    prebuild_at = _step(ci, RELEASE_MODE_JOB, KEYCLOAK_PREBUILD)[0]
+    if not 0 <= prebuild_at < snapshot_at:
+        problems.append(f"{RELEASE_MODE_JOB}: the keycloak image is not built before the snapshot")
     return problems
 
 
