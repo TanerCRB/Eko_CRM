@@ -412,6 +412,17 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** splitting the runtime suite beyond what the cause requires; reopening EKO-1-23; re-judging PRs merged while the jobs were cancelled; raising the bound without a named cause; splitting or parallelising the suite (C-3); fixing the hidden runtime failures and the `release.yml` runtime bound — follow-up Issues (C-4).
   **Done 2026-11-11:** merged in [PR #139](https://github.com/TanerCRB/Eko_CRM/pull/139) as a merge commit `ce1f5b0` — R-01's instruction, keeping the pinned pair `bf55c4d`..`4d1380e` reachable; verified at `3c86efa`. Cause (b) named from per-file timings (K-02, human at gate 2): EKO-1-12's runtime files add ~3630 s to the suite; no test hung or ran past its own bound. PR run [43043176502](https://github.com/TanerCRB/Eko_CRM/actions/runs/43043176502): both runtime jobs concluded `failure`, not `cancelled`, in 126.4 / 122.6 min under the 360-min bound. First `main` run at the merge: [43074142146](https://github.com/TanerCRB/Eko_CRM/actions/runs/43074142146) — both runtime jobs completed: composition 125.3 min (2 failures), release mode 115.3 min (6 failures) — K-01 gate-3 half observed, not assumed. Five of the six release-mode failures are the listed table's (#140–#144); the sixth — `test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement`, `playwright: net::ERR_NETWORK_CHANGED` — passed on the same tree in the PR run and is flagged flaky, raised as an Issue if it repeats on the next `main` run. Bound guards `test_eko125_k04/k05_*` on the pinned pair, mutations M0–M14 all killed (M0 by CI observation). Exceptions EKO-1-25/weakening-1, EKO-1-25/boundary-1, EKO-1-25/B-01; EKO-1-20/weakening-1 flagged for the human's revisit (C-6). `main`'s runtime stays red until #140–#144 land (C-4); `release.yml` bound #138.
 
+- [ ] **EKO-1-29** — Give the tracked-additions secret scan raw-format teeth (#120).
+  *Done when:* `SECRET_ENV_ASSIGNMENT` in `backend/tests/static/test_eko112_k06_synthetic_and_secret_free.py`
+  flags raw `NAME=value` assignment shapes in scanned files (not only diff-form `+`-prefixed lines),
+  proven by a committed plaintext plant turning the scan red and its removal turning it green, in a
+  scanned path beyond `proxy/` if the plant design demands; the widened prefix set from EKO-1-12 stays
+  intact; exception EKO-1-12/Q3-1 is removed at this task's gate 3; the Q3-2 formatter-drift half is
+  re-checked against current main and recorded as already fixed or given its own carrier.
+  **Out of scope (explicit):** changing what counts as a secret value beyond assignment shape; CI
+  wiring; the runtime-side log scans.
+  After EKO-1-12.
+
 ## EKO-2 — Access
 
 - [ ] **EKO-2-01** — Require login for the whole application.
