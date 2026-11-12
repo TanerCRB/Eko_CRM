@@ -3,8 +3,12 @@
 EKO-1-29 (K-01a..K-03): the tracked-additions secret scan gained raw-format teeth — the scan
 predicate is extracted into `find_literal_secret_assignment_lines` and guarded in-file by
 committed in-memory plants: raw keyword-terminated `NAME=literal` shapes fire under each of the
-four scanned prefixes, diff-form `+NAME=literal` teeth survive, and placeholder, path-valued and
-self-reference shapes (the current-main `TOKEN_FILE=/etc/...` and `token=token,` pair) hold.
+four scanned prefixes and in mid-line shell contexts (`;`, `&&`, `||`, `|`, `-e`/`env`, and
+extra `export`/assignment slots, dev-2 R-01), diff-form `+NAME=literal` teeth survive including
+the diff-line head and unbalanced-quote values (dev-2 G-01), placeholder and path-valued shapes
+hold, and the self-reference hold is narrowed to the comma-terminated kwarg call
+`NAME=name,` (dev-2 R-02 — a bare `PASSWORD=password` fires again). Lines are cut on newline
+only (dev-2 R-04) and a linear membership prefilter guards both regex branches (dev-2 R-03).
 """
 
 import json
@@ -20,36 +24,83 @@ from tests.support.repo import REPO_ROOT, read_text, tracked_files
 ENV_PLACEHOLDER = re.compile(r"^\$\{[A-Z][A-Z0-9_]*\}$")
 # EKO-1-29 (exception EKO-1-12/Q3-1): the old SECRET_ENV_ASSIGNMENT anchored on `^\+`, so a
 # raw `SOME_KEY=literal` passed a scan that reads file content, and `POSTGRES_PASSWORD=` passed
-# the word boundary before the keyword. The predicate is now the union of the raw assignment
-# shape and the retained diff-form shape; the keyword set is unchanged (Story: out of scope).
-_KEYWORD_TERMINATED_NAME = r"[A-Za-z0-9_]*?(?:PASSWORD|SECRET|TOKEN|CREDENTIAL|KEY)"
-_QUOTED_LITERAL = r'"[^$\s][^"]*"' r"|'[^$\s][^']*'"
-# A bare value excludes `$`-references and quotes; the self-reference passing is held in
-# `_is_literal_value` instead — Python's `re` has no non-consuming named backreference.
+# the word boundary before the keyword. The predicate is the union of the raw assignment shape
+# and the retained diff-form shapes; the keyword set is unchanged (Story: out of scope).
+# A keyword-terminated name may carry at most 64 leading characters: the bound is the
+# half of the linearity guard (dev-2 R-03), an env name longer than that is a documented
+# pass (census: none on the tracked tree).
+_KEYWORD_TERMINATED_NAME = r"[A-Za-z0-9_]{0,64}?(?:PASSWORD|SECRET|TOKEN|CREDENTIAL|KEY)"
+# A quoted value is a literal even unbalanced: `KEY="foo` and `KEY=""` fire (dev-2 G-01;
+# supersedes dev-1's assumption A-04, which had them hold). A value starting with `$` inside
+# the quotes stays a reference, not a literal.
+_QUOTED_LITERAL = (
+    r"(?:\"\"|'')"
+    r"|\"[^$\s][^\"]*"
+    r"|'[^$\s][^']*"
+    r"|(?:[\"'][ \t]*)(?=$|[ \t])"
+)
+# A bare value excludes `$`-references and quotes.
 _BARE_LITERAL = r"[^$\s\"'][^\s]*"
 _LITERAL_VALUE = rf"(?P<value>{_QUOTED_LITERAL}|{_BARE_LITERAL})"
+# dev-2 R-01: a raw assignment fires after line start and after a shell separator context —
+# `;` `&&` `||` `|` (also as `export`/plain prefix), `-e`/`--env`/`env` arguments, any
+# further `NAME=value` slot (as after `export FOO=bar ADMIN_TOKEN=x`), and a separator
+# character a newline-only line cut leaves inside the line (dev-2 R-04). The value grammar
+# keeps the placeholder and path-valued names out of every context.
+_ASSIGNMENT_PREFIX = (
+    r"(?:^\s*(?:export\s+)?"
+    r"|(?<=[;|&])\s*(?:export\s+)?"
+    r"|(?<=[\u2028\u2029\x0b\x0c\x85])\s*(?:export\s+)?"
+    r"|(?:^|\s)(?:-{1,2}env|-{1,2}e|env)\s+(?:export\s+)?"
+    r"|[A-Za-z_][A-Za-z0-9_]{0,64}=[^\"',\s]+\s+(?:export\s+)?)"
+)
 RAW_SECRET_ASSIGNMENT = re.compile(
-    rf"^\s*(?:export\s+)?(?P<name>{_KEYWORD_TERMINATED_NAME})={_LITERAL_VALUE}", re.IGNORECASE
+    rf"{_ASSIGNMENT_PREFIX}(?P<name>{_KEYWORD_TERMINATED_NAME})={_LITERAL_VALUE}", re.IGNORECASE
 )
+# Lazy `.*?` (dev-2 R-03): the leftmost candidate assignment is tried first, so a firing line
+# costs its prefix length, not the whole line scanned back from the end. The fire/hold verdict
+# is order-insensitive (every candidate position is still tried on failure).
 DIFF_SECRET_ASSIGNMENT = re.compile(
-    rf"^\+[^+].*(?P<name>{_KEYWORD_TERMINATED_NAME})={_LITERAL_VALUE}", re.IGNORECASE
+    rf"^\+[^+].*?(?P<name>{_KEYWORD_TERMINATED_NAME})={_LITERAL_VALUE}", re.IGNORECASE
 )
-_STATEMENT_TAIL = ",;:)]}"
+# The mid-line form above cannot see a name at the very head of a diff line: `[^+]` eats its
+# first character (dev-1's G-01 miss on `+KEY="foo`); this head form covers both branches'
+# unbalanced-quote and self-reference shapes. `(?!\+)` keeps the `+++ b/...` headers out.
+DIFF_HEAD_SECRET_ASSIGNMENT = re.compile(
+    rf"^\+(?!\+)[ \t]*(?:export[ \t]+)?(?P<name>{_KEYWORD_TERMINATED_NAME})={_LITERAL_VALUE}",
+    re.IGNORECASE,
+)
+# dev-2 R-02: dev-1's name==value hold was path-blind and un-terminated (`PASSWORD=password`
+# regressed from firing on base to holding). The hold is now the narrowest statement that
+# describes a Python kwarg passing a variable into itself: the value equals the name and the
+# kwarg comma terminates it. `PASSWORD=password`, `key=KEY` and `TOKEN=token` fire again;
+# the 14 `token=token,` passings in scripts/keycloak-bootstrap.py keep the suite green at rest.
+_SECRET_KEYWORDS = ("password", "secret", "token", "credential", "key")
 SECRET_SCAN_PREFIXES = ("identity/", "proxy/", "docs/evidence/EKO-1-12/", "scripts/keycloak-")
 
 
-def _is_literal_value(name: str, value: str) -> bool:
-    if value[0] in "\"'":
-        return True
-    # `token=token,` passes a variable, not a literal (the kwarg lines that keep the merged
-    # suite green at rest in scripts/keycloak-bootstrap.py); a quoted value is deliberate.
-    return value.rstrip(_STATEMENT_TAIL).casefold() != name.casefold()
+def _is_self_reference_kwarg_passing(name: str, value: str) -> bool:
+    return value.endswith(",") and value[:-1].casefold() == name.casefold()
 
 
 def is_secret_env_assignment(line: str) -> bool:
-    for pattern in (RAW_SECRET_ASSIGNMENT, DIFF_SECRET_ASSIGNMENT):
-        match = pattern.match(line)
-        if match is not None and _is_literal_value(match["name"], match["value"]):
+    # dev-2 R-03: the mid-line diff search was quadratic on long non-matching lines (10k =
+    # 8.1s measured, base 0.25ms); this linear membership prefilter guards both branches —
+    # no match is possible without an `=` and a keyword on the line.
+    if "=" not in line:
+        return False
+    folded = line.casefold()
+    if not any(keyword in folded for keyword in _SECRET_KEYWORDS):
+        return False
+    for pattern in (
+        RAW_SECRET_ASSIGNMENT,
+        DIFF_SECRET_ASSIGNMENT,
+        DIFF_HEAD_SECRET_ASSIGNMENT,
+    ):
+        match = pattern.search(line)
+        if match is not None and not _is_self_reference_kwarg_passing(
+            match["name"], match["value"]
+        ):
             return True
     return False
 
@@ -58,9 +109,17 @@ def find_literal_secret_assignment_lines(relative: str, text: str) -> list[int]:
     """The scan predicate: 1-based line numbers of literal secret environment assignments."""
     if not relative.startswith(SECRET_SCAN_PREFIXES):
         return []
+    # dev-2 R-04: `splitlines()` also cuts on \v, \f, \x85, U+2028 and U+2029 — Unicode line
+    # boundaries that are not line boundaries for git or a shell — shifting reported numbers
+    # and splitting values mid-token. The scan cuts on `\n` only (the read is already
+    # universal-newline; a trailing `\r` is stripped defensively) and the prefix contexts above
+    # keep assignments after one of those separators firing on the same physical line.
     return [
         number
-        for number, line in enumerate(text.splitlines(), start=1)
+        for number, line in enumerate(
+            (raw.rstrip("\r") for raw in text.split("\n")),
+            start=1,
+        )
         if is_secret_env_assignment(line)
     ]
 
@@ -185,7 +244,9 @@ DIFF_FIRE_SHAPES = [
     "+\texport CLIENT_SECRET='lit-eral'",
 ]
 # K-01 contrast plus the at-rest shapes the merged suite's green depends on: placeholders, a
-# path-valued name that merely contains a keyword, and Python's self-reference kwarg passings.
+# path-valued name that merely contains a keyword, and Python's self-reference kwarg passings
+# — dev-2 R-02 narrowed that last hold to the comma-terminated `NAME=name,` call shape, so
+# bare `PASSWORD=password` / `TOKEN=token` fire again (both directions pinned below).
 HOLD_SHAPES = [
     "KEY=${VAR}",
     'KEY="${VAR}"',
@@ -237,6 +298,132 @@ def test_eko129_k03_diff_form_lines_still_fire(shape: str) -> None:
 @pytest.mark.parametrize("shape", DIFF_HOLD_SHAPES)
 def test_eko129_k03_contrast_diff_form_non_assignments_and_placeholders_hold(shape: str) -> None:
     assert find_literal_secret_assignment_lines("proxy/entrypoint.sh", shape) == []
+
+
+# --- dev-2 (review findings): the newly-pinned shapes, both directions for every fix.
+
+# R-01: the five mid-line shell contexts of the reviewer's plants; dev-1's raw branch only
+# saw line-start assignments and passed these.
+MIDLINE_FIRE_SHAPES = [
+    "set -eu; export ADMIN_API_KEY=x",
+    "echo hi && TOKEN=x ./runner",
+    "docker run -e CLIENT_SECRET=x img",
+    "env A=1 TOKEN=x run.sh",
+    "export FOO=bar ADMIN_TOKEN=x",
+]
+# R-01 contrast: the same contexts with placeholder values — the hold family survives the
+# wider anchor untouched.
+MIDLINE_HOLD_SHAPES = [
+    "set -eu; export ADMIN_API_KEY=${ADMIN_API_KEY}",
+    "echo hi && TOKEN=${TOKEN} ./runner",
+    "docker run -e CLIENT_SECRET=${S} img",
+    "env A=1 TOKEN=${VAR} run.sh",
+    "export FOO=bar ADMIN_TOKEN=${VAULT}",
+]
+
+# R-02: the self-reference hold narrowed to the comma-terminated kwarg call shape; bare
+# name==value assignments fire again.
+SELF_REFERENCE_FIRE_SHAPES = [
+    "PASSWORD=password",
+    "key=KEY",
+    "TOKEN=token",
+    "API_KEY=API_KEY",
+    "+API_KEY=API_KEY",
+]
+SELF_REFERENCE_HOLD_SHAPES = [
+    "token=token,",
+    "        token=token,",
+    "export TOKEN=token,",
+]
+
+# G-01: unbalanced-quote and empty-quote values are literals in both branches (supersedes
+# dev-1's assumption A-04, which had the raw `KEY="foo` shape holding); the same openings
+# with a `$` reference start still hold.
+QUOTE_LITERAL_FIRE_SHAPES = [
+    'KEY="foo',
+    'KEY=""',
+    "KEY='foo",
+    "KEY=''",
+    'KEY="',
+    '+KEY="foo',
+    '+KEY=""',
+    '+ KEY="foo',
+]
+QUOTE_REFERENCE_HOLD_SHAPES = ['KEY="${VAR}"', 'KEY="$']
+
+# A-06 restated as a probe: every shape the pre-EKO-1-29 (main) `\b`-keyword diff scan fired
+# on — produced by running that pattern over candidates on 2026-11-12, recorded in
+# docs/evidence/EKO-1-29/ — still fires under the dev-2 grammar.
+BASE_FIRED_PROBE_SHAPES = [
+    "+ KEY=literal",
+    "+export TOKEN=x",
+    "+\tpassword=Passw0rd",
+    '+ KEY="foo',
+    '+ KEY=""',
+    "+ KEY=KEY",
+    "+ client_id=x SECRET=lit",
+    "+ --flag TOKEN=abc123",
+    "+ TOKEN=token",
+    "+ credential='pw'",
+    "+a SECRET=b",
+]
+
+# R-04: the boundaries Python's splitlines() cuts on but git and shells do not.
+UNIVERSAL_LINE_SEPARATORS = ["\u2028", "\u2029", "\v", "\f", "\x85"]
+
+
+@pytest.mark.parametrize("shape", MIDLINE_FIRE_SHAPES)
+def test_eko129_r01_midline_shell_context_assignments_fire(shape: str) -> None:
+    assert find_literal_secret_assignment_lines("proxy/entrypoint.sh", shape) == [1]
+
+
+@pytest.mark.parametrize("shape", MIDLINE_FIRE_SHAPES)
+@pytest.mark.parametrize("path", SCANNED_PATHS_UNDER_TEST)
+def test_eko129_r01_midline_shapes_fire_under_every_scanned_prefix(path: str, shape: str) -> None:
+    assert find_literal_secret_assignment_lines(path, shape) == [1]
+
+
+@pytest.mark.parametrize("shape", MIDLINE_HOLD_SHAPES)
+def test_eko129_r01_contrast_midline_placeholder_shapes_hold(shape: str) -> None:
+    assert find_literal_secret_assignment_lines("proxy/entrypoint.sh", shape) == []
+
+
+@pytest.mark.parametrize("shape", SELF_REFERENCE_FIRE_SHAPES)
+def test_eko129_r02_self_reference_assignments_fire_again(shape: str) -> None:
+    assert find_literal_secret_assignment_lines("proxy/entrypoint.sh", shape) == [1]
+
+
+@pytest.mark.parametrize("shape", SELF_REFERENCE_HOLD_SHAPES)
+def test_eko129_r02_contrast_kwarg_passings_still_hold(shape: str) -> None:
+    assert find_literal_secret_assignment_lines("scripts/keycloak-bootstrap.py", shape) == []
+
+
+@pytest.mark.parametrize("shape", QUOTE_LITERAL_FIRE_SHAPES)
+def test_eko129_g01_unterminated_and_empty_quoted_values_fire(shape: str) -> None:
+    assert find_literal_secret_assignment_lines("proxy/entrypoint.sh", shape) == [1]
+
+
+@pytest.mark.parametrize("shape", QUOTE_REFERENCE_HOLD_SHAPES)
+def test_eko129_g01_contrast_reference_quoted_values_hold(shape: str) -> None:
+    assert find_literal_secret_assignment_lines("proxy/entrypoint.sh", shape) == []
+
+
+@pytest.mark.parametrize("shape", BASE_FIRED_PROBE_SHAPES)
+def test_eko129_a06_base_fired_shapes_still_fire(shape: str) -> None:
+    assert find_literal_secret_assignment_lines("proxy/entrypoint.sh", shape) == [1]
+
+
+@pytest.mark.parametrize("separator", UNIVERSAL_LINE_SEPARATORS)
+def test_eko129_r04_unicode_line_separators_do_not_create_phantom_lines(separator: str) -> None:
+    # splitlines() would cut at the separator and report the second assignment on line 3.
+    text = f"echo start\nKEY=lit1{separator}ADMIN_TOKEN=lit2\ntrailer\n"
+    assert find_literal_secret_assignment_lines("proxy/entrypoint.sh", text) == [2]
+
+
+def test_eko129_r04_trailing_carriage_return_is_stripped_defensively() -> None:
+    # The universal-newline read never yields these, but a lone `\r` at the line end must
+    # not leak into the value grammar; the assignment fires on its single physical line.
+    assert find_literal_secret_assignment_lines("proxy/entrypoint.sh", "export TOKEN=x\r") == [1]
 
 
 def test_eko129_k01a_edge_two_identical_raw_assignments_are_two_reported_lines() -> None:
