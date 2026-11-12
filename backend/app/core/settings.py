@@ -1,6 +1,10 @@
 """The one place configuration and secrets are read (ADR-0001 Constraint 1, ADR-0001-C10)."""
 
-from pydantic import Field, SecretStr, ValidationError, field_validator
+import base64
+import binascii
+import re
+
+from pydantic import Field, SecretStr, ValidationError, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -49,7 +53,84 @@ class MigrateSettings(Settings):
         return value
 
 
-def load_settings[T: Settings](cls: type[T]) -> T:
+_ORIGIN = re.compile(r"https?://[^/\s?#@]+")
+_BASE_URL = re.compile(r"https?://[^\s?#@]+[^/\s?#@]")
+# ADR-0003-C2: the realm's `accessTokenLifespan` (240 s, identity/eko-realm.json) plus these two
+# is at most 300 s.
+MAX_LEEWAY_PLUS_OFFSET_SECONDS = 60
+
+
+class AuthSettings(BaseSettings):
+    """`backend` only (EKO-2-01): the OIDC client, the browser origin and the session-token key.
+
+    A separate class, not a field of `Settings`: `worker` and `migrate` never receive these.
+    """
+
+    model_config = SettingsConfigDict(case_sensitive=False, extra="ignore")
+
+    # The application's own origin, `https://<app-host>` (ADR-0004 *HTTPS exposure*): compared
+    # with `Origin` on state-changing requests and the base of the callback URL.
+    app_origin: str
+    # The realm's issuer exactly as Keycloak writes `iss`; browser-facing URLs are built on it.
+    app_oidc_issuer: str
+    # The realm's base URL for the backend's own calls inside the composition; the issuer if unset.
+    app_oidc_internal_url: str | None = None
+    app_oidc_client_id: str = "eko-backend"
+    app_oidc_client_secret: SecretStr
+    # URL-safe base64 of 32 random bytes (AES-256-GCM).
+    app_session_encryption_key: SecretStr
+    app_oidc_clock_skew_leeway_seconds: int = Field(default=30, ge=0)
+    app_oidc_max_clock_offset_seconds: int = Field(default=30, ge=0)
+
+    @field_validator("app_origin")
+    @classmethod
+    def _origin(cls, value: str) -> str:
+        if not _ORIGIN.fullmatch(value):
+            raise ValueError("not an origin")
+        return value
+
+    @field_validator("app_oidc_issuer", "app_oidc_internal_url")
+    @classmethod
+    def _base_url(cls, value: str | None) -> str | None:
+        if value is not None and not _BASE_URL.fullmatch(value):
+            raise ValueError("not a base URL")
+        return value
+
+    @field_validator("app_oidc_client_secret")
+    @classmethod
+    def _secret_not_blank(cls, value: SecretStr) -> SecretStr:
+        if not value.get_secret_value().strip():
+            raise ValueError("empty")
+        return value
+
+    @field_validator("app_session_encryption_key")
+    @classmethod
+    def _key_32_bytes(cls, value: SecretStr) -> SecretStr:
+        if len(_decode_key(value)) != 32:
+            raise ValueError("not 32 bytes")
+        return value
+
+    @field_validator("app_oidc_max_clock_offset_seconds")
+    @classmethod
+    def _c2_bound(cls, value: int, info: ValidationInfo) -> int:
+        leeway = info.data.get("app_oidc_clock_skew_leeway_seconds")
+        if isinstance(leeway, int) and leeway + value > MAX_LEEWAY_PLUS_OFFSET_SECONDS:
+            raise ValueError("leeway plus offset above the ADR-0003-C2 bound")
+        return value
+
+    def session_key(self) -> bytes:
+        return _decode_key(self.app_session_encryption_key)
+
+
+def _decode_key(value: SecretStr) -> bytes:
+    raw = value.get_secret_value().strip()
+    try:
+        return base64.b64decode(raw + "=" * (-len(raw) % 4), altchars=b"-_", validate=True)
+    except (binascii.Error, ValueError):
+        return b""
+
+
+def load_settings[T: BaseSettings](cls: type[T]) -> T:
     """Read the settings, or stop the process naming the variables at fault and nothing else."""
     try:
         return cls()

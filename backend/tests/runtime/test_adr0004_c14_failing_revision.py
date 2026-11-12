@@ -30,7 +30,7 @@ def test_adr0004_c14_failing_revision(lab: Lab) -> None:
     assert '"cause":"psycopg.errors.DivisionByZero"' in logs, logs[-2000:]
     assert lab.comparison_dump() == before
     assert lab.versions() == [SHIPPED_HEAD]
-    assert lab.lineage() == {"0001", "0002"}
+    assert lab.lineage() == {"0001", "0002", "0003"}
     assert took < WATCH_SECONDS - 2, "the run outlasted the health watch"
     assert statuses and set(statuses) == {"200"}, statuses
     assert lab.composition.container_id("backend") == container
@@ -46,5 +46,5 @@ def test_adr0004_c14_contrast_without_the_failing_statement_both_revisions_apply
     code, logs = lab.run_migrate(lab.variant("c14_passing"))
     assert code == 0, logs
     assert lab.versions() == ["t_c14_second"]
-    assert lab.lineage() == {"0001", "0002", "t_c14_first", "t_c14_second"}
+    assert lab.lineage() == {"0001", "0002", "0003", "t_c14_first", "t_c14_second"}
     assert lab.comparison_dump() != before

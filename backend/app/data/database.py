@@ -1,4 +1,4 @@
-"""Engine construction and the readiness probe: the only database access the skeleton has."""
+"""Engine construction and the readiness probe; the bounded pool every application engine uses."""
 
 import logging
 
@@ -9,6 +9,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.settings import Settings
 
 logger = logging.getLogger(__name__)
+
+POOL_TIMEOUT_SECONDS = 0.5
 
 
 def database_url(settings: Settings) -> URL:
@@ -35,6 +37,8 @@ def create_app_engine(settings: Settings) -> Engine:
         database_url(settings),
         pool_size=settings.app_db_pool_size,
         max_overflow=settings.app_db_max_overflow,
+        # ADR-0002 addendum of 2026-11-02 (G-6 A): the total wait for one checkout.
+        pool_timeout=POOL_TIMEOUT_SECONDS,
         pool_pre_ping=True,
         connect_args=connect_args(settings),
     )
@@ -49,6 +53,11 @@ class Database:
     @classmethod
     def from_settings(cls, settings: Settings) -> "Database":
         return cls(create_app_engine(settings))
+
+    @property
+    def engine(self) -> Engine:
+        """For the modules of `data` only."""
+        return self._engine
 
     def is_reachable(self) -> bool:
         try:

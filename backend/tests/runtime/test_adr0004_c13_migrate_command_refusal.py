@@ -38,5 +38,5 @@ def test_adr0004_c13_migrate_command_refusal_contrast_upgrade_head_applies(lab: 
     code, logs = lab.run_migrate(image, command=("alembic", "upgrade", "head"))
     assert code == 0, logs
     assert lab.versions() == ["t_next"]
-    assert lab.lineage() == {"0001", "0002", "t_next"}
+    assert lab.lineage() == {"0001", "0002", "0003", "t_next"}
     assert lab.comparison_dump() != before

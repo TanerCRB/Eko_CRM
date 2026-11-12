@@ -26,8 +26,8 @@ from tests.runtime.conftest import BUILT_SERVICES, Composition
 from tests.support.repo import REPO_ROOT
 
 REVISIONS = Path(__file__).parent / "revisions"
-SHIPPED_HEAD = "0002"
-SHIPPED_TREE = ("0001", "0002")
+SHIPPED_HEAD = "0003"
+SHIPPED_TREE = ("0001", "0002", "0003")
 # pg_dump writes a random \restrict key into every dump unless one is given.
 DUMP_RESTRICT_KEY = "ekotestdump"
 HEALTH_URL = "http://backend:8000/api/health"
@@ -567,6 +567,6 @@ REFUSING_STATES: dict[str, Callable[[Lab], None]] = {
     "vi-descendant-lineage-dropped": _lineage_dropped,
 }
 ACCEPTING_STATES: dict[str, Callable[[Lab], None]] = {
-    "head-0002": Lab.at_head,
+    "head-0003": Lab.at_head,
     "descendant-t_next": lambda lab: lab.at_variant_head("next"),
 }
