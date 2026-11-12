@@ -899,3 +899,128 @@ That is architectural direction only: no concrete provider or custom image has b
   all required audit and privacy boundaries. Runtime proof remains mandatory.
 - **B — Reject this addendum.** The official-image rule and EKO-1-12 STOP remain unchanged; no
   custom provider or image is authorized.
+
+### 2026-11-12 — One login theme in the custom image; the OTP secret as a Keycloak-held staff credential
+
+**Status:** Accepted 2026-11-12 (repeated gate 1 of EKO-2-01, Issue #21; accepted by the human in the driving session with every recommended option — G-A A, G-B A, G-C A, G-D A, G-E A, G-F outside EKO-2-01 — recorded on the Issue).
+
+**Condition.** This addendum is drafted for gate 1 of EKO-2-01 (Issue #21). On 2026-11-12, in the
+driving session, the human chose to deliver G-4 A ("restrained Eko_CRM branding") through a custom
+login theme baked into the existing custom image. That is the Architect's delta check, Q-1 = B.
+The choice in conversation does not accept this text. The addendum takes effect only if the human
+accepts it together with the ADR-0004 addendum of the same date and the ADR-0005 addendum of the
+same date.
+
+**What it changes.**
+
+The addendum of 2026-11-06 permits exactly one addition to the official Keycloak 26.8.1 image: the
+event-store provider. *Identity server product* otherwise still names the official image. On
+acceptance, the custom image may additionally carry **one login theme**, and nothing else is added
+by this addendum. This is a declared deviation from *Identity server product*. Every boundary of the
+2026-11-06 addendum stays unchanged.
+
+- **What the theme may contain.** One theme directory, of type `login` only. It may contain only
+  these files:
+  - its `theme.properties`;
+  - FreeMarker templates (`*.ftl`);
+  - one Polish message file;
+  - CSS files;
+  - PNG images.
+
+  It extends one parent theme shipped in the same official image. The theme adds no Java class, JAR,
+  provider, JavaScript file, `scripts` entry in `theme.properties`, inline `<script>` element,
+  HTML event-handler attribute, SVG, font file or other executable or active content.
+- **No remote resources.** No theme file references another origin, whether by an absolute or
+  protocol-relative URL, a CSS `@import`/`url()` pointing outside the theme's own resources, or a
+  web font. Every page the theme renders loads only Keycloak's own resources from `<auth-host>`.
+- **Templates are server-side code in effect, so they are restricted.** An overridden template:
+  - uses none of FreeMarker's `?new`, `?api`, `?eval`, `?interpret` or `?no_esc`;
+  - leaves Keycloak's escaping of every user- or request-derived value in place.
+
+  A message key is overridden in preference to a template. A template is overridden only when the
+  required Polish wording, the Eko_CRM name or the branding cannot be achieved through messages and
+  CSS alone.
+- **Polish only.** The theme declares Polish as its only locale and carries only a Polish message
+  file. The application realm is localized with Polish as its only supported and default locale. No
+  language selector is offered.
+- **Selection.** The theme is selected in the versioned realm export under `identity/`: the
+  application realm's `loginTheme` names it, and the realm's display name is "Eko_CRM". The account,
+  admin and e-mail themes of the application realm, and every theme of the master realm, stay at the
+  defaults of the image. A theme selected only in a console, or selected server-wide by a server
+  option, is a defect under *Identity server product* ("a realm setting changed only in a console
+  is a defect").
+- **Upgrade review duty.** The theme overrides templates of its parent, and the parent changes with
+  Keycloak releases without notice. Every change of the base image version (patch releases
+  included), and every change to the theme, requires a review before deployment:
+  - Compare each overridden template and each overridden message key with the parent's version in
+    the new image.
+  - Record the outcome, naming the Keycloak version it was reviewed against, in a versioned review
+    record under `identity/`, outside the directory copied into the image.
+
+  An image whose base version differs from the last reviewed version is not released. The existing
+  major-version addendum rule and the provider re-verification duty of the 2026-11-06 addendum are
+  unchanged and run in addition.
+- **The OTP secret is a staff credential held by Keycloak.** G-3 A requires MFA for every staff
+  account. Each enrolled account therefore has a one-time-password credential: its shared secret,
+  and the algorithm metadata and label Keycloak keeps with it. Keycloak's database holds it; nothing
+  else does.
+  - It joins the password hash under *Staff personal data* (Keycloak row) and PD-S1 of ADR-0005.
+  - Under *Identity server product* it is never in the realm export.
+  - The application never receives, stores or logs it, and neither does any token the application
+    holds.
+  - No stored event, admin-event representation or container log contains the secret or a one-time
+    code.
+  - ADR-0003-C17's rule that "no stored representation holds a password value" applies to it
+    equally.
+- **MFA is enforced by the realm, not by the backend.** The backend verifies tokens exactly as *How
+  a request is verified* states. This addendum adds no authentication-method claim check, and no
+  claim, to the application's tokens. K-02's claim set is unchanged.
+- **Recovery of a lost authenticator.** Only an administrator recovers a lost authenticator: they
+  remove the account's OTP credential in Keycloak's console, which is a stored admin event, and the
+  user enrols a new one at their next login on Keycloak's pages. The removal follows the hand-over
+  rule of *Password reset*:
+  - it is done only right before the user logs in;
+  - the user's identity has been confirmed in person, or in a call the administrator makes to a
+    phone number the company already holds for that person, never to an incoming caller.
+
+  An account whose OTP credential was removed and has not been re-enrolled 7 days after the removal
+  is disabled by the administrator, as for an unused temporary password.
+
+Every other rule and control of this decision is unchanged. In particular:
+- the closed public-route list;
+- the custom-image provider boundary of 2026-11-06;
+- the no-identity-provider rule;
+- the account-console exposure rule.
+
+**New controls.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0003-C29 | A static check reads the repository's theme directory and the same directory inside the built custom image. It confirms all of the following, and a one-violation fixture of each kind fails naming the file: both hold the same files byte for byte; every file is one of `theme.properties`, `*.ftl`, the single Polish message file, `*.css` or `*.png`; `theme.properties` declares type `login`, one parent shipped in the image and Polish as its only locale, and no `scripts`; no file contains `<script`, an HTML `on…=` event attribute, an absolute or protocol-relative URL, a remote `@import`/`url()`, or one of `?new`, `?api`, `?eval`, `?interpret`, `?no_esc`. The fixtures are an added `.js` file, an SVG, an inline script, a remote font URL and `?no_esc` in a template. The unmodified theme passes the same check. |
+| ADR-0003-C30 | The realm export's application realm names the theme in `loginTheme`, has internationalization enabled with Polish as the only supported locale and the default locale, has display name "Eko_CRM", and sets no account, admin or e-mail theme; the master realm sets no theme. Against the running composition, the login page served through the public listener comes from the theme and declares Polish as its language. Contrast: with `loginTheme` removed as the only change, the same request returns the parent's page and the check fails. |
+| ADR-0003-C31 | The Keycloak version of the custom image's base (`identity/Dockerfile`) equals the version named by the latest entry of the theme's review record, and that entry lists every overridden template and message key present in the theme. Changing only the base version, or adding only an overridden template without a matching entry, fails the check. |
+| ADR-0003-C32 | Against a running Keycloak, a synthetic account enrols an OTP credential, and a privileged read confirms that the credential exists. Then an account holding only `administrator` removes it, and the account's next login requires a new enrolment. Throughout, the realm export, every stored application- and master-realm event and admin-event representation, the Keycloak and backend container logs, and the application database contain neither the OTP secret nor any one-time code used. The removal is a stored admin event naming the acting account, the affected account and the time. Planting the secret value into a copy of any inspected source fails the check, which proves the scan reads that source. |
+
+**Options considered.**
+
+| Option | Cost | Closes off |
+|---|---|---|
+| **A. One restricted login theme in the custom image, selected by the realm export** (the human's direction of 2026-11-12, pending acceptance) | Template maintenance on every Keycloak release; a review record; an image change that re-triggers provider verification; templates are reviewed as server-side code. | Unmodified default pages; branding through bind-mounted or volume-held files. |
+| B. Built-in Polish messages, `localizationTexts` and display name only, with no theme files | Text-only branding; no logo or colours. | Visual Eko_CRM branding on Keycloak's pages. |
+| C. A theme carried in a provider JAR | The same review duty, plus a second JAR in the provider directory and the unsandboxed-provider supply-chain boundary for non-code content. | Keeping theme content outside `providers/`. |
+
+**Why.** G-4 A was accepted with restrained branding, and the human requires visual branding that
+messages alone cannot provide. The 2026-11-06 addendum admits only the provider, so a theme in the
+same image needs its own declared deviation. The restrictions keep the addition to passive content
+served from Keycloak's own origin. They also make the parent-template drift that each Keycloak
+release can introduce a recorded review instead of a silent breakage. G-3 A creates a new
+Keycloak-held credential that the staff-data inventory and the event/log rules do not name. Recording
+it here prevents an implementation from treating it as anything other than a credential.
+
+**Options requiring a human choice.**
+
+- **A — Accept this addendum with the ADR-0004 and ADR-0005 addenda of 2026-11-12.** This permits
+  the theme under the boundaries and controls above and records the OTP credential and its recovery
+  rule.
+- **B — Reject it.** The official-image rule outside the provider remains. G-4's branding is then
+  delivered as option B above (text only), or G-4 returns to the human.

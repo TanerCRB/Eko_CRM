@@ -2052,3 +2052,85 @@ separate dated action gives every carrier one name per control while the record 
 gate used on the day it decided. The collision was found by the Architect's 2026-11-10 impact map
 and accepted with it at the same gate.
 
+### 2026-11-12 — The custom Keycloak image also carries the login theme: contents, build, startup, release and the OTP secret in backups and restores
+
+**Status:** Accepted 2026-11-12 (repeated gate 1 of EKO-2-01, Issue #21; accepted by the human in the driving session with every recommended option — G-A A, G-B A, G-C A, G-D A, G-E A, G-F outside EKO-2-01 — recorded on the Issue).
+
+**Condition.** This addendum is drafted for gate 1 of EKO-2-01 (Issue #21). It takes effect only if
+the human accepts ADR-0003's addendum of 2026-11-12, which admits one login theme into the custom
+Keycloak image, and ADR-0005's addendum of the same date.
+
+**What it changes.**
+
+- **Image contents.** The `keycloak` service's custom image contains the official Keycloak 26.8.1
+  base plus exactly these additions:
+  - the event-store provider JAR (addendum of 2026-11-06);
+  - the boot-token directory seed (addendum of 2026-11-10);
+  - the one login theme of ADR-0003's addendum of 2026-11-12.
+
+  The build copies the theme from the repository into Keycloak's theme directory before `kc.sh
+  build`, so one build produces the whole image. The copied files are not writable by the
+  container's runtime user. Nothing else enters the image through this addendum.
+- **No mount over the theme.** Theme content reaches Keycloak only through the image. No host path
+  is bind-mounted, and no named volume is mounted, at Keycloak's theme or provider directories, in
+  any profile. ADR-0004-C4 is unchanged; this states its consequence for themes. Keycloak's theme
+  and template caching is not disabled in any profile.
+- **An image change re-triggers startup verification.** A theme change is an image change. On every
+  fresh bootstrap, restart and restore with the theme-bearing image, two checks are re-run against
+  that image, not taken over from the previous one:
+  - the provider selection and filtering verification before either listener opens (ADR-0004-C34,
+    as cited by the addendum of 2026-11-10, printed C29 in the addendum of 2026-11-06);
+  - the boot-token marker binding (ADR-0004-C33).
+
+  A theme defect gives no reason to open a listener early, and a theme-loading failure does not
+  replace the provider check. Both listeners stay closed until C34 passes for the current boot. The
+  accepted 2026-11-02 brute-force order is unchanged.
+- **Tag and digest.** The image keeps its local tag. Its new digest is recorded in the implementing
+  task's dated evidence under `docs/evidence/`, and that digest supersedes the one recorded for
+  EKO-1-12 only through the capability register at gate 3. Exception EKO-1-12/R-02 stays as
+  recorded: the custom image is not yet one of the checked-image digests, and its release
+  publishing is carried by #118. No release composition is claimed to name the theme-bearing image
+  by digest until #118 delivers it. ADR-0004-C29 (digest pinning in a published release
+  composition) is unchanged and applies to that image once it is published.
+- **The OTP secret in backups and restores.** ADR-0003's addendum of 2026-11-12 makes each staff
+  account's OTP secret a credential in Keycloak's database. It is therefore in every backup set,
+  under the same encryption, and is kept as long as its set (ADR-0005 *Retention*).
+  - **Compromise of the backup encryption private key.** Every staff account's OTP credential is
+    removed, and the users enrol new ones under ADR-0003's recovery rule. This sits beside the
+    existing duty to rotate the OIDC client secret and SMTP credentials on that compromise.
+  - **Restore step 9.** The step also re-applies every OTP-credential removal entered in the IT
+    department's off-server record of account changes after the backup's time. It does so by
+    removing the credential the restored database holds, so that an authenticator withdrawn after
+    the backup point does not work again.
+  - **Record of account changes.** Every OTP-credential removal is entered in that record, as
+    password resets are.
+
+Every other rule and control of this decision is unchanged. That includes the closed service list,
+published ports, the three named volumes, environment-only configuration, the secret table's other
+rows, the backup set and the restore order.
+
+**New controls.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0004-C35 | The built custom Keycloak image differs from its official base only by the provider JAR, the boot-token seed and the theme directory of ADR-0003-C29; the theme files in the image are not writable by the runtime user. In every rendered profile, no service mounts a host path or a volume at Keycloak's theme or provider directories, and no setting disables theme or template caching. Each of these one-violation fixtures fails naming it: an extra file copied into the image, a bind mount over the theme directory, a named volume over it, and caching disabled. |
+| ADR-0004-C36 | Fresh-bootstrap and restart checks run against the theme-bearing image: ADR-0004-C33 and ADR-0004-C34 pass for the current boot before either listener opens, and with only the provider JAR removed from that image both listeners stay closed. A restore record, by review, shows every OTP-credential removal entered in the record of account changes after the backup's time re-applied at step 9, before the public listener opens to the internet. |
+
+**Options requiring a human choice.**
+
+- **A — Accept this addendum with ADR-0003's and ADR-0005's of 2026-11-12.** The theme enters only
+  through the image, startup verification is re-proven on that image, and the OTP secret's
+  backup/restore consequences become operator duties. Cost: one more image change to verify, and
+  two more operator steps (MFA re-enrolment of all staff on compromise of the backup key; OTP
+  removals re-applied at restore).
+- **B — Reject it.** The custom image stays as accepted on 2026-11-06 and 2026-11-10, and ADR-0003's
+  theme addendum cannot take effect.
+
+**Why.** The theme changes the bytes of an image whose accepted boundary is "verified before either
+listener opens on every fresh bootstrap, restart and restore". Without restating that the
+verification runs on the new image, an image change could be treated as already verified. The
+mount prohibition keeps runtime-editable page content, which would be internet-facing HTML outside
+the release, out of the composition. G-3 A puts a second factor into the Keycloak database. Without
+the compromise and restore duties, a backup set or a restore could bring back an authenticator the
+company had withdrawn.
+
