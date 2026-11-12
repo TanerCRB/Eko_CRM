@@ -223,7 +223,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   endpoint and the first expand → contract (EKO-3-01); the reviewer's low finding R-02 (a
   branched tree is reported as "unknown destination revision").
 
-- [ ] **EKO-1-12** — Configure Keycloak in the composition as ADR-0003..ADR-0005 require (#53).
+- [x] **EKO-1-12** — Configure Keycloak in the composition as ADR-0003..ADR-0005 require (#53).
   *Done when:* the realm export meets ADR-0003-C1, C14, C15, C17 and ADR-0005-C7; bootstrap opens
   the public listener only after the realm import and the C8 check (exception EKO-1-03/R-22
   lifted); ADR-0003-C10, C16, ADR-0004-C23, C24 and ADR-0005-C5 pass against the running
@@ -231,6 +231,29 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   rules apply.
   **Out of scope (explicit):** login to the application (EKO-2-01); event shipping (EKO-1-09).
   After EKO-1-06; before EKO-2-01.
+  **Done 2026-11-11:** merged in [PR #117](https://github.com/TanerCRB/Eko_CRM/pull/117) with the
+  self-test fix [PR #122](https://github.com/TanerCRB/Eko_CRM/pull/122) and the boot-identity
+  correction [PR #135](https://github.com/TanerCRB/Eko_CRM/pull/135) (#126): a versioned realm
+  export for both realms; the custom image `localhost/eko-crm/keycloak:26.8.1-eko112`
+  (`sha256:387f615a11a75e6ee2289206f2e9098113933d83f3a9084bbd8c3882cbc631f8`,
+  `docs/evidence/EKO-1-12/custom-image-build-fix1.md`) baking the ADR-0007 option-A provider —
+  same-ID order-100 `jpa` override filtering `details.code_id`, `sessionId` and unknown-account
+  `details.username`; the ordered bootstrap (`scripts/keycloak-bootstrap.sh`) verifying provider
+  selection AND filtering before either listener opens with per-gate brute-force preconditions;
+  gate markers bound to a per-boot UUID token rotated by the compose wrapper as its first act
+  (ADR-0004 addendum 2026-11-10, C33; the numbering correction C29→C34 cited by verification).
+  Exception EKO-1-03/R-22 lifted — its register line is removed by this check-off. Reset timing
+  measured 2026-11-09 cold (`docs/evidence/EKO-1-12/reset-timing.md`); K-05's mail-window case
+  accepted as exception EKO-1-12/qa2-7. Gate 2 accepted G-02 (ADR-0005 *Retention* reachable-set
+  amendment recorded in this PR), K-07, U-02 moot-by-config and assumptions A-01..A-04; six
+  exceptions recorded (this PR). Verification: QA four rounds (16 mutations of the qa4 set,
+  `docs/evidence/EKO-1-12/`), guardian/reviewer/auditor final re-verifications green at the
+  correction head; CI run [43078488149](https://github.com/TanerCRB/Eko_CRM/actions/runs/43078488149)
+  green on both runtime jobs at `70647ee`, the first ubuntu proof of the token primitive and of
+  release-mode K-04 with the keycloak pre-build step (option A1; digest integration stays #118 —
+  exception EKO-1-12/R-02; #126 correction ratified by the human 2026-11-10). Follow-ups #118..#121
+  (#121 closed by #122); deviations D-01..D-05 of inv-33 (freeze-list job-gate, comment byte-pin)
+  and the human's merge-before-CI-completion at gate 2 are ratified by this check-off.
 
 - [x] **EKO-1-13** — Set the log settings and log bounds of every service (#54).
   *Done when:* ADR-0005-C3 (with a marker statement), C4 and C6's composition half pass; backend
