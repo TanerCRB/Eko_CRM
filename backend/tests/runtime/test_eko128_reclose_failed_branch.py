@@ -89,11 +89,7 @@ def _run_public_gate_failure(
         "the run did not fail at the public gate's own verification; the failure tail was "
         f"not reached through the real mechanism:\n{result.stderr[-2000:]}"
     )
-    events = [
-        line
-        for line in evidence.read_text(encoding="utf-8").splitlines()
-        if line
-    ]
+    events = [line for line in evidence.read_text(encoding="utf-8").splitlines() if line]
     # The scenario preconditions every clause depends on: the provider check ran, the admin
     # gate opened (so the public failure tail runs against the live admin marker), and the
     # public gate's success record is impossible.
@@ -145,9 +141,7 @@ def test_eko128_hook_unset_records_the_success_path_tail(
     monkeypatch.delenv(RECLOSE_FAIL_HOOK, raising=False)
     prepare(fresh)
     _break_public_upstream(fresh)
-    failure_lines = _run_public_gate_failure(
-        fresh, tmp_path / "bootstrap-hook-unset.jsonl", {}
-    )
+    failure_lines = _run_public_gate_failure(fresh, tmp_path / "bootstrap-hook-unset.jsonl", {})
     assert "marker removed" in failure_lines[0], failure_lines[0]
     assert "admin listener remains open" in failure_lines[0], (
         "the unset hook changed the shipped residual record: " + failure_lines[0]
@@ -158,9 +152,7 @@ def test_eko128_hook_unset_records_the_success_path_tail(
     )
 
 
-def test_eko128_hook_empty_string_behaves_as_unset(
-    fresh: Composition, tmp_path: Path
-) -> None:
+def test_eko128_hook_empty_string_behaves_as_unset(fresh: Composition, tmp_path: Path) -> None:
     """K-02(i) "Nothing" edge: a set-but-empty knob is the shipped path, byte-identical to
     the unset phase's records (the house `${VAR:-}` reading)."""
     prepare(fresh)
@@ -190,11 +182,7 @@ def test_eko128_hook_set_on_a_healthy_bootstrap_completes_open(
     run_bootstrap(
         fresh, evidence, overrides={RECLOSE_FAIL_HOOK: "fail"}, expected=0
     )  # fmt: skip
-    events = [
-        line
-        for line in evidence.read_text(encoding="utf-8").splitlines()
-        if line
-    ]
+    events = [line for line in evidence.read_text(encoding="utf-8").splitlines() if line]
     assert not any("verification failed" in line for line in events), (
         f"a healthy bootstrap with the hook set recorded a failed gate: {events}"
     )
