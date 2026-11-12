@@ -282,12 +282,11 @@ jobs:
       - name: Install
         working-directory: backend
         run: uv sync --locked
-      # EKO-1-12 fix-round-3 (2026-11-11): keycloak has no checked image (scripts/release-images.sh NAMES=backend frontend proxy backup; its digest integration is deferred to #118), so under EKO_CHECKED_IMAGES the session's first compose up built localhost/eko-crm/keycloak:26.8.1-eko112 after the K-04 snapshot (#135 run 130307698397); building it before the snapshot makes the session reuse the reference, and K-04 still flags every image whose name first appears during the session.
-      - name: Build the keycloak composition image before the K-04 snapshot
-        shell: bash
-        run: |
-          bash scripts/dev-env.sh "$RUNNER_TEMP/keycloak-prebuild.env"
-          docker compose -p eko-ci-keycloak-prebuild --env-file "$RUNNER_TEMP/keycloak-prebuild.env" --profile dev build keycloak
+      # EKO-1-26 (route A): no pre-session keycloak build here. EKO-1-12's transitional pre-build
+      # step was removed with the merge of the fifth checked image: the custom Keycloak image is
+      # built by the checked-images job, identity-verified and placed as the fifth pair, so the
+      # release-mode session builds nothing (step order: load, identity, snapshot, tests,
+      # identity, session-images check).
       - name: Images before the tests (K-04)
         working-directory: backend
         run: uv run python -m tests.support.session_images snapshot --out "$RUNNER_TEMP/images-before.txt"
