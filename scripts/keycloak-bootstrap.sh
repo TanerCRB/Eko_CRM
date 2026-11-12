@@ -3,7 +3,8 @@
 
 set -Eeuo pipefail
 export MSYS2_ARG_CONV_EXCL='*'
-trap 'echo "keycloak-bootstrap: failed closed (line $LINENO)" >&2' ERR
+# The placement-override directory (release runs only) never outlives a failed closed run.
+trap 'if [ -n "${CHECKED_DIR:-}" ]; then rm -rf "$CHECKED_DIR"; fi; echo "keycloak-bootstrap: failed closed (line $LINENO)" >&2' ERR
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$ROOT"
@@ -18,7 +19,11 @@ usage() {
 # the composition or writes into the repository: (a) and (b) run the script as a sub-process
 # that stops before the first compose call; (c) runs this file's own extracted open_gate with
 # only the composition side stubbed, so the boot-identity character class is exercised as
-# written, never re-implemented here; (d) re-runs the whole self-test from a scratch directory
+# written, never re-implemented here; (e) drives the whole script against a recording `docker`
+# double on PATH — fake ids, canned provider log line and boot identity, no daemon, container
+# or volume — to prove the release-mode keycloak starts carry the checked-images placement
+# override and the development ones keep their byte-identical arguments (EKO-1-26 F-1); (d)
+# re-runs the whole self-test from a scratch directory
 # and checks nothing was left behind (EKO112_SELFTEST_NESTED bounds the recursion). Live
 # composition behavior (marker removal, reachability, residual-state records) is carried by
 # backend/tests/runtime, not by these offline cases.
@@ -134,6 +139,98 @@ self_test() {
   identity_case "a valid UUID boot identity is accepted and reaches the marker write" \
     "123e4567-e89b-12d3-a456-426614174000" accept
 
+  # (e) Release placement through the recording docker double (EKO-1-26 QA F-1): a bootstrap
+  # whose environment exports the checked-image pairs must compose every keycloak start through
+  # the same placement override the runtime harness applies (backend/tests/runtime/conftest.py),
+  # and must refuse a list naming no image for one of the five families BEFORE any compose call;
+  # without the variable the keycloak starts keep exactly the development file arguments. No
+  # daemon, container or volume is touched: the double on PATH answers fake ids, the provider
+  # log line, a synthetic boot identity and the master-ready event, logs every invocation and
+  # copies every -f file it is handed into a snapshot directory. The checked pairs are the
+  # synthetic names of ci.yml.
+  local checked_five checked_missing placement_path placement_dir
+  mkdir -p "$root/bin" "$root/snap.e2"
+  cat > "$root/bin/docker" <<'SHIM'
+#!/usr/bin/env bash
+# recording docker double: logs the call, copies every readable -f file into the snapshot
+# directory, answers the canned outputs that let the bootstrap finish offline. Never a daemon.
+printf '%s\n' "$*" >> "$EKO112_FAKE_LOG"
+if [ "${1:-}" = "compose" ]; then
+  shift
+  prev=""
+  for a in "$@"; do
+    if [ "$prev" = "-f" ] && [ -r "$a" ]; then
+      mkdir -p "$EKO112_FAKE_SNAP"
+      cp -- "$a" "$EKO112_FAKE_SNAP/$(basename -- "$a")" 2>/dev/null
+    fi
+    prev="$a"
+  done
+fi
+case "$*" in
+  *test\ -f\ /data/master-initialized)
+    [ "${EKO112_FAKE_RERUN:-false}" = true ] || exit 1 ;;
+  *python\ /tmp/eko112-bootstrap.py*) printf '{"event":"master accounts ready"}\n' ;;
+  *ps\ -q\ backend) printf 'fake-backend-container\n' ;;
+  *ps\ -q\ keycloak) printf 'fake-keycloak-container\n' ;;
+  *logs\ keycloak*)
+    printf '%s\n' 'KC-SERVICES0047: jpa (org.eko_crm.keycloak.events.FilteringJpaEventStoreProviderFactory) is active' ;;
+  *eko-keycloak-boot-identity.sh*) printf '123e4567-e89b-12d3-a456-426614174000\n' ;;
+esac
+exit 0
+SHIM
+  chmod +x "$root/bin/docker"
+  printf 'COMPOSE_PROJECT_NAME=e112-selftest\nAUTH_HOST=auth.localhost\nAUTH_ADMIN_HOST=auth-admin.localhost\n' \
+    > "$root/release.env"
+  checked_five="backend=eko-crm/backend:checked frontend=eko-crm/frontend:checked proxy=eko-crm/proxy:checked backup=eko-crm/backup:checked keycloak=eko-crm/keycloak:checked"
+
+  out="$(EKO_CHECKED_IMAGES="$checked_five" EKO112_FAKE_LOG="$root/calls.e1" EKO112_FAKE_SNAP="$root/snap.e1" \
+    PATH="$root/bin:$PATH" bash "$self" "$root/release.env" 2>&1)"
+  rc=$?
+  placement_path="$(tr ' ' '\n' < "$root/calls.e1" 2>/dev/null | grep -m1 'checked-images\.yaml$')"
+  placement_dir="${placement_path%/*}"
+  if [ "$rc" -eq 0 ] \
+    && [ "$(grep ' up -d --force-recreate' "$root/calls.e1" \
+        | grep -c 'compose\.yaml -f [^ ]*checked-images\.yaml')" = "2" ] \
+    && grep -q -- '--profile dev -f [^ ]*\.override\.[^ ]* up' "$root/calls.e1" \
+    && sed -n '/^  keycloak:/,+3p' "$root/snap.e1/checked-images.yaml" \
+      | grep -qF 'image: eko-crm/keycloak:checked' \
+    && sed -n '/^  keycloak:/,+3p' "$root/snap.e1/checked-images.yaml" | grep -qF 'pull_policy: never' \
+    && sed -n '/^  keycloak:/,+3p' "$root/snap.e1/checked-images.yaml" | grep -qF 'build: !reset null' \
+    && grep -qF 'BACKUP_MANIFEST_KEYCLOAK_IMAGE: eko-crm/keycloak:checked' "$root/snap.e1/checked-images.yaml" \
+    && [ -n "$placement_path" ] && [ ! -e "$placement_dir" ]; then
+    ok "under EKO_CHECKED_IMAGES both keycloak starts carry the placement override and it leaves no directory behind"
+  else
+    fail "under EKO_CHECKED_IMAGES both keycloak starts carry the placement override and it leaves no directory behind" \
+      "exit $rc, override path '$placement_path', output: $(tr '\n' '|' <<< "$out")"
+  fi
+
+  out="$(env -u EKO_CHECKED_IMAGES EKO112_FAKE_LOG="$root/calls.e2" EKO112_FAKE_SNAP="$root/snap.e2" \
+    PATH="$root/bin:$PATH" bash "$self" "$root/release.env" 2>&1)"
+  rc=$?
+  if [ "$rc" -eq 0 ] \
+    && [ "$(grep -c ' up -d --force-recreate' "$root/calls.e2")" = "2" ] \
+    && ! grep -q 'checked-images\.yaml' "$root/calls.e2" \
+    && ! [ -e "$root/snap.e2/checked-images.yaml" ] \
+    && grep -q 'compose\.yaml -f [^ ]*\.override\.[^ ]* up' "$root/calls.e2" \
+    && grep -q -- '--profile dev up -d --force-recreate' "$root/calls.e2"; then
+    ok "without EKO_CHECKED_IMAGES the keycloak starts keep the development file arguments byte for byte"
+  else
+    fail "without EKO_CHECKED_IMAGES the keycloak starts keep the development file arguments byte for byte" \
+      "exit $rc, output: $(tr '\n' '|' <<< "$out")"
+  fi
+
+  checked_missing="backend=eko-crm/backend:checked frontend=eko-crm/frontend:checked proxy=eko-crm/proxy:checked backup=eko-crm/backup:checked"
+  out="$(EKO_CHECKED_IMAGES="$checked_missing" EKO112_FAKE_LOG="$root/calls.e3" EKO112_FAKE_SNAP="$root/snap.e3" \
+    PATH="$root/bin:$PATH" bash "$self" "$root/release.env" 2>&1)"
+  rc=$?
+  if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'names no image for keycloak' \
+    && ! [ -s "$root/calls.e3" ]; then
+    ok "a checked list naming no keycloak image is refused before any compose call"
+  else
+    fail "a checked list naming no keycloak image is refused before any compose call" \
+      "exit $rc, calls $([ -s "$root/calls.e3" ] && echo present || echo absent), output: $(tr '\n' '|' <<< "$out")"
+  fi
+
   # (d) The whole self-test re-run from a scratch directory: nothing is left there, and the
   # repository's working state is byte-identical before and after (git porcelain, read-only).
   if [ -z "${EKO112_SELFTEST_NESTED:-}" ]; then
@@ -203,8 +300,72 @@ docker_path() {
 
 DOCKER_ENV_FILE="$(docker_path "$ENV_FILE")"
 DOCKER_ROOT="$(docker_path "$ROOT")"
+
+# EKO-1-26 (QA F-1): when the environment exports the checked-image pairs (the release-mode job
+# does, for the runtime harness too), this bootstrap must compose the SAME placement — otherwise
+# a fresh CI runner builds the custom Keycloak image inside the test session (the K-04 guard's
+# red, run 42954811816's shape) and a host with a pre-existing anchor starts an image that
+# `check-identity` never verified. COMPOSE_PLACEMENT is the file pair the harness gives its
+# compositions: the repository file plus the rendered override, passed to every compose call of
+# the run. Outside a release run it stays empty and compose() keeps exactly the arguments this
+# script has always passed. The override renders in a directory beside the environment file
+# (docker_path() translates drive paths for the Compose CLI; a bare /tmp name would not survive
+# that translation), and that directory is removed by the ERR trap above and after the last
+# start below. Fail closed: a pair list naming no image for one of the five families is refused
+# before the run touches the composition at all, with the harness's message wording.
+CHECKED_DIR=""
+COMPOSE_PLACEMENT=()
+
+checked_override_content() {
+  # Render the placement override of backend/tests/runtime/conftest.py (checked_images_override):
+  # the same service order, the same `build: !reset null` reset form for the built five, the same
+  # backup-manifest mirror lines. A static carrier compares the two renderings byte for byte.
+  local item service name pair missing
+  local -a items=()
+  local -A images=()
+  read -r -a items <<< "$EKO_CHECKED_IMAGES"
+  for item in "${items[@]}"; do
+    [[ "$item" == *=* ]] || continue
+    images["${item%%=*}"]="${item#*=}"
+  done
+  missing=""
+  for name in backend backup frontend keycloak proxy; do
+    [ -n "${images[$name]:-}" ] || missing="${missing:+$missing, }$name"
+  done
+  if [ -n "$missing" ]; then
+    printf 'keycloak-bootstrap: EKO_CHECKED_IMAGES names no image for %s\n' "$missing" >&2
+    return 1
+  fi
+  printf 'services:\n'
+  # CHECKED_SERVICES of the harness as "service=image-family" pairs, in its order; BUILT_SERVICES
+  # (proxy frontend backup backend keycloak) additionally get their build block reset.
+  for pair in "proxy=proxy" "frontend=frontend" "backup=backup" "backend=backend" \
+    "migrate=backend" "worker=backend" "keycloak=keycloak"; do
+    service="${pair%%=*}"
+    name="${pair#*=}"
+    printf '  %s:\n    image: %s\n    pull_policy: never\n' "$service" "${images[$name]}"
+    case " proxy frontend backup backend keycloak " in
+      *" $service "*) printf '    build: !reset null\n' ;;
+    esac
+    if [ "$service" = "backup" ]; then
+      printf '    environment:\n      BACKUP_MANIFEST_BACKEND_IMAGE: %s\n      BACKUP_MANIFEST_KEYCLOAK_IMAGE: %s\n' \
+        "${images[backend]}" "${images[keycloak]}"
+    fi
+  done
+}
+
+if [ -n "${EKO_CHECKED_IMAGES:-}" ]; then
+  CHECKED_DIR="$(mktemp -d "${ENV_FILE}.checked.XXXXXX")"
+  if ! checked_override_content > "$CHECKED_DIR/checked-images.yaml"; then
+    rm -rf "$CHECKED_DIR"
+    CHECKED_DIR=""
+    exit 1
+  fi
+  COMPOSE_PLACEMENT=(-f "$DOCKER_ROOT/compose.yaml" -f "$(docker_path "$CHECKED_DIR/checked-images.yaml")")
+fi
+
 compose() {
-  docker compose -p "$COMPOSE_PROJECT_NAME" --env-file "$DOCKER_ENV_FILE" --profile dev "$@"
+  docker compose "${COMPOSE_PLACEMENT[@]}" -p "$COMPOSE_PROJECT_NAME" --env-file "$DOCKER_ENV_FILE" --profile dev "$@"
 }
 
 BASELINE="2dcb057f818fd9a1e4142fbf0c71276f542f6ffa"
@@ -400,7 +561,7 @@ compose restart proxy >/dev/null
 if [ "$RERUN" = false ]; then
   OVERRIDE="$(mktemp "${ENV_FILE}.override.XXXXXX")"
   DOCKER_OVERRIDE="$(docker_path "$OVERRIDE")"
-  trap 'rm -f "$OVERRIDE"; echo "keycloak-bootstrap: failed closed (line $LINENO)" >&2' ERR
+  trap 'rm -f "$OVERRIDE"; if [ -n "$CHECKED_DIR" ]; then rm -rf "$CHECKED_DIR"; fi; echo "keycloak-bootstrap: failed closed (line $LINENO)" >&2' ERR
   cat > "$OVERRIDE" <<'YAML'
 services:
   keycloak:
@@ -408,8 +569,14 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:?required}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?required}
 YAML
-  compose -f "$DOCKER_ROOT/compose.yaml" -f "$DOCKER_OVERRIDE" up -d --force-recreate --wait \
-    --wait-timeout 420 keycloak >/dev/null
+  if [ "${#COMPOSE_PLACEMENT[@]}" -gt 0 ]; then
+    # The base file and the placement override already come from compose(); listing the base
+    # again here would re-apply its `build:` after the reset and undo the freeze.
+    compose -f "$DOCKER_OVERRIDE" up -d --force-recreate --wait --wait-timeout 420 keycloak >/dev/null
+  else
+    compose -f "$DOCKER_ROOT/compose.yaml" -f "$DOCKER_OVERRIDE" up -d --force-recreate --wait \
+      --wait-timeout 420 keycloak >/dev/null
+  fi
   EKO112_USE_BOOTSTRAP=true
   export EKO112_USE_BOOTSTRAP
   run_mode master
@@ -438,3 +605,7 @@ if [ "$RERUN" = true ]; then
 fi
 compose exec -T -u 0 backend rm -f \
   /tmp/eko112-bootstrap.py /tmp/eko112-realm.json /tmp/eko112-role-mapping-policy.json >/dev/null
+# The placement override served every start of this run; it leaves nothing behind (EKO-1-26).
+if [ -n "$CHECKED_DIR" ]; then
+  rm -rf "$CHECKED_DIR"
+fi

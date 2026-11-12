@@ -13,8 +13,7 @@ from tests.support import session_images as si
 
 COMPOSE_LABEL = {"com.docker.compose.project": "ekort-fresh-31db3650"}
 CHECKED: dict[str, dict[str, str]] = {
-    f"eko-crm/{name}:checked": {}
-    for name in ("backend", "frontend", "proxy", "backup", "keycloak")
+    f"eko-crm/{name}:checked": {} for name in ("backend", "frontend", "proxy", "backup", "keycloak")
 }
 KEYCLOAK_ANCHOR = "localhost/eko-crm/keycloak:26.8.1-eko112"
 
@@ -32,6 +31,4 @@ def test_eko126_qa_k01_the_placed_keycloak_name_is_never_a_session_build() -> No
 
 def test_eko126_qa_k01_the_session_built_keycloak_anchor_is_flagged_and_named() -> None:
     found = si.violations(set(CHECKED), {**CHECKED, KEYCLOAK_ANCHOR: COMPOSE_LABEL})
-    assert found == [
-        f"{KEYCLOAK_ANCHOR}: built by Compose for project ekort-fresh-31db3650"
-    ], found
+    assert found == [f"{KEYCLOAK_ANCHOR}: built by Compose for project ekort-fresh-31db3650"], found
