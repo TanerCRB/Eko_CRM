@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Connection, delete, func, insert, select, text, update
+from sqlalchemy import ColumnElement, Connection, delete, func, insert, select, text, update
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.data.database import Database
@@ -77,8 +77,8 @@ _TRY_LOCK = text("SELECT pg_try_advisory_lock(CAST(:cls AS integer), CAST(:key A
 _UNLOCK = text("SELECT pg_advisory_unlock(CAST(:cls AS integer), CAST(:key AS integer))")
 
 
-def _session(connection: Connection, where: object) -> StoredSession | None:
-    row = connection.execute(select(*_SESSION_COLUMNS).where(where)).one_or_none()  # type: ignore[arg-type]  # a column expression
+def _session(connection: Connection, where: ColumnElement[bool]) -> StoredSession | None:
+    row = connection.execute(select(*_SESSION_COLUMNS).where(where)).one_or_none()
     return None if row is None else StoredSession(*row)
 
 
