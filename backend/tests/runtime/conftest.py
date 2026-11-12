@@ -1,14 +1,17 @@
-"""Runtime harness: the composition started by the documented command, from no volumes.
+"""Runtime harness: the composition started by the documented bring-up, from no volumes.
 
 Each composition gets its own project name, a fresh synthetic environment file outside the
 repository and free host ports, and is removed with its volumes afterwards.
 """
 
+import functools
 import json
+import os
 import re
 import secrets
 import socket
 import subprocess
+import tempfile
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -27,6 +30,12 @@ if TYPE_CHECKING:
 
 UP_TIMEOUT_SECONDS = 900
 PORT_VARIABLES = ("PROXY_HTTP_PORT", "PROXY_HTTPS_PORT", "PROXY_ADMIN_PORT")
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """EKO-1-13 K-07: the secret-in-logs check reads the logs every other test left behind."""
+    last = [item for item in items if "test_adr0005_no_secret_in_logs" in item.nodeid]
+    items[:] = [item for item in items if item not in last] + last
 
 
 def free_port() -> int:
@@ -63,6 +72,45 @@ def parse_instant(value: str) -> datetime:
     return datetime.fromisoformat(trimmed)
 
 
+# EKO-1-15 K-02 (ADR-0004-C31): in a release run the runtime tests run the images built once and
+# checked, loaded under the names EKO_CHECKED_IMAGES gives, and never rebuild them.
+CHECKED_SERVICES = {
+    "proxy": "proxy",
+    "frontend": "frontend",
+    "backup": "backup",
+    "backend": "backend",
+    "migrate": "backend",
+    "worker": "backend",
+}
+BUILT_SERVICES = ("proxy", "frontend", "backup", "backend")
+
+
+@functools.cache
+def checked_images_override() -> Path | None:
+    """A composition override naming the checked images, or None outside a release run."""
+    given = os.environ.get("EKO_CHECKED_IMAGES", "").split()
+    if not given:
+        return None
+    images = dict(item.split("=", 1) for item in given if "=" in item)
+    missing = sorted(set(CHECKED_SERVICES.values()) - set(images))
+    if missing:
+        raise ValueError(f"EKO_CHECKED_IMAGES names no image for {', '.join(missing)}")
+    lines = ["services:"]
+    for service, name in CHECKED_SERVICES.items():
+        lines += [f"  {service}:", f"    image: {images[name]}", "    pull_policy: never"]
+        if service in BUILT_SERVICES:
+            lines.append("    build: !reset null")
+        if service == "backup":
+            # The manifest names the backend image the composition runs, as the anchor does.
+            lines += [
+                "    environment:",
+                f"      BACKUP_MANIFEST_BACKEND_IMAGE: {images['backend']}",
+            ]
+    override = Path(tempfile.mkdtemp(prefix="eko-checked-")) / "checked-images.yaml"
+    override.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return override
+
+
 @dataclass
 class Composition:
     project: str
@@ -75,9 +123,11 @@ class Composition:
 
     def base_args(self) -> list[str]:
         args = ["docker", "compose"]
-        if self.extra_files:
+        checked = checked_images_override()
+        extra_files = ([checked] if checked else []) + self.extra_files
+        if extra_files:
             args += ["-f", str(REPO_ROOT / "compose.yaml")]
-            for extra in self.extra_files:
+            for extra in extra_files:
                 args += ["-f", str(extra)]
         return args + ["-p", self.project, "--env-file", str(self.env_file), "--profile", "dev"]
 
@@ -178,17 +228,43 @@ class Started:
 
 @pytest.fixture(scope="session")
 def running(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Started]:
-    """The development profile, started by the documented command from no volumes."""
+    """The development profile, brought up the accepted two-step way from no volumes.
+
+    EKO-1-12 (ADR-0004 addendum of 2026-11-02): `compose up` alone leaves both proxy listeners
+    closed — each opens only after its own live brute-force precondition — so the session
+    bring-up runs `prepare` and then `scripts/keycloak-bootstrap.sh`, exactly like
+    `keycloak_running`. `prepare` must stay the first step: it keeps Keycloak out of the up,
+    so the server's first start of an empty database happens inside the bootstrap's own
+    override recreate, where the temporary administrator is the one the script answers.
+    A contrast that needs an un-bootstrapped composition must use `fresh` or its own project,
+    never this fixture. The two final assertions are the live precondition this whole session
+    depends on: if bootstrap ever returns success on a composition whose listeners are closed,
+    the fixture fails here instead of handing out the closed sockets behind 100+ connection
+    errors.
+    """
+    from tests.runtime.keycloak_client import listener_open, prepare, run_bootstrap
+
     composition = new_composition(tmp_path_factory, "dev")
     try:
-        up = composition.compose(
-            "up", "--build", "--wait", "--wait-timeout", str(UP_TIMEOUT_SECONDS),
-            check=False, timeout=UP_TIMEOUT_SECONDS + 300,
-        )  # fmt: skip
-        if up.returncode != 0:
-            logs = composition.compose("logs", "--tail", "40", check=False).stdout
-            raise AssertionError(f"up exited {up.returncode}\n{up.stderr[-3000:]}\n{logs[-6000:]}")
-        yield Started(composition, up)
+        prepare(composition)
+        result = run_bootstrap(composition)
+        assert listener_open(composition, "admin"), "admin listener closed after bootstrap"
+        assert listener_open(composition, "auth"), "public listener closed after bootstrap"
+        yield Started(composition, result)
+    finally:
+        composition.down()
+
+
+@pytest.fixture(scope="session")
+def keycloak_running(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Started]:
+    """EKO-1-12: the development profile after the live, ordered Keycloak bootstrap."""
+    from tests.runtime.keycloak_client import prepare, run_bootstrap
+
+    composition = new_composition(tmp_path_factory, "keycloak")
+    try:
+        prepare(composition)
+        result = run_bootstrap(composition)
+        yield Started(composition, result)
     finally:
         composition.down()
 

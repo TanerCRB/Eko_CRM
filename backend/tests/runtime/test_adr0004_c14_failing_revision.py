@@ -27,7 +27,7 @@ def test_adr0004_c14_failing_revision(lab: Lab) -> None:
     took = time.monotonic() - started
     statuses = watch.statuses()
     assert code != 0, logs
-    assert "division by zero" in logs, logs[-2000:]
+    assert '"cause":"psycopg.errors.DivisionByZero"' in logs, logs[-2000:]
     assert lab.comparison_dump() == before
     assert lab.versions() == [SHIPPED_HEAD]
     assert lab.lineage() == {"0001", "0002"}

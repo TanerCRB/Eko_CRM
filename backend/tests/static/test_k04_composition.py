@@ -108,9 +108,14 @@ def test_k04_c3_fails_when_admin_bind_is_not_required(
 
 
 @pytest.mark.parametrize("profile", ["dev", "shared"])
-def test_k04_c4_state_only_in_the_two_named_volumes(
+def test_k04_c4_state_only_in_the_three_named_volumes(
     profile: str, rendered_dev: Rendered, rendered_shared: Rendered
 ) -> None:
+    # C4 as amended by the addendum of 2026-11-10: `keycloak-boot` (the boot-token carrier)
+    # joins the two state volumes. A FOURTH declared volume needs two changes to render at
+    # all (compose drops an unused declaration from `config`), so the "exactly these three"
+    # superset half of the amendment is pinned on the source side — the unrendered set
+    # assertion in tests/static/test_eko112_k01_custom_provider_image.py.
     assert cc.c4_state(rendered_dev if profile == "dev" else rendered_shared) == []
 
 

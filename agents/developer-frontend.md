@@ -11,7 +11,8 @@ Eko_CRM — a CRM application (domain detail is TODO: filled in at gate 1 of the
 monorepo with a Python 3.12 / FastAPI / Pydantic backend in `backend/` and a React + TypeScript
 (Vite, pnpm) frontend in `frontend/`.
 
-You work in `frontend/` only. The backend has its own developer role (`developer-backend.md`).
+You work in `frontend/` only. The backend and runtime infrastructure have their own developer roles
+(`developer-backend.md`, `developer-infrastructure.md`).
 The frontend's biggest risk class is an error that renders correctly — nothing throws, the screen
 looks plausible, so a test is the only defense.
 

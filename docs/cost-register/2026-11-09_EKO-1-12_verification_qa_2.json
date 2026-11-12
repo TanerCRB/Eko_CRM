@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-09",
+  "task": "EKO-1-12",
+  "phase": "verification",
+  "role": "qa",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "High",
+  "agentId": "ad674c90b7cfae87d",
+  "tokens": 17556570,
+  "tokenSplit": { "input": 5604, "output": 112793, "cacheWrite": 1021152, "cacheRead": 16417021 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 145,
+  "seconds": 11948,
+  "fixRound": 1,
+  "reworkCause": "re-verification of mechanisms rewritten by the fix round (provider fields, boot-bound markers, open_gate, parity, polls) - caused by the round's Highs G-01/R-01/S-01; the earlier role able to catch them: the Developer's own field-coverage self-check",
+  "notes": "boundary-check: clean (snapshot 69843bd, allowed backend/tests/ + docs/evidence/); PROOF HOLDS, 12 mutation runs: 11 killed, qa2-7 survived x3 (F-02 race non-reproducing today, historical reds stand); U-01 closed with QA-observed record admin-event-secret-probe.md; K-02 green on new mechanisms; default suite 1596 exit 0; findings 0/0/3/3 (F-01 k04 self-containment, F-03 carrier thinness -> dev micro-fix; F-04 bind race fixed in place); QA checkpoint 59bd3ef; single-final-handback instruction worked - no slot burn"
+}

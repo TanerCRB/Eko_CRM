@@ -59,11 +59,22 @@ jobs:
     name: backend unit tests and static checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Reads the release record for the API-compatibility step (EKO-1-15 K-06, C-3, C-7, C-8).
+    permissions:
+      contents: read
+      packages: read
     steps:
+      # Full history: the previous release counts only when its commit is reachable from main.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Registry login, read only (pulls the previous release's backend)
+        shell: bash
+        env:
+          TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: printf '%s' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.11.21"
@@ -85,11 +96,13 @@ jobs:
         env:
           CHANGESET_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: uv run pytest -v
-      # Until EKO-1-15 (#56) supplies the previous release's document, this says it compared
-      # nothing (ADR-0004 addendum of 2026-10-29); it is not red for that.
+      # The previous published release reachable from main, as its backend serves it (EKO-1-15
+      # K-06); with none it says it compared nothing, and one it cannot obtain is red (exit 2).
       - name: API compatibility with the previous release (ADR-0004)
         working-directory: backend
-        run: uv run python -m tests.support.openapi_compat
+        env:
+          RELEASE_RECORD_TOKEN: ${{ github.token }}
+        run: uv run python -m tests.support.openapi_compat --from-record
 
   frontend:
     name: frontend unit tests
@@ -148,11 +161,24 @@ jobs:
     needs: changes
     if: needs.changes.outputs.runtime == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # EKO-1-25 (#133): the runtime suite grew with EKO-1-12's runtime tests; 360 is GitHub's job maximum, chosen at gate 1 (C-5).
+    timeout-minutes: 360
+    # Reads the release record for ADR-0004-C13's previous-release half (EKO-1-15 K-06, C-3, C-4).
+    permissions:
+      contents: read
+      packages: read
     steps:
+      # Full history: the previous release counts only when its commit is reachable from main.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: Registry login, read only (pulls the previous release's backend)
+        shell: bash
+        env:
+          TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: printf '%s' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.11.21"
@@ -162,4 +188,119 @@ jobs:
         run: uv sync --locked
       - name: Runtime tests (K-01, K-02, K-03, K-04)
         working-directory: backend
-        run: uv run pytest -m runtime tests/runtime -v
+        env:
+          RELEASE_RECORD_TOKEN: ${{ github.token }}
+        run: uv run pytest -m "runtime or previous_release" tests/runtime -v
+
+  # EKO-1-19 (#95): release mode wherever the runtime tests run. The four project images are built
+  # once in this run as release.yml's images job builds them (ADR-0004-C31), with Docker only
+  # (ADR-0001-C4), and reach the next job as this run's own artifact; nothing is pushed.
+  checked-images:
+    name: checked image builds (release mode)
+    needs: changes
+    if: needs.changes.outputs.runtime == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      backend-id: ${{ steps.ids.outputs.backend }}
+      frontend-id: ${{ steps.ids.outputs.frontend }}
+      proxy-id: ${{ steps.ids.outputs.proxy }}
+      backup-id: ${{ steps.ids.outputs.backup }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build images
+        run: |
+          docker build -t eko-crm/backend:checked backend
+          docker build -t eko-crm/frontend:checked frontend
+          docker build -t eko-crm/proxy:checked proxy
+          docker build -t eko-crm/backup:checked backup
+      - name: Record image IDs
+        id: ids
+        shell: bash
+        run: |
+          for name in backend frontend proxy backup; do
+            echo "$name=$(docker image inspect --format '{{.Id}}' "eko-crm/$name:checked")" >> "$GITHUB_OUTPUT"
+          done
+      - name: Save the checked images
+        run: docker save -o "$RUNNER_TEMP/checked-images.tar" eko-crm/backend:checked eko-crm/frontend:checked eko-crm/proxy:checked eko-crm/backup:checked
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: checked-images
+          path: ${{ runner.temp }}/checked-images.tar
+          retention-days: 1
+          if-no-files-found: error
+
+  # The build-mode runtime job's session on the loaded images, EKO_CHECKED_IMAGES its one
+  # difference (K-01). Identity is checked before and after the tests, and afterwards no image a
+  # Compose build leaves behind may exist (K-04). The download reads this run's artifact only.
+  runtime-checked:
+    name: runtime tests on the checked images (release mode)
+    needs: [changes, checked-images]
+    if: needs.changes.outputs.runtime == 'true'
+    runs-on: ubuntu-latest
+    # EKO-1-25 (#133): the release-mode runtime suite grew with EKO-1-12's runtime tests; 360 is GitHub's job maximum, chosen at gate 1 (C-5).
+    timeout-minutes: 360
+    # Reads the release record for ADR-0004-C13's previous-release half, as the runtime job does.
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: checked-images
+          path: ${{ runner.temp }}
+      - name: Load the checked images and check their identity
+        shell: bash
+        env:
+          BACKEND_ID: ${{ needs.checked-images.outputs.backend-id }}
+          FRONTEND_ID: ${{ needs.checked-images.outputs.frontend-id }}
+          PROXY_ID: ${{ needs.checked-images.outputs.proxy-id }}
+          BACKUP_ID: ${{ needs.checked-images.outputs.backup-id }}
+        run: |
+          docker load -i "$RUNNER_TEMP/checked-images.tar"
+          bash scripts/release-images.sh check-identity
+      - name: Registry login, read only (pulls the previous release's backend)
+        shell: bash
+        env:
+          TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: printf '%s' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.21"
+          python-version: "3.12"
+      - name: Install
+        working-directory: backend
+        run: uv sync --locked
+      # EKO-1-12 fix-round-3 (2026-11-11): keycloak has no checked image (scripts/release-images.sh NAMES=backend frontend proxy backup; its digest integration is deferred to #118), so under EKO_CHECKED_IMAGES the session's first compose up built localhost/eko-crm/keycloak:26.8.1-eko112 after the K-04 snapshot (#135 run 130307698397); building it before the snapshot makes the session reuse the reference, and K-04 still flags every image whose name first appears during the session.
+      - name: Build the keycloak composition image before the K-04 snapshot
+        shell: bash
+        run: |
+          bash scripts/dev-env.sh "$RUNNER_TEMP/keycloak-prebuild.env"
+          docker compose -p eko-ci-keycloak-prebuild --env-file "$RUNNER_TEMP/keycloak-prebuild.env" --profile dev build keycloak
+      - name: Images before the tests (K-04)
+        working-directory: backend
+        run: uv run python -m tests.support.session_images snapshot --out "$RUNNER_TEMP/images-before.txt"
+      - name: Runtime tests on the checked images (K-01, K-02, K-03, K-04)
+        working-directory: backend
+        env:
+          EKO_CHECKED_IMAGES: "backend=eko-crm/backend:checked frontend=eko-crm/frontend:checked proxy=eko-crm/proxy:checked backup=eko-crm/backup:checked"
+          RELEASE_RECORD_TOKEN: ${{ github.token }}
+        run: uv run pytest -m "runtime or previous_release" tests/runtime -v
+      - name: The checked images are still the ones built (K-04)
+        shell: bash
+        env:
+          BACKEND_ID: ${{ needs.checked-images.outputs.backend-id }}
+          FRONTEND_ID: ${{ needs.checked-images.outputs.frontend-id }}
+          PROXY_ID: ${{ needs.checked-images.outputs.proxy-id }}
+          BACKUP_ID: ${{ needs.checked-images.outputs.backup-id }}
+        run: bash scripts/release-images.sh check-identity
+      - name: No image built by the tests (K-04)
+        working-directory: backend
+        run: uv run python -m tests.support.session_images check --before "$RUNNER_TEMP/images-before.txt"

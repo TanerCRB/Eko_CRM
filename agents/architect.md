@@ -76,10 +76,11 @@ or from the domain model.
    task stands on verified, or only planned. A task based on an unproven foundation is a risk
    that must be named.
 5. **List the invariants the task touches** — so the developer roles (`developer-backend` for
-   `backend/`, `developer-frontend` for `frontend/`) and the Invariant Guardian know what to
-   watch. Do not repeat the whole list; point to the ones this change actually touches, and say
-   which side each one binds — a task spanning both directories names the contract between them
-   (the HTTP API surface) as the place where the two developer roles must agree.
+   `backend/`, `developer-frontend` for `frontend/`, `developer-infrastructure` for runtime
+   composition, identity, proxy and bootstrap paths) and the Invariant Guardian know what to watch.
+   Do not repeat the whole list; point to the ones this change actually touches, and say which side
+   each one binds — a task spanning both application directories names the contract between them
+   (the HTTP API surface) as the place where the two application developer roles must agree.
 
 ## Impact map format
 

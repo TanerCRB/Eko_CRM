@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-09",
+  "task": "EKO-1-12",
+  "phase": "code",
+  "role": "developer-infrastructure",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Low",
+  "agentId": "a7c559be403faabaf",
+  "tokens": 5584457,
+  "tokenSplit": { "input": 3633, "output": 61647, "cacheWrite": 542651, "cacheRead": 4976526 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 63,
+  "seconds": 5544,
+  "fixRound": 1,
+  "reworkCause": "QA2 findings F-01/F-03 (test-hygiene class) surfaced after the fix checkpoint; earlier role able to catch: nobody — the coupling only shows under standalone selection, which QA2 attacked by design",
+  "notes": "boundary-check: clean (snapshot 91a3506, allowed backend/tests/); checkpoint 92b8ddb; red->green pair recorded honestly incl. the contradicting pre-fix whole-file green"
+}

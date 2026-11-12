@@ -1552,3 +1552,503 @@ requires. A completeness rule replaces the deletion that an append-only destinat
 Enforcing write-only at the destination keeps ADR-0004-C16 true against a compromised server. This
 is not a deviation from ADR-0004, ADR-0003 or ADR-0005: it decides what they leave open. To be
 approved by the human at gate 1 of EKO-1-14 (G-1 A, Issue #55).
+
+### 2026-11-04 — Releases: the release tag, the release composition and its record, the registry write credential, and what a release run guards
+
+**Status:** Accepted 2026-11-04
+<!-- Accepted by the human at gate 1 of EKO-1-15 (Issue #56), 2026-11-04: R-1 A, G-6 A+, G-1, G-5, G-7, G-8 and G-9 A, the release-tag form as written. -->
+
+**What it settles.** *Images* has CI build images "from a release tag" and push them to the
+project's container registry, and has "a release's composition" reference them by digest. The
+addendum of 2026-10-28 on *Images* widens the digest rule to `postgres`, `keycloak` and `proxy`'s
+base. The addendum of 2026-10-29 says that "nothing yet fixes what a release tag is" and gives
+EKO-1-15 (#56) the choice of which release is the previous one. None of these says what a release
+is, where its composition lives, or what the readers of releases (CI, the operator) count as a
+published release. Three passages of this decision also take the composition from the repository:
+*Container runtime* ("from one composition file kept in the repository"), *Restore procedure*
+("the composition from the repository at the release tag", step 2), and *Deployment* (steps 2 and
+rollback, by "the digests its composition names"). The repository at a release tag holds tag pins
+and local builds, not digests. A restore that takes its composition from there runs what the B-01
+widening forbids. From this date:
+
+- **A release tag.** A release tag is a tag of the form `v<major>.<minor>.<patch>`, each part a
+  decimal number with no leading zero. A tag with any other form, a pre-release suffix
+  included (Issue #56, G-7), is not a release tag. Release tags are ordered by their numbers, never
+  as text. A release tag lower than a published one is refused (G-8). A release is made only from a
+  commit on `main` (G-5).
+- **A release.** A release is a release tag whose release run passed every check on the tagged
+  commit and then produced its release composition. A release-form tag whose run was refused,
+  failed or stopped before the release composition exists is not a release (G-9). A release, once
+  published, never changes: no later run replaces its release composition, and no later run pushes
+  under its name.
+- **The release composition.** It is the one composition file kept in the repository at the
+  release tag, rendered with only these differences: every image reference of the
+  shared-environment profile is in digest form (`<tag>@sha256:<64 lower-case hex>` or the bare
+  digest), project-built images name the digests of the images the release run checked and pushed,
+  and no service of that profile has `build:`. Required variables stay required variables. No
+  environment value is substituted into it, and it holds no secret value (*Secret handling*). It is
+  the composition file *Container runtime* means for every shared environment.
+- **Where the release composition and the record of releases live.** An OCI artifact in the
+  project registry (`ghcr.io/tanercrb/eko-crm/…`), one per release tag (R-1 A, chosen at gate 1). The record that CI and the operator read as "the published releases"
+  is the same place that holds the release compositions. A file in the repository is never that
+  record (addendum of 2026-10-29, *Why*).
+- **The previous release** is the highest release in release-tag order other than the one being
+  built (G-1) whose tagged commit is reachable from `main` when the record is read (G-6 A+). A
+  release whose tagged commit is not reachable from `main` is not counted; when reachability
+  cannot be determined, the reader fails as "the check itself failed". Both the API-compatibility check (addendum of 2026-10-29) and the previous-release
+  half of ADR-0004-C13 read it from the record above: the OpenAPI document as that release's
+  backend, started by digest, serves it directly (ADR-0003, addendum of 2026-10-28), and its
+  backend image by digest. While the record lists no release, each says it compared nothing and
+  reports no pass. When the record cannot be read, or lists a release whose composition, image or
+  document cannot be obtained, the check fails as "the check itself failed", never as "no release".
+- **Deployment, rollback and restore take the release composition from the record.** *Deployment*
+  step 2 and *Rollback to the previous release* use the release composition of the release
+  deployed. *Restore procedure* step 2 fetches the release composition of the release currently
+  deployed from the record, together with the repository at its release tag for everything else it
+  needs. Exception EKO-1-03/R-18 on that step's choice of release is unchanged and stays EKO-1-08's
+  (#36).
+- **The registry write credential.** Writing to the project registry happens only in a release
+  run, with that run's own short-lived `GITHUB_TOKEN` granted `packages: write` in the jobs that
+  push and nowhere else. No long-lived registry write credential exists: none is a repository or
+  environment secret, none is in a tracked file, an image or a server. This is not a secret of the
+  inventory under *Secret handling*: it has no master copy, and nothing holds it after the run. The
+  row *Container registry pull credential (read-only)* is unchanged. Who holds it, and how the
+  operator reaches the record, stays EKO-1-08's (#36).
+- **What the release run guards, and what it does not.** On a tag push GitHub runs the workflow
+  file of the tagged commit. On the free plan for a private repository, as the human confirms in
+  the repository settings, there are no tag rulesets or branch rulesets, and no environment
+  protection rules. The package setting for Actions access is per repository, not per ref or
+  workflow. Any workflow on any pushed ref of this repository can therefore request
+  `packages: write`. The release run's own checks (the tag form, the commit on `main`, the
+  account) bind only a tagged commit that carries `main`'s release workflow. Agent sessions act
+  through the account `TanerCRB`, so no check in CI can tell an agent's tag from the human's. Under
+  G-6 A+ (chosen at gate 1), "an agent never pushes a release tag" rests on the agent sessions'
+  permission settings (Issue #83) and the human's push approval, and every reader of releases (CI's
+  previous-release selection now, the operator's procedure in EKO-1-08) accepts a release only
+  when its tagged commit is reachable from `main` at read time. That closes a branch tag's bypass
+  of the release run's checks for the readers; it does not cover the account. Both limits are
+  stated in the capability register's *What this does not prove* for the release pipeline.
+
+**New controls.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0004-C29 | In every published release composition, every `image:` of the shared-environment profile carries `@sha256:` and 64 lower-case hexadecimal digits, no service of that profile has `build:`, and the `FROM` of `proxy/Dockerfile` at the release tag carries a digest; a fixture with one tag-only reference (a project image, `postgres`, `keycloak`, `proxy`'s `FROM`) fails naming it. |
+| ADR-0004-C30 | Across every file in `.github/workflows/`, only jobs of the release path hold `packages: write` (a job or workflow with no `permissions` key counts as holding it), and only behind the release admission; registry login uses no credential other than `GITHUB_TOKEN`; the repository's secrets list holds no registry credential. |
+| ADR-0004-C31 | The digests a release composition names equal the registry's for those references and the images the release run's checks ran on; a second release run for a published release tag fails before pushing, and the release composition and its digests are unchanged after it. |
+
+Every other rule and control of this decision is unchanged. ADR-0004-C1 is unchanged: no service is
+added.
+
+**Options considered for this addendum.**
+
+| Question | Option | Cost | Closes off |
+|---|---|---|---|
+| R-1: where the release composition and the record of releases live | A. **An OCI artifact in the project registry** (`ghcr.io/tanercrb/eko-crm/…`), one per release tag | the release path needs only `packages: write`; PR runs need `packages: read` to list releases; listing tags of a private user-owned package with `GITHUB_TOKEN` is unproven here; a registry tag can be re-pointed by any workflow holding `packages: write`, so "never changes" rests on the release run's refusal and on readers taking the composition's own digest | nothing; the operator retrieves it with the read-only pull credential already in the inventory, and *Images*' "the registry is used at deployment only" holds |
+| | B. **A GitHub release on the release tag, the composition as its asset** | the release job also needs `contents: write`, which on this plan (no branch protection) also lets that job push to `main` and move tags; the operator needs read access to the private repository besides the registry credential, a credential the inventory does not list (restore step 2 already assumes repository access); release assets can be replaced by the account | nothing |
+| | C. A file committed to the repository | the digests exist only after the run, so a second commit on `main` follows every tag, made by CI with `contents: write` or through a pull request that can edit the record | a record no pull request can change (addendum of 2026-10-29, *Why*); DoD 7 of #56 |
+| | D. An artifact of the release run | Actions artifacts expire (at most 90 days on this plan) | rollback and restore of any release older than that |
+| G-6: a guard outside the tagged commit's workflow | **A. Accept the stated limit** (proposed): the release run's checks bind a tagged commit carrying `main`'s release workflow; "never an agent" rests on session settings and push approval | two claims are stated as unproven in the capability register | nothing now; a later Story can add B |
+| | A+. As A, and every reader (CI's previous-release selection, the operator's procedure) also accepts a release only when its tagged commit is reachable from `main` at read time | one more check in each reader; it does not cover the account (C-2) | nothing |
+| | B. A guard GitHub enforces | needs a paid plan (tag rulesets) **and** agents on their own GitHub identity without the admin role, because the owner bypasses rulesets; neither exists, and both are outside this task | nothing, but it is a new Story |
+
+**Why.** Without a definition of a release and of its record, the previous-release checks of the
+addendum of 2026-10-29 have nothing to read, and EKO-1-08 (#36) has nothing to pull. Taking the
+composition from the repository at the release tag would make deployment, rollback and restore run
+tag-pinned third-party images, which the B-01 widening of 2026-10-28 forbids for shared
+environments. This is a declared deviation: it restates where *Container runtime*, *Deployment*
+and *Restore procedure* step 2 take the composition from, and it adds controls. Approved by the
+human at gate 1 of EKO-1-15 (Issue #56), 2026-11-04: R-1 A and G-6 A+.
+
+### 2026-11-06 — *Releases*: the readers' reachability rule does not close a planted record entry
+
+**What it corrects.** The addendum of 2026-11-04 on *Releases*, in its item *What the release run
+guards, and what it does not*, says of the readers' reachability rule: "That closes a branch tag's
+bypass of the release run's checks for the readers". **That sentence does not hold.** The same
+item already states that any workflow on any pushed ref of this repository can request
+`packages: write`. Such a workflow needs no tag and no pull request. It can push images under
+`ghcr.io/tanercrb/eko-crm/…` and write a record entry under a release-form tag, a new one or an
+already published one, because the registry overwrites a tag on write. The refusal to replace a
+published release lives only in the release run. The entry's tagged commit, as readers see it, is
+the `org.opencontainers.image.revision` annotation, and the writer sets it. A planted entry that
+names any commit on `main` therefore passes the reachability rule. From this date, the text of
+2026-11-04 is read with this correction:
+
+- **What the reachability rule guards.** An honest record entry, written by a release run, whose
+  tagged commit is not reachable from `main` when the record is read: for example, a release-form
+  tag pushed on a branch whose run published. Readers do not count it as a release.
+- **What it does not guard.** A planted or overwritten record entry, written by any workflow that
+  holds `packages: write`, whose revision annotation names a commit on `main`. Readers cannot tell
+  such an entry from a release (*A release*: a release tag whose release run passed every check).
+  The rule checks the annotation, not who wrote the entry. *A release, once published, never
+  changes* binds release runs. It does not bind such a workflow.
+- **The narrowing in place (EKO-1-15, PR #85).** The CI readers, the API-compatibility check
+  (addendum of 2026-10-29) and the previous-release half of ADR-0004-C13, take only the backend
+  image digest from the record entry. They run it under the `compose.yaml` of the commit under
+  test. The entry's own composition is never given to Docker Compose, so a planted entry cannot
+  bring services, mounts, volumes or dependencies of its own into a CI run.
+- **The residual risk.** A planted or overwritten entry still decides which backend image runs as
+  "the previous release" in every CI job that reads the record. That image serves the OpenAPI
+  document the API-compatibility check compares against. It is also the image the C13 test
+  migrates and health-checks. So it controls the outcome of both checks: it can make them pass or
+  fail as its author chooses. A planted entry with a release tag higher than every real release
+  also makes the release admission refuse every real release ("a release tag lower than a
+  published one is refused"), which blocks releasing until the entry is removed.
+- **Where it is recorded.** This residual is the recorded exception **EKO-1-15/security-1**
+  (owner @TanerCRB, blocks again on 2027-02-05, or earlier if EKO-1-08 starts reading the record).
+  Provenance of record entries is Issue **#84**, which is not decided.
+- **For EKO-1-08 (#36).** The operator's procedure reads the same record (*Deployment, rollback and
+  restore take the release composition from the record*). Until #84 is decided, that procedure
+  must not treat the record, or the reachability rule, as establishing that an entry is a release
+  produced by a release run, or that its composition and digests are the ones that run checked.
+  When EKO-1-08 starts reading the record, exception EKO-1-15/security-1 blocks again.
+
+The second half of the corrected sentence, "it does not cover the account", is unchanged. The
+capability register's *What this does not prove* for the release pipeline must state the planted
+entry as well as those two limits.
+
+**Controls.** ADR-0004-C29, C30 and C31 do not change. Their wording does not depend on the
+corrected sentence:
+
+- C29 states what every published release composition holds. It does not claim who wrote an entry.
+- C30 binds the workflow files of the ref under test. It does not claim that a workflow on another
+  pushed ref cannot hold `packages: write`, and the addendum of 2026-11-04 already says one can.
+- C31 binds a second release run for a published release tag. It does not claim that another
+  workflow cannot overwrite the entry.
+
+None of them is to be read as closing the planted-entry path. No control is added. Every other rule
+and control of this decision is unchanged.
+
+**Why.** The security auditor's finding B-01 on EKO-1-15 showed that the reachability rule checks a
+revision the writer sets. Finding B-03 showed that this decision still said the bypass was closed.
+A reader of the decision, or the author of EKO-1-08's procedure, would then rely on a guard that
+does not hold. B-03 was accepted by the human at gate 2 of EKO-1-15 (Issue #56, PR #85), as part
+of exception EKO-1-15/security-1, with this correction to be made in the documentation PR. This is
+not a deviation. It withdraws a claim that the text of 2026-11-04 made, and it states the residual
+risk that exception covers. No rule chosen at gate 1 (R-1 A, G-6 A+) changes.
+
+### 2026-11-08 — The backup control session's lock wait after the advisory lock is granted
+
+**Status:** Accepted 2026-11-08 (gate 1 of EKO-1-20, Issue #76; accepted by the human in the driving session with every recommended option, recorded on the Issue).
+<!-- Gate 1 of EKO-1-20 (Issue #76): G-1, G-2 and G-3 are in EKO-1-20's impact map. -->
+
+**What it settles.** The addendum of 2026-10-30 (*One run: its sessions, the lock and the
+snapshot*) has the control session wait for the advisory lock with no time limit (step 1). Then, in
+the snapshot transaction, it reads the Alembic revision and counts the rows of every application
+table (step 3). It says nothing about how long those statements may wait for a table lock. A session
+holding a conflicting lock on an application table, `alembic_version` included, therefore stalls
+the run with no failure line. Because the advisory lock stays held, it also stalls a release's
+`migrate` for the same time (Issue #76, QA finding Q-01 of EKO-1-14). The two `pg_dump` calls
+already wait at most 180 seconds for a table lock (EKO-1-14 fix round 1, R-04). From this date:
+
+- **The bound.** In the control session's snapshot transaction, each wait for a lock ends after at
+  most **180 seconds**. The value is the same as the `pg_dump` calls' lock wait (Issue #76, C-1).
+  - It is PostgreSQL's lock timeout (`lock_timeout`), set as a transaction-local setting of the
+    snapshot transaction. It bounds each lock wait separately. It does not bound a statement's
+    running time, or the transaction as a whole (G-1 A).
+  - It covers the revision read and the row counts of step 3. It ends with the transaction's
+    commit, so it never applies to the release of the advisory lock or to anything after the
+    commit.
+  - The value is greater than 0, because PostgreSQL reads `0` as no limit. It is written once, as a
+    literal in `backup/eko-backup`, beside the `pg_dump` calls' value.
+- **Where it sits in the control session's order.** The order of the addendum of 2026-10-30 becomes:
+  1. the advisory lock is taken and waited for with no time limit (step 1, unchanged);
+  2. only once the lock is granted, the `REPEATABLE READ`, read-only transaction begins. Its first
+     statement establishes and exports the snapshot and returns the backup point (step 2,
+     unchanged);
+  3. **after that statement**, the bound is set, for the rest of that transaction only;
+  4. the revision is read and the rows are counted (step 3, now under the bound);
+  5. steps 4 to 6 follow, unchanged.
+
+  The bound is never in force before the export statement has run:
+  - not on the connection (its start-up options, `PGOPTIONS` in `backup`'s environment), on the
+    `eko_backup` role, on either database or in the server configuration, and not by a statement
+    before `pg_advisory_lock`. PostgreSQL's lock timeout also bounds an advisory-lock wait, so
+    each of these would bound the wait that step 1 keeps unbounded. The role, database and server
+    places would also reach the dump tools' sessions and other services;
+  - not by a statement between the transaction's start and the export. The export must stay the
+    transaction's first statement, because the snapshot and the backup point are fixed there
+    (exception EKO-1-14/M12: a backup point read later cannot be told apart by timing).
+- **A run that reaches the bound.** The waiting statement fails with SQLSTATE 55P03. The run fails
+  with the failure line, `reason=dump-application` and `sqlstate=55P03`. No object of the run has
+  been uploaded yet. Ending the control session releases the advisory lock (step 6). The reason
+  list and the line's form do not change. No retry and no second attempt follow.
+- **What does not change.**
+  - The advisory-lock wait has no limit. The cost recorded in the addendum of 2026-10-29 (*What
+    this does not bound*) and restated on 2026-10-30 (*Two runs at once*) stands.
+  - The `pg_dump` calls keep their own 180-second lock wait, which fails with SQLSTATE 57014.
+  - A run still holds at most two sessions.
+  - No other session gets a setting: the dump tools, `migrate` (5 and 30 seconds, addendum of
+    2026-10-29), `backend`, `worker`, `keycloak`, the `eko_backup` role and both databases.
+  - The control session gets no statement timeout and no transaction timeout.
+- **What this does not bound (a stated cost).**
+  - Each lock wait is bounded on its own. A run that meets locks on several application tables in
+    turn can wait up to 180 seconds for each, so the worst case grows with the number of
+    application tables.
+  - Once a count has its lock, the time it runs is not bounded.
+  - 180 seconds is the value the human chose (Issue #76, C-1). It is not shown to be the right size
+    for production.
+
+**New control.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0004-C32 | With an `ACCESS EXCLUSIVE` lock held before a backup run, once on `alembic_version` and once on another application table, the run exits non-zero with the failure line `reason=dump-application` and `sqlstate=55P03`, no earlier than the control session's bound and no later than the bound plus a stated margin after its wait starts. It has uploaded no object, and a `migrate` started afterwards is not held by the advisory lock. With the advisory lock held past the same time instead, the run only waits, then completes its set. `backup/eko-backup` and this addendum state the same bound, greater than 0. |
+
+Every other rule and control of this decision is unchanged. ADR-0004-C19 and the backup half of
+C26 are unchanged.
+
+**Consequence for EKO-1-20's Story.** In Definition of done item 5, "the accepted ADR-0004 text"
+is this addendum once accepted. Criterion K-06 reads the bound from it. The addendum of 2026-10-30
+is not edited.
+
+**Options considered for this addendum.**
+
+| Question | Option | Cost | Closes off |
+|---|---|---|---|
+| G-1: what is bounded | **A. Each lock wait, by a transaction-local lock timeout** (chosen at gate 1) | the worst case grows with the number of application tables locked in turn | nothing |
+| | B1. The transaction as a whole (`transaction_timeout`) | the transaction stays open through the application dump, so it also bounds a long dump that waits on no lock, which is a bound on `pg_dump` (out of scope of Issue #76); on timeout PostgreSQL ends the session, with another SQLSTATE than Issue #76 states | an application dump longer than the budget |
+| | B2. Each statement's running time (`statement_timeout`) | a count that runs long with no lock waiting fails too; it fails with 57014, which the `pg_dump` bound already uses (R-04), so the two causes cannot be told apart | counts on large tables longer than the bound |
+| Where the bound is set | **P1. Transaction-local, after the export statement, before the revision read** (chosen at gate 1) | none beyond A | nothing |
+| | P2. Session-level, after the advisory lock is granted and before the transaction begins | keeps steps 1 and 2 as written, but the setting outlives the snapshot transaction for the rest of the run, unlike `migrate`'s transaction-only setting | nothing now; a later control-session statement that waits would inherit it unnoticed |
+| | P3. The connection, `PGOPTIONS`, the role, a database or the server | bounds the advisory-lock wait (step 1); the role, database and server places also reach other sessions | the unbounded advisory wait |
+| G-2: how the text changes | **A. This new dated addendum** (chosen at gate 1) | one more addendum to read beside 2026-10-30 | nothing |
+| | B. An edit of the accepted addendum of 2026-10-30 | rewrites accepted text, which this decision's *Addenda* rule forbids and `test_k07_adr_files_change_only_by_appended_dated_addenda` (capability register, `mutation-tested`) refuses | the accepted text as the record of what gate 1 of EKO-1-14 approved |
+
+**Why.** A backup that waits without limit on a table lock fails silently, and, because it holds
+the advisory lock, it blocks a deployment for as long. A bound on the control session's lock waits,
+the same size as the dumps' bound, turns that into the documented failure line. Setting it after
+the export keeps the two properties the addendum of 2026-10-30 rests on: the advisory wait has no
+limit, and the export is the transaction's first statement. Setting it for the transaction only
+mirrors how `migrate` sets its timeouts (addendum of 2026-10-29, step 2). This is not a deviation
+from ADR-0004: it decides what the addendum of 2026-10-30 leaves open (step 3 states no rule for a
+lock wait), and it changes no rule that addendum states. Approved by the human at gate 1 of
+EKO-1-20 (Issue #76), 2026-11-08.
+
+### 2026-11-02 — Bootstrap order: each listener opens only after its own brute-force precondition
+
+**Status:** Accepted 2026-11-02 (gate 1 of EKO-1-12, Issue #53; G-1 A accepted by the human in the driving session, recorded on the Issue).
+
+**What it changes.** *Bootstrap of the first administrator* completes master-realm brute-force
+configuration at step 2 and then starts `proxy`, but imports the application realm only at step 3.
+Starting both listeners at step 2 therefore opens the public listener before the application-realm
+import and the live check required by ADR-0004-C8. This is exception EKO-1-03/R-22. On acceptance,
+the listener-opening order of that section reads as follows:
+
+1. Complete step 2 with neither listener running, including the master-realm configuration it
+   names. Verify that the live master realm reports `bruteForceProtected` true and record the date
+   of the check. Only then open the admin listener. Until that verification has completed, the
+   admin listener stays closed.
+2. With the public listener still closed, import the application realm from the export under
+   `identity/` as step 3 requires. After the import has completed, verify that the live application
+   realm reports `bruteForceProtected` true and record the date of the check. Only then open the
+   public listener. Until both the import and that verification have completed, the public listener
+   stays closed.
+3. Continue with the first application-realm administrator and the reviewer's confirmation as
+   steps 4 and 5 require.
+
+A check that does not establish the live value as true is not a completed verification and does
+not open the corresponding listener. ADR-0004-C8 is unchanged: this order satisfies its two
+preconditions independently. Every other bootstrap duty, and every other rule and control of this
+decision, is unchanged.
+
+**Why.** The accepted order cannot meet ADR-0004-C8: it starts `proxy` after master-realm
+configuration but before application-realm import, so the application realm's brute-force state
+cannot be verified before the public listener opens. The correction also makes the master-realm
+check explicit before the admin listener opens, as C8 already requires. Recording the correction
+as an addendum is required by this decision's addendum of 2026-10-28, *Forwards to EKO-1-06
+reassigned after its split*. This is a declared deviation from the accepted bootstrap step order,
+submitted for human approval at gate 1 of EKO-1-12 (Issue #53).
+
+### 2026-11-06 — Custom Keycloak image build, startup verification, and recovery for event filtering
+
+**Status:** Accepted 2026-11-06
+
+**Condition.** This addendum takes effect only if the human accepts ADR-0007 option A and its paired
+ADR-0003 addendum of the same date. It does not select or implement A by itself.
+
+**What it changes.** On acceptance, the `keycloak` service uses the custom image described by that
+ADR-0003 addendum rather than directly referencing the official image. The custom image is built
+from the official Keycloak 26.8.1 base, includes the provider JAR under `/opt/keycloak/providers`
+before `kc.sh build`, and selects the event-store provider with the build-time
+`--spi-events-store--provider=jpa` setting. The custom factory must out-order the built-in factory
+so that the selected `jpa` entry is the custom implementation. Image references and release
+composition continue to use the full-version/digest rules of *Images* and ADR-0004-C2.
+
+No service, published port, named volume, environment secret, or persistent store is added. Events
+remain in the existing Keycloak database, so the existing backup set and restore database scope are
+unchanged. Deployment, rollback, and restore use the release's custom Keycloak image by digest;
+Keycloak's existing no-rollback rule and the restore rule against an image older than the manifest
+remain unchanged.
+
+**Startup and failure boundary.** The source assessment does not establish that a missing same-ID
+custom override fails closed: built-in `jpa` remains available. On every fresh bootstrap, restart,
+and restore, the selected custom factory and the required filtering behavior must therefore be
+verified before either listener opens. A missing, unselected, or unverified custom provider leaves
+both listeners closed. This verification is additional to, and does not reorder or weaken, the
+accepted 2026-11-02 brute-force preconditions. No claim of request-level failure-closed behavior is
+made without runtime evidence.
+
+**New control ADR-0004-C29:** When ADR-0007 option A is selected, the rendered shared composition
+retains the accepted service list, private networking, and named volumes; `keycloak` references the
+pinned custom image; fresh-bootstrap, restart, and restore checks establish the custom provider's
+selection and filtering before any listener opens; absence or failed verification of that provider
+keeps both listeners closed; and a backup/restore continues to contain the same required events in
+the existing Keycloak database with the ADR-0007 privacy boundary.
+
+**Why.** The official 26.8.1 container/provider guides establish the custom JAR and build direction,
+and the provider-loading source establishes selection and override behavior. They do not prove that
+a concrete provider is present or that its failure behavior protects the listeners. This addendum
+records the custom-image, release, startup, backup, and recovery boundary without treating source
+inspection as runtime proof.
+
+**Options requiring a human choice.**
+
+- **A — Accept this addendum together with ADR-0007 option A and the paired ADR-0003 draft.** This
+  accepts the custom-image release and verification duties without adding a service or store.
+- **B — Reject this addendum.** The accepted composition/image rules and EKO-1-12 STOP remain
+  unchanged; no custom image or provider is authorized.
+
+### 2026-11-10 — Gate-marker boot binding: the Keycloak container's own per-boot token replaces the ARP-observed hardware address
+
+**Status:** Accepted 2026-11-10 — human gate 1 of the boot-identity correction, recorded on Issue #126 (refs #53): the two declared deviations, the boot-every-container-start semantics, control C33 and the CI timeout raise, all accepted as drafted; the separate dated numbering action this addendum records is the dated addendum that follows.
+
+**Condition.** This addendum exists because the mechanism the merged implementation of the
+2026-11-06 addendum chose for the marker's boot binding — the hardware address Docker assigns to
+the Keycloak container at creation, observed from the proxy network by an ARP resolution
+(`proxy/keycloak-boot-identity.sh`) — is not reliably observable. It was proven wrong at the wire,
+not in theory: `backend/tests/runtime/test_eko112_k04_admin_listener_log_privacy.py::test_k04_admin_only_window_logs_the_console_redirect_restricted`
+fails on both CI runtime jobs and locally under load ("the admin listener closed in its own open
+window" — the entrypoint's fresh read races the restarted proxy's empty ARP table, and a
+wrong-but-present read keeps a verified boot's gate closed), and
+`backend/tests/runtime/test_eko112_k02_marker_boot_binding.py` is red on the release-mode
+(checked-images) job. A drift detector that mis-observes is worse than a hole: it false-closes a
+verified boot and makes the accepted K-02 evidence unrunnable on CI. This addendum changes the
+observable, not the rule.
+
+**What it changes.**
+
+- **The boot identity.** The identity a gate marker names is no longer read from the network. It is
+  the value the Keycloak container itself writes as the first act of every container start, before
+  the Keycloak process launches and before the empty-password refusal: a per-boot random token
+  generated inside the container from the kernel's per-boot UUID source, stored in a
+  Docker-managed named volume at one well-known path, replaced by atomic rename so no reader ever
+  sees a partial value. A start that cannot rotate the token fails — the failure is loud and
+  fail-closed; it cannot open anything. **Boot means every Keycloak container start.** A restart,
+  a recreation, an image swap, a restore bring-up and a host reboot each rotate the token and
+  therefore invalidate markers from the previous boot; a restart of `proxy` alone against an
+  unchanged Keycloak start keeps them valid. The accepted sentence of the 2026-11-06 addendum —
+  verification "on every fresh bootstrap, restart, and restore" before either listener opens — is
+  now enforced by the mechanism and not only by procedure: the hardware-address reading ties the
+  identity to the container creation rather than to the container start, so on the test docstring's
+  own claim that a same-container `compose restart keycloak` "keeps the verified boot identity and
+  the listeners open", a boot no run re-verified reopens its listeners through the restart
+  procedure alone, with the ARP table's grace as the only thing between a stale marker and a live
+  listener. That docstring claim is withdrawn by this addendum and replaced by an assertion that
+  such a restart keeps every listener closed until a bootstrap re-verifies the pair for the
+  current boot.
+- **Determinism.** The writer of the marker (`open_gate`, through the proxy's own helper) and the
+  reader at every proxy start (`proxy/entrypoint.sh`, through the same helper in the same image)
+  both read the same file. No DNS resolution, no TCP attempt, no ARP table, no retry loop and no
+  sleep enters either observation path; comparing a marker against the current boot is as
+  reliable as a file read, on every host, under any load. A missing, empty or malformed token file
+  names no boot, and the entrypoint keeps selecting the closed configuration, as it does today.
+- **Declared deviations from accepted text.** (1) The 2026-11-06 addendum states: "No service,
+  published port, named volume, environment secret, or persistent store is added." One named
+  volume is now added — the token's carrier. It holds no event, no personal data, no credential
+  and no session value; its only content is the per-boot random token (plus a seed placeholder),
+  it is meaningless once the boot it names is not the running one, and it is never logged. The
+  service list, published ports, environment, secrets, databases, backup set and restore scope
+  are unchanged, and events remain in the existing Keycloak database. (2) ADR-0004-C4 states the
+  rendered composition "declares only the named volumes `pgdata` and `proxy-data` for persistent
+  state"; the composition now declares a third named volume. C4's rule — persistent state only in
+  named volumes, no host path mounted into `postgres`, `keycloak`, `backend` or `migrate` — is
+  kept exactly: the token travels in a Docker-managed named volume, never a host bind, and this
+  is what keeps the observation credential-free and free of host-tier state. The two static
+  checks that pin the volume set (`backend/tests/static/test_eko112_k01_custom_provider_image.py`,
+  `backend/tests/static/test_k04_composition.py` and its fixtures) move with acceptance of this
+  addendum, not before it.
+- **What does not change.** The accepted bootstrap order of 2026-11-02, every per-gate
+  precondition, the provider verification before each `open_gate`, the marker paths and the
+  failed-gate marker removal, the proxy's non-revocation limit ("a proxy process that keeps
+  running across a Keycloak recreation" — already recorded as not gated; a bring-up ordering in
+  which the proxy reads before the current Keycloak start has rotated still lands in this same
+  recorded class), the entrypoint's public-without-admin refusal, and EKO-1-03/B-02's finding
+  that the proxy is a drift detector, not a security boundary against a host-tier attacker: the
+  token is not a secret. Nothing in the accepted text naming "hardware address" needed editing,
+  because no accepted ADR-0004 text names it — the phrase exists only in code comments, test
+  helpers and the dated evidence record `docs/evidence/EKO-1-12/marker-boot-binding.md`, which
+  stays as its dated record and is answered by a new one.
+
+**New control ADR-0004-C33:** A gate marker is an open gate only while its content exactly equals
+the boot token the running Keycloak container wrote at its own current start, read as a file by
+both the marker's writer and the proxy's entrypoint through the same shipped helper; any Keycloak
+container start (restart, recreation, image swap, restore bring-up, host reboot) invalidates every
+marker from a previous boot before a later proxy start consults it, and no listener opens from a
+stale marker; neither observation path performs any network lookup of Keycloak; a fixture with a
+stale marker on a recreated Keycloak keeps both listeners closed at the connection level, and the
+same composition reopens them only through a bootstrap run that re-verifies the provider pair for
+the current boot.
+
+**Controls unchanged; a recorded numbering defect.** The 2026-11-06 addendum's control as printed
+("New control ADR-0004-C29") is unchanged in substance: verification before either listener opens.
+It is noted for the human that this identifier collides with the release addendum of 2026-11-04,
+whose own table also carries "ADR-0004-C29" (digest pinning) — two accepted texts print the same
+control number for different controls. Accepted text is not silently renumbered; a correction is a
+separate dated action for the human. The comment lines that cite "ADR-0004 C29" for the marker
+binding are redirected by the Developer to C33 (as accepted) when they are rewritten.
+
+**Options requiring a human choice.**
+
+- **A — Accept this addendum.** The Developer replaces the ARP primitive with the per-boot token
+  volume under the mechanical contract of the impact map; the runtime suite becomes deterministic
+  and restart/reboot drift is actually gated. Closes off: keeping the hardware-address reading.
+- **B — Reject; keep the ARP primitive and retry wider.** The race remains: local Docker Desktop
+  usually wins it, ubuntu runners lose it; the K-02/K-04 evidence stays unrunnable on CI and the
+  accepted verification-before-open boundary has no runnable proof. Not recommended.
+- **C — Reject; bound the ARP retries.** Retries cannot fix a primitive whose wrong-but-present
+  read mis-closes a verified boot; this was the observed failure, not a missing retry. Not
+  recommended.
+
+**Why.** Constraints the replacement must keep — fail-closed drift detection across image swap,
+recreation, restore and reboot; determinism (no network probe in the proxy's startup path); one
+observation on both sides with no docker.sock, credential or host-tier state; a proxy-only restart
+still serving an unchanged boot; drift-detector-not-authentication — admit exactly one carrier for
+a live boot observation that is neither the network nor the Docker API: a file written by the
+observed container itself. The named-volume carrier was chosen over mounting the existing marker
+volume into `keycloak` because the volume's root is created for `proxy`'s image (root-owned) and
+the Keycloak container runs as uid 1000; a dedicated volume seeded by both images at one owned
+path is the only arrangement that is writable by Keycloak and readable by the entrypoint without
+changing either service's user. The token is preferred over the container hostname-as-ID or a
+start timestamp because those survive a same-container start and so would not gate the reboot and
+restart cases the accepted sentence already names.
+
+### 2026-11-10 — *Controls*: the identifier printed "C29" in the addendum of 2026-11-06 is cited as C34
+
+**Status:** Accepted 2026-11-10 — human gate 1 of the boot-identity correction, recorded on Issue #126 (refs #53), decision 3: the numbering correction instructed as a separate dated action.
+
+**What it changes.** Two accepted texts of this decision print the same control identifier for
+different controls: the release addendum of 2026-11-04 declares "ADR-0004-C29" for what every
+published release composition carries (digest references, no `build:`, the `proxy` base digest),
+and the addendum of 2026-11-06 declares "New control ADR-0004-C29" for the custom-provider
+verification that must precede either listener opening. This addendum resolves the collision with
+one citation rule and no edit of either text: the verification-before-open control as printed in
+the 2026-11-06 addendum is hereafter cited **ADR-0004-C34**; **C29** belongs to the 2026-11-04
+digest-pinning control alone, which keeps every carrier that already names it — the release
+workflow, the release-composition renderer, the EKO-1-15 checks and their register rows. The
+2026-11-06 text, its printed identifier included, stands as the record of what was accepted on
+that date; this correction adds a name, it does not rewrite history. C33 — the marker-to-boot
+binding of the 2026-11-10 addendum above — is a distinct control: C33 names how the open state is
+observed, C34 names the verification it enforces before any listener opens; the substance of both
+accepted criteria is unchanged by this correction.
+
+**Consequence for the carriers.** Comments, docstrings and test headers that cite "C29" for the
+verification or the marker binding move to C34 or C33 in the correction's implementation pull
+request; the dated evidence records of EKO-1-12 keep their wording, as dated records are answered
+and never rewritten, and records written after this correction cite C33 and C34.
+
+**Why.** A silent renumber of accepted text is what this decision's addendum rule forbids; a
+separate dated action gives every carrier one name per control while the record keeps the name a
+gate used on the day it decided. The collision was found by the Architect's 2026-11-10 impact map
+and accepted with it at the same gate.
+

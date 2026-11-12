@@ -14,14 +14,15 @@ command with no destination (`check`, `current`) runs in a read-only transaction
 
 import logging
 from collections.abc import Collection, Mapping
-from logging.config import fileConfig
 from typing import Any
 
 from alembic import context
 from alembic.runtime.migration import MigrationContext, MigrationInfo
+from alembic.script.revision import MultipleHeads
 from alembic.util import CommandError
 from sqlalchemy import create_engine, pool, text
 
+from app.core.logs import install_process_logging
 from app.core.settings import MigrateSettings, Settings, load_settings
 from app.data import models
 from app.data.database import connect_args, database_url
@@ -36,10 +37,8 @@ from app.data.schema_revision import (
 )
 
 config = context.config
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
-
-logger = logging.getLogger("alembic.env")
+# Migration progress names revision identifiers only (ADR-0005 addendum 2026-11-02).
+logger = logging.getLogger("app.migrations")
 target_metadata = models.Base.metadata
 
 
@@ -53,8 +52,15 @@ def destination() -> object:
         return context.get_revision_argument()
     except KeyError:
         return NoDestination
-    except CommandError:
-        # An identifier the code's tree cannot resolve.
+    except CommandError as error:
+        # Alembic raises CommandError for an unresolvable identifier and for a branched tree
+        # alike; a tree the code's own read confirms branched refuses naming every head
+        # (EKO-1-24), anything else keeps the exact text below.
+        if isinstance(error.__cause__, MultipleHeads):
+            try:
+                code_tree()
+            except RevisionRefused as refused:
+                raise SystemExit(f"migrate refused: {refused}") from None
         raise SystemExit("migrate refused: unknown destination revision") from None
 
 
@@ -106,6 +112,7 @@ def run_upgrade() -> None:
             with context.begin_transaction():
                 context.run_migrations()
             write_lineage(connection, tree)
+        logger.info("migrate: database upgraded to %s", tree.head)
     finally:
         engine.dispose()
 
@@ -131,9 +138,25 @@ def run_without_destination() -> None:
         engine.dispose()
 
 
-if context.is_offline_mode():
-    raise SystemExit("offline migrations are not used: migrate runs against the database")
-if destination() is NoDestination:
-    run_without_destination()
+def dispatch() -> None:
+    if context.is_offline_mode():
+        raise SystemExit("offline migrations are not used: migrate runs against the database")
+    if destination() is NoDestination:
+        run_without_destination()
+    else:
+        run_upgrade()
+
+
+# Two guards, neither standing in for the other: this wrap writes the error line for any exception
+# but SystemExit, including a CommandError, which Alembic's command line would print with its
+# message; the hook catches what reaches the interpreter. Without a configuration file (Alembic as
+# a library, in a test) nothing is installed and nothing wrapped (ADR-0005 amendments, S-3, QA).
+if config.config_file_name is None:
+    dispatch()
 else:
-    run_upgrade()
+    install_process_logging("migrate")
+    try:
+        dispatch()
+    except Exception:
+        logger.error("migrate failed", exc_info=True)
+        raise SystemExit(1) from None

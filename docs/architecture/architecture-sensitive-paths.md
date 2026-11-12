@@ -8,14 +8,14 @@ fast lane will wave through — when in doubt, add it.
 
 Paths follow the layout fixed by ADR-0001, ADR-0002, ADR-0003 and ADR-0004; the personal-data
 class follows ADR-0005 (*Where personal data is held*).
-Rows that mark a decision as "pending" (ADR-0006) are governed by a decision not yet accepted;
-that task edits its own rows.
+A row cites the decision that governs it: an unmarked citation names an Accepted decision; a row
+that marks a decision "pending <id>" is rewritten by that decision's own task when it is accepted.
 
 | Path (glob) | Risk classes | Governing decisions | Why it's sensitive |
 |---|---|---|---|
 | `backend/app/data/**` | schema, personal-data, auth | ADR-0002, ADR-0003, ADR-0005 | persistence of contacts and customer records; server-side sessions holding encrypted tokens |
 | `backend/migrations/**` | schema, personal-data | ADR-0002, ADR-0005 | expand → deploy → contract; defines the tables and columns holding personal data, and a data migration processes it |
-| `backend/alembic.ini` | schema | ADR-0002 | migration tool configuration, where revisions are found |
+| `backend/alembic.ini` | schema, personal-data | ADR-0002, ADR-0005 | migration tool configuration, where revisions are found; `migrate`'s log form is set in code, and a logging section here would reconfigure it |
 | `backend/app/auth/**` | auth, personal-data | ADR-0003, ADR-0005 | authentication, the browser session, the shared access dependency, permissions; the session, subject and display name |
 | `backend/app/api/**` | auth, personal-data | ADR-0001, ADR-0003, ADR-0005 | every endpoint is an access decision over personal data |
 | `backend/app/main.py` | auth, personal-data | ADR-0001, ADR-0003, ADR-0005 | wires the app-wide access dependency and the error handling of requests carrying personal data |
@@ -23,9 +23,10 @@ that task edits its own rows.
 | `backend/app/services/**` | personal-data | ADR-0001, ADR-0005 | every read and write of contacts goes through here |
 | `frontend/src/**` | personal-data | ADR-0001, ADR-0003, ADR-0005 | renders contacts; holds no token (ADR-0003: HttpOnly session cookie, one origin) |
 | `backend/app/core/settings.py` | secrets | ADR-0001, ADR-0004 | the one place configuration and secrets are read |
+| `backend/app/core/logs.py` | personal-data, secrets | ADR-0005, ADR-0004 | the one line form of `backend`, `migrate` and `worker`: decides that an exception or warning is written as type and location only, never its message, arguments or values |
 | `backend/app/core/**` | secrets | ADR-0001, ADR-0004 | configuration code beside settings.py |
 | `backend/app/integrations/**` | external, personal-data | ADR-0001, ADR-0005, ADR-0006 | adapters to external systems receive personal data |
-| `backend/app/serve.py` | schema, secrets | ADR-0001, ADR-0004 | the backend entry point: reads the settings before uvicorn and refuses a schema revision other than its code's head or a recorded descendant |
+| `backend/app/serve.py` | schema, secrets, personal-data | ADR-0001, ADR-0004, ADR-0005 | the backend entry point: reads the settings before uvicorn and refuses a schema revision other than its code's head or a recorded descendant; installs the log form and keeps uvicorn's access log off |
 | `backend/app/worker.py` | schema, external, personal-data, secrets | ADR-0001, ADR-0004, ADR-0005, ADR-0006 | the worker's entry point: refuses an older schema and never migrates, drives the Google sync jobs carrying customer data, reads the Google secrets through settings |
 | `backup/**` | personal-data, secrets, external | ADR-0004, ADR-0005 | the backup service: reads both databases in full, holds the destination write credential and the encryption public key, encrypts and ships every set, and documents the failure line IT monitoring reads; a change here can leave a dump unencrypted or at rest, leak a secret into a log, or weaken the write-only use of the destination |
 | `backend/pyproject.toml` | dependencies | ADR-0001 | backend package manifest |
@@ -40,11 +41,11 @@ that task edits its own rows.
 | `**/.gitignore` | secrets | ADR-0004 | a nested `.gitignore` can re-include a `.env*` file below it |
 | `**/Dockerfile*` | dependencies | ADR-0001, ADR-0004 | container images |
 | `Dockerfile*` | dependencies | ADR-0001, ADR-0004 | container images at the repository root (`**/Dockerfile*` needs a slash) |
-| `*compose*.y*ml` | dependencies, schema, auth, secrets | ADR-0002, ADR-0003, ADR-0004 | container composition; holds the PostgreSQL init content (roles, limits, privileges, the ICU application database) and the services' required secrets |
+| `*compose*.y*ml` | dependencies, schema, auth, secrets, personal-data | ADR-0002, ADR-0003, ADR-0004, ADR-0005 | container composition; holds the PostgreSQL init content (roles, limits, privileges, the ICU application database), the services' required secrets and PostgreSQL's log settings; a `logging` key would override the host runtime's log deletion |
 | `.dockerignore` | secrets | ADR-0001, ADR-0004 | what enters the image build context at the root (`**/.dockerignore` needs a slash) |
 | `**/.dockerignore` | secrets | ADR-0001, ADR-0004 | what enters the image build context; a dropped `.env` line bakes secrets into an image |
-| `Caddyfile*` | auth, secrets | ADR-0004 | entry-point routing at the repository root (`**/Caddyfile*` needs a slash): HTTPS, the public/admin split of Keycloak's pages, which paths the internet reaches |
-| `**/Caddyfile*` | auth, secrets | ADR-0004 | entry-point and static-file-server configuration: a dropped refusal rule exposes Keycloak's admin console or account console to the internet |
+| `Caddyfile*` | auth, secrets, personal-data | ADR-0004, ADR-0005 | entry-point routing at the repository root (`**/Caddyfile*` needs a slash): HTTPS, the public/admin split of Keycloak's pages, which paths the internet reaches |
+| `**/Caddyfile*` | auth, secrets, personal-data | ADR-0004, ADR-0005 | entry-point and static-file-server configuration: a dropped refusal rule exposes Keycloak's admin console or account console to the internet; a dropped log filter writes queries, headers or client addresses |
 | `frontend/index.html` | dependencies, personal-data | ADR-0001, ADR-0003, ADR-0005 | a script tag here runs in the SPA beside personal data and same-origin requests carrying the session cookie |
 | `frontend/public/**` | dependencies, personal-data | ADR-0001, ADR-0003, ADR-0005 | static files served unbundled from the SPA's origin, the origin the session cookie belongs to |
 | `identity/**` | auth, secrets | ADR-0003, ADR-0004 | realm export: roles, registration off, token lifespans, client and scope settings, SMTP settings |
@@ -59,7 +60,15 @@ that task edits its own rows.
 | `.ruff.toml` | pipeline | ADR-0001 | ruff config at the repository root; takes precedence over `ruff.toml` in its directory |
 | `**/.ruff.toml` | pipeline | ADR-0001 | ruff config; takes precedence over `ruff.toml` and `pyproject.toml` in its directory |
 | `frontend/tsconfig*.json` | pipeline | ADR-0001 | `strict` (ADR-0001-C3) |
-| `.github/workflows/**` | pipeline | — | who runs what, with which secrets |
+| `docs/operations/**` | personal-data | ADR-0005 | the documented log form the IT department's monitoring reads; the tests read its key-set table |
+| `.github/workflows/**` | pipeline, secrets, dependencies | ADR-0004 | who runs what, with which secrets; the release workflow alone holds `packages: write`, pushes the images by digest and publishes the release composition (ADR-0004-C29..C31), and any workflow on any pushed ref can request that permission |
+| `backend/tests/support/release_composition.py` | pipeline, dependencies, secrets | ADR-0004 | renders the release composition the shared environments run: a tag-only reference, a kept `build:` or a substituted environment value ships in the release (ADR-0004-C29, C9) |
+| `backend/tests/support/openapi_compat.py` | pipeline | ADR-0004 | the API-compatibility step: a pull request runs its own copy, so a weakened comparison or document source passes that pull request (DoD 7 narrowing of EKO-1-15) |
+| `backend/tests/support/releases.py` | pipeline | ADR-0004 | release admission and the previous-release selection: tag form, order, account, reachability from `main` and "cannot tell" decide what is published and what the compatibility and C13 checks compare against |
+| `backend/tests/support/release_backend.py` | pipeline | ADR-0004 | obtains the previous release's OpenAPI document from its own backend started by digest; a document taken from elsewhere, or a failure read as "no release", empties the compatibility check |
+| `backend/tests/support/release_workflow.py` | pipeline | ADR-0004 | the static checks of the release path and of `ci.yml` (C30, C31, K-07's listed differences); a widened allowance lets a registry write or a changed check through |
+| `backend/tests/runtime/conftest.py` | pipeline | ADR-0004 | the runtime harness decides which images a release run's checks run on (`checked_images_override`, ADR-0004-C31); a kept `build:` or a missing `image:` tests an image that is never published (EKO-1-19 G-8) |
+| `backend/tests/support/workflow_checks.py` | pipeline | ADR-0004 | the static checks of `ci.yml`; `RECORD_JOBS` is the closed list of jobs that may hold `packages: read` for the release record, so a widened list grants it to another job (EKO-1-19 G-8) |
 | `.githooks/**` | pipeline | — | the pre-push guard on `main` |
 | `scripts/**` | pipeline | — | the process checks the task command and CI rely on |
 | `docs/architecture/layer-dependencies.md` | pipeline | ADR-0001, ADR-0003, ADR-0006 | the layer table the CI layer check and the ruff bans read (ADR-0001-C9, C11); an emptied row drops a ban |

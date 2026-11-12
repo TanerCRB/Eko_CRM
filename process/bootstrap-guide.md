@@ -204,7 +204,7 @@ Ignore only that directory, not the whole `.claude/` — the commands and the sh
 are versioned. Then, from the root of the **process** repository:
 
 ```bash
-node tools/sync-agents.mjs            # copies the 8 roles; prints the source commit it read
+node tools/sync-agents.mjs            # copies the 10 role definitions; prints the source commit it read
 node tools/sync-agents.mjs --check    # afterwards: "No drift."
 ```
 
@@ -352,7 +352,7 @@ git status --short --untracked-files=all .claude/   # commands and settings.json
 node <process-repo>/tools/sync-agents.mjs --check   # run from the process repo: "No drift."
 ```
 
-In a Claude Code session started in the product repository: `/agents` lists the 8 roles, and
+In a Claude Code session started in the product repository: `/agents` lists the 10 role definitions, and
 `/task-status` is available.
 
 ---
