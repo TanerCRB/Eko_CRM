@@ -52,7 +52,7 @@ BASE = "044e957891d5f1d256d1b9ae8e62d4f7e3f02061"
 # STAMP-EKO-1-27: the supervisor replaces the value of this one line with the full SHA of the
 # checkpoint commit (`git rev-parse HEAD` after it exists). Until stamped, every node that
 # reads the pinned head fails with the missing-commit error; nothing else on this line changes.
-HEAD = "0" * 40
+HEAD = "bb5f8554aa7911a626d1f428d973df067a38faff"
 BASES = (BASE, HEAD)
 
 # Gate 1 of #138 recorded the bound as Clarifications C-1: 360 minutes, matching ci.yml's two
