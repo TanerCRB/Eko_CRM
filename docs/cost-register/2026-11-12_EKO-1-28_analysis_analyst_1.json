@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-12",
+  "task": "EKO-1-28",
+  "phase": "analysis",
+  "role": "analyst",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Low",
+  "agentId": "a25055323f7a931b0",
+  "tokens": 65237,
+  "tokenSplit": null,
+  "tokensSource": "task-notification",
+  "measured": "record",
+  "toolCalls": 17,
+  "seconds": 338,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "boundary-check: clean (analyst read-only); READY FOR GATE 1 - 5 criteria (guard+record/exit, hook-unset shipped, tail-only reach, both CI jobs collected, exception-removal prohibition), edge sweep, no blocking gaps; criteria accepted verbatim by the human (G-1 A); body republished in house template, evidence-chain lint 5/0, scope lock f18c722297d554d0442b023075df2ed7b2974261; token split unavailable (gateway did not persist usage in transcript), total from harness"
+}
