@@ -127,6 +127,24 @@ def test_eko115_k03_qa_failed_third_push_ends_the_step_without_all_digests(
     assert [line.split("=")[0] for line in out.splitlines()] == ["backend", "frontend"]
 
 
+def test_eko126_qa_k02_keycloak_rebuilt_under_the_same_name_is_caught(
+    tmp_path: Path,
+) -> None:
+    """EKO-1-26 K-02 identity half (QA contrast): the snapshot guard cannot see a rebuild into
+    an existing loaded name (`session_images` reports names that first appear during the
+    session; capabilities.md:30 admits the blind spot), so the placed custom Keycloak image's
+    identity rests on the recorded-ID comparison. A same-name rebuild must fail `check-identity`
+    and must stop `push` before it tags or pushes anything — the fifth image is in that loop
+    exactly like the four before it."""
+    rebuilt = {**IDS, "keycloak": sha("id-keycloak-rebuilt")}
+    code, _, calls = run(tmp_path, "check-identity", ids=rebuilt)
+    assert code == 1, calls
+    assert [c for c in calls if c.startswith("push") or c.startswith("tag")] == []
+    push_code, push_out, push_calls = run(tmp_path, "push", TAG, ids=rebuilt)
+    assert push_code == 1 and push_out == ""
+    assert [c for c in push_calls if c.startswith("push") or c.startswith("tag")] == []
+
+
 def test_eko126_k03_qa_keycloak_is_a_pushed_image_not_a_pulled_one(tmp_path: Path) -> None:
     """EKO-1-26 K-03: the release demands no registry digest for what it does not publish. The
     custom keycloak image is now pushed (`push` prints its registry digest, in the five-image
