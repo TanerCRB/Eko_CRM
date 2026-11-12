@@ -11,3 +11,6 @@ backend/tests/runtime/revisions/t_backup_*.py
 backend/tests/static/test_adr0004_c26_backup_lock_by_reference.py
 backend/tests/static/test_adr0004_backup_script_rules.py
 backend/tests/support/backup_checks.py
+# EKO-1-26: the accepted decision draft keeps "draft" in its name deliberately -
+# the accepted-text guard matches on the filename; renaming would hide the decision.
+docs/architecture/decisions/EKO-1-26-keycloak-release-location-draft-2026-11-11.md
