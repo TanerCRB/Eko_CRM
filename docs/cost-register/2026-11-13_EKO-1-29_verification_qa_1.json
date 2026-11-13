@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-13",
+  "task": "EKO-1-29",
+  "phase": "verification",
+  "role": "qa",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "aa5d6bd3f7abe3f2f",
+  "tokens": 118658,
+  "tokenSplit": null,
+  "tokensSource": "task-notification",
+  "measured": "record",
+  "toolCalls": 62,
+  "seconds": 3111,
+  "fixRound": 2,
+  "reworkCause": null,
+  "notes": "PROOF HOLDS 0/0/0/0 at 5b40a15 (guard content ffd4020); M1-M7 KILLED with exact id sets (3/15/6/4/5/1/1), M8 behaviour-inert confirmed + timing (350x constant, 385ms<1s all-held, linear floor from name bound not prefilter); faithful-M1 wording correction (.search-once not .match) recorded; live plant proxy/qa129-plant.sh red naming lines [2,3] incl the enumeration-on-real-file proof + tasking correction (task_files/c9 prefixes exclude proxy - cannot go red, stated); ++ plant green = S-5 residual confirmed live by design (M5 flips prove the guard is the cause); full static 2033 at rest exit 0; every revert git-checkout from HEAD, tree clean after; qa-1.md committed 9f94ada (boundary finding = driver-record commit HEAD-move, compensated); gate-3 mutation-register rows supplied"
+}
