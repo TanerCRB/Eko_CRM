@@ -15,6 +15,7 @@ from urllib.parse import quote, urlparse
 
 import httpx
 
+from app.core.settings import without_default_port
 from tests.runtime.conftest import Composition
 from tests.runtime.keycloak_client import RealmClient, form_path, second_factor
 from tests.support import eko201_keycloak as accounts
@@ -25,12 +26,13 @@ LOGIN_COOKIE = "__Host-eko_login"
 
 def app_origin(composition: Composition) -> str:
     env = composition.env
-    return f"https://{env['APP_HOST']}:{env['PROXY_HTTPS_PORT']}"
+    # As the backend uses it (F-1 A): a default port dropped.
+    return without_default_port(f"https://{env['APP_HOST']}:{env['PROXY_HTTPS_PORT']}")
 
 
 def issuer(composition: Composition) -> str:
     env = composition.env
-    return f"https://{env['AUTH_HOST']}:{env['PROXY_HTTPS_PORT']}/realms/eko"
+    return without_default_port(f"https://{env['AUTH_HOST']}:{env['PROXY_HTTPS_PORT']}/realms/eko")
 
 
 def app_request(
@@ -70,8 +72,10 @@ def start_login(composition: Composition, return_to: str = "/") -> LoginStart:
     started = app_request(composition, "GET", f"/api/auth/login?return_to={quote(return_to)}")
     assert started.status_code == 303, f"login start status {started.status_code}"
     location = urlparse(started.headers["location"])
-    env = composition.env
-    assert location.netloc == f"{env['AUTH_HOST']}:{env['PROXY_HTTPS_PORT']}", location.netloc
+    assert (
+        f"https://{location.netloc}{location.path}"
+        == f"{issuer(composition)}/protocol/openid-connect/auth"
+    ), location.netloc
     assert location.path == "/realms/eko/protocol/openid-connect/auth"
     cookie = set_cookies(started).get(LOGIN_COOKIE, "")
     assert cookie, "no login-transaction cookie"

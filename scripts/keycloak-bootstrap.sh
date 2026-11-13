@@ -134,6 +134,43 @@ self_test() {
   identity_case "a valid UUID boot identity is accepted and reaches the marker write" \
     "123e4567-e89b-12d3-a456-426614174000" accept
 
+  # (e) F-1 A: the client root URL is APP_ORIGIN as the backend uses it, a default port dropped
+  # and any other kept. Runs this repository's keycloak-bootstrap.py function itself, offline.
+  origin_case() {
+    local name="$1" raw="$2" expected="$3" got candidate
+    local -a python=()
+    # The first interpreter that really runs (a Windows store alias answers but runs nothing).
+    for candidate in python3 python; do
+      if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c 'pass' >/dev/null 2>&1; then
+        python=("$candidate")
+        break
+      fi
+    done
+    if [ "${#python[@]}" -eq 0 ] && command -v uv >/dev/null 2>&1 \
+      && uv run --no-project python -c 'pass' >/dev/null 2>&1; then
+      python=(uv run --no-project python)
+    fi
+    if [ "${#python[@]}" -eq 0 ]; then
+      fail "$name" "no Python interpreter for the offline origin case"
+      return
+    fi
+    # A native Windows interpreter reads Windows paths, not Git Bash ones.
+    local script="$ROOT/scripts/keycloak-bootstrap.py"
+    if command -v cygpath >/dev/null 2>&1; then script="$(cygpath -m "$script")"; fi
+    got="$(APP_ORIGIN="$raw" "${python[@]}" -c 'import importlib.util, sys
+spec = importlib.util.spec_from_file_location("b", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+print(module.application_origin())' "$script" 2>&1)"
+    if [ "$got" = "$expected" ]; then ok "$name"; else fail "$name" "got '$got'"; fi
+  }
+  origin_case "an https origin on 443 loses the default port" \
+    "https://app.example.test:443" "https://app.example.test"
+  origin_case "an https origin on another port keeps it" \
+    "https://app.example.test:8443" "https://app.example.test:8443"
+  origin_case "an http origin on 443 keeps it (443 is not http's default)" \
+    "http://app.example.test:443" "http://app.example.test:443"
+
   # (d) The whole self-test re-run from a scratch directory: nothing is left there, and the
   # repository's working state is byte-identical before and after (git porcelain, read-only).
   if [ -z "${EKO112_SELFTEST_NESTED:-}" ]; then

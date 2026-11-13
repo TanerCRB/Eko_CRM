@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 
+from app.core.settings import without_default_port
 from tests.runtime.conftest import Composition, Started
 from tests.support import totp
 
@@ -112,7 +113,9 @@ def callback_uri(composition: Composition) -> str:
     """The application's own login callback, the one redirect URI the realm export registers
     for `eko-backend` (`${APP_ORIGIN}/api/auth/callback`, APP_ORIGIN as compose.yaml wires it)."""
     env = composition.env
-    return f"https://{env['APP_HOST']}:{env['PROXY_HTTPS_PORT']}/api/auth/callback"
+    origin = f"https://{env['APP_HOST']}:{env['PROXY_HTTPS_PORT']}"
+    # As the backend sends it (F-1 A): a default port dropped.
+    return f"{without_default_port(origin)}/api/auth/callback"
 
 
 def hidden_inputs(document: str) -> dict[str, str]:

@@ -37,6 +37,12 @@ EXPORT_REALM_SETTINGS = (
     "browserFlow",
 )
 CALLBACK_PATH = "/api/auth/callback"
+# F-1 A: the backend drops a default port from APP_ORIGIN (443 for https, 80 for http), as a
+# browser and Keycloak do; the client root URL must be that same origin, or Keycloak refuses the
+# redirect URI the backend sends. Same rule as `app.core.settings.without_default_port`, written
+# here because this script runs alone inside the container.
+AUTHORITY = re.compile(r"(?P<scheme>https?)://(?P<host>\[[^\]/]*\]|[^:/\[\]]+)(?::(?P<port>\d+))?")
+DEFAULT_PORTS = {"https": 443, "http": 80}
 CUSTOM_FACTORY = "org.eko_crm.keycloak.events.FilteringJpaEventStoreProviderFactory"
 VERIFICATION_USER = "eko112-verification-probe"
 ACCOUNTS = {
@@ -109,6 +115,17 @@ def required(name: str) -> str:
     if not value.strip():
         raise RuntimeError(f"missing required bootstrap input: {name}")
     return value
+
+
+def application_origin() -> str:
+    """APP_ORIGIN as the backend uses it: an explicit default port removed, any other kept."""
+    origin = required("APP_ORIGIN")
+    match = AUTHORITY.match(origin)
+    if match is None or match.group("port") is None:
+        return origin
+    if int(match.group("port")) != DEFAULT_PORTS[match.group("scheme")]:
+        return origin
+    return f"{match.group('scheme')}://{match.group('host')}{origin[match.end():]}"
 
 
 def setting(name: str, default: str) -> str:
@@ -427,7 +444,7 @@ def configure_application(client: ApiClient) -> None:
     # The real callback: the export registers its path relative to the client's root URL, and
     # the root URL is the application's own origin from the backend's own environment
     # (compose.yaml wires APP_ORIGIN into this container), like the secret above.
-    application["rootUrl"] = required("APP_ORIGIN")
+    application["rootUrl"] = application_origin()
     request(
         client,
         "PUT",
@@ -505,7 +522,7 @@ def verify_application_settings(client: ApiClient, token: str, expected: dict[st
     if any(item.get("requirement") == "CONDITIONAL" for item in executions):
         drift.append("browser flow condition")
     application = management_client(client, token, "eko", "eko-backend")
-    if application.get("rootUrl") != required("APP_ORIGIN") or application.get(
+    if application.get("rootUrl") != application_origin() or application.get(
         "redirectUris"
     ) != [CALLBACK_PATH]:
         drift.append("callback")
