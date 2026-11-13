@@ -23,7 +23,6 @@ from pathlib import Path
 
 import pytest
 
-from tests.runtime.conftest import new_composition
 from tests.support import theme_checks as tc
 
 pytestmark = pytest.mark.runtime
@@ -48,13 +47,6 @@ LISTING = f"{PRUNE} -type f -print0 | xargs -0 md5sum; {PRUNE} -type l -printf '
 
 def docker(*args: str, timeout: int = 600) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(["docker", *args], capture_output=True, timeout=timeout, check=True)
-
-
-@pytest.fixture(scope="module")
-def built_image(tmp_path_factory: pytest.TempPathFactory) -> str:
-    composition = new_composition(tmp_path_factory, "image")
-    composition.compose("build", "keycloak", timeout=1800)
-    return docker("image", "inspect", "--format", "{{.Id}}", IMAGE).stdout.decode().strip()
 
 
 def copy_out(image: str, path: str) -> bytes:

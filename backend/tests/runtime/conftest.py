@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from tests.runtime.lab import Lab
 
 UP_TIMEOUT_SECONDS = 900
+KEYCLOAK_IMAGE = "localhost/eko-crm/keycloak:26.8.1-eko112"
 PORT_VARIABLES = ("PROXY_HTTP_PORT", "PROXY_HTTPS_PORT", "PROXY_ADMIN_PORT")
 
 
@@ -343,3 +344,18 @@ def no_scheduler_outlives_its_test(request: pytest.FixtureRequest) -> Iterator[N
         backup_lab: BackupLab = request.getfixturevalue("backup_lab")
         backup_lab.stop_scheduler()
         assert not backup_lab.scheduler_running(), "the backup scheduler is still running"
+
+
+@pytest.fixture(scope="module")
+def built_image(tmp_path_factory: pytest.TempPathFactory) -> str:
+    """EKO-2-01 K-07: the custom Keycloak image built the composition's own way, by image ID;
+    shared by `test_eko201_k07_theme_image.py` and `test_eko201_qa_theme_image.py`."""
+    composition = new_composition(tmp_path_factory, "image")
+    composition.compose("build", "keycloak", timeout=1800)
+    inspected = subprocess.run(
+        ["docker", "image", "inspect", "--format", "{{.Id}}", KEYCLOAK_IMAGE],
+        capture_output=True,
+        timeout=600,
+        check=True,
+    )
+    return inspected.stdout.decode().strip()
