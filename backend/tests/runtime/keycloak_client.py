@@ -8,6 +8,7 @@ import os
 import re
 import secrets
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -15,8 +16,19 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 
 from tests.runtime.conftest import Composition, Started
+from tests.support import totp
 
 FORM_ACTION = re.compile(r'<form[^>]+action="([^"]+)"', re.IGNORECASE)
+INPUT = re.compile(r"<input\b[^>]*>", re.IGNORECASE)
+# EKO-2-01 (G-3 A): every application-realm account must enrol an OTP credential at its first
+# login and give a one-time code at every later one. The raw secret Keycloak issued at an
+# enrolment this session drove is kept here, in memory only, keyed by composition, realm and
+# username, so a later login of the same account can answer with a code; the time steps
+# already answered are kept too, because Keycloak refuses a code that was used before.
+OTP_SECRETS: dict[tuple[str, str, str], str] = {}
+OTP_USED_STEPS: dict[tuple[str, str, str], set[int]] = {}
+# Every code this session typed, per account, so a secret scan can look for each one.
+OTP_TYPED_CODES: dict[tuple[str, str, str], list[str]] = {}
 
 
 class TypedUsernameStop(AssertionError):
@@ -96,6 +108,104 @@ def prepare(composition: Composition) -> None:
     )
 
 
+def callback_uri(composition: Composition) -> str:
+    """The application's own login callback, the one redirect URI the realm export registers
+    for `eko-backend` (`${APP_ORIGIN}/api/auth/callback`, APP_ORIGIN as compose.yaml wires it)."""
+    env = composition.env
+    return f"https://{env['APP_HOST']}:{env['PROXY_HTTPS_PORT']}/api/auth/callback"
+
+
+def hidden_inputs(document: str) -> dict[str, str]:
+    """The hidden inputs of a Keycloak form, by name."""
+    found: dict[str, str] = {}
+    for tag in INPUT.findall(document):
+        if not re.search(r'type="hidden"', tag, re.IGNORECASE):
+            continue
+        name = re.search(r'name="([^"]+)"', tag)
+        value = re.search(r'value="([^"]*)"', tag)
+        if name is not None:
+            found[name.group(1)] = html.unescape(value.group(1)) if value else ""
+    return found
+
+
+def is_enrolment_page(document: str) -> bool:
+    return 'name="totpSecret"' in document and 'name="totp"' in document
+
+
+def is_code_page(document: str) -> bool:
+    return 'name="otp"' in document
+
+
+def enrolment_secret(document: str) -> str:
+    """The raw OTP secret on Keycloak's enrolment form (never printed or logged)."""
+    secret = hidden_inputs(document).get("totpSecret", "")
+    assert secret, "the enrolment form carries no secret"
+    return secret
+
+
+def form_path(document: str) -> str:
+    match = FORM_ACTION.search(document)
+    assert match is not None, "form not found"
+    parsed = urlparse(html.unescape(match.group(1)))
+    return parsed.path + ("?" + parsed.query if parsed.query else "")
+
+
+def fresh_code(key: tuple[str, str, str]) -> str:
+    """A code for the current step, or a neighbouring one Keycloak's default look-around window
+    accepts, that this session has not answered yet; otherwise wait for the next period."""
+    used = OTP_USED_STEPS.setdefault(key, set())
+    while True:
+        now = totp.time_step()
+        for step in (now, now + 1, now - 1):
+            if step not in used:
+                used.add(step)
+                code = totp.totp(totp.keycloak_key(OTP_SECRETS[key]), step)
+                OTP_TYPED_CODES.setdefault(key, []).append(code)
+                return code
+        time.sleep(totp.PERIOD_SECONDS - time.time() % totp.PERIOD_SECONDS + 0.5)
+
+
+def second_factor(client: "RealmClient", username: str, response: httpx.Response) -> httpx.Response:
+    """Drive the one-time-code part of a login after its password step, and return the first
+    response that is neither an in-flow redirect nor an MFA page: the code redirect, or another
+    page (an error page, a required password action) for the caller to judge.
+
+    An enrolment page is answered with a code for the secret it issues (that secret replaces
+    any earlier one for the account); a code page with a fresh code for the secret this session
+    holds. A code page for an account whose secret this session never saw is returned as it is.
+    Each enrolment gets its own device label: Keycloak refuses a second OTP credential under a
+    label the account already has, and the realm's password-reset flow (Keycloak's default
+    "Reset - Conditional OTP" step) makes an enrolled account enrol again.
+    """
+    key = (client.composition.project, client.realm, username)
+    for _ in range(8):
+        if response.status_code in (302, 303):
+            location = urlparse(response.headers.get("location", ""))
+            if "code" in parse_qs(location.query) or "/login-actions/" not in location.path:
+                return response
+            response = client.request(
+                "GET", location.path + ("?" + location.query if location.query else "")
+            )
+            continue
+        if response.status_code != 200:
+            return response
+        document = response.text
+        if is_enrolment_page(document):
+            OTP_SECRETS[key] = enrolment_secret(document)
+            OTP_USED_STEPS[key] = set()
+            fields = {
+                **hidden_inputs(document),
+                "totp": fresh_code(key),
+                "userLabel": f"{username}-device-{secrets.token_hex(3)}",
+            }
+        elif is_code_page(document) and key in OTP_SECRETS:
+            fields = {**hidden_inputs(document), "otp": fresh_code(key)}
+        else:
+            return response
+        response = client.request("POST", form_path(document), data=fields)
+    return response
+
+
 def listener_open(composition: Composition, listener: str) -> bool:
     path = (
         "/realms/master/.well-known/openid-configuration"
@@ -170,7 +280,7 @@ class RealmClient:
         client_id: str = "admin-cli",
         client_secret: str | None = None,
     ) -> dict[str, Any]:
-        redirect_uri = "https://eko112.invalid/callback"
+        redirect_uri = callback_uri(self.composition)
         verifier = secrets.token_urlsafe(64)
         challenge = (
             base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
@@ -195,6 +305,7 @@ class RealmClient:
         parsed = urlparse(action)
         path = parsed.path + ("?" + parsed.query if parsed.query else "")
         submitted = self.request("POST", path, data={"username": username, "password": password})
+        submitted = second_factor(self, username, submitted)
         assert submitted.status_code in (302, 303), (
             f"login submission status {submitted.status_code}"
         )

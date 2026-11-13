@@ -12,6 +12,11 @@ RUN mvn -q package && mvn -q dependency:build-classpath -Dmdep.outputFile=target
 
 FROM quay.io/keycloak/keycloak:26.8.1
 COPY --chown=keycloak:keycloak --chmod=644 --from=provider-build /workspace/target/eko112-event-store-1.0.0.jar /opt/keycloak/providers/
+# The one login theme (ADR-0003 and ADR-0004 addenda of 2026-11-12), copied before the build so
+# one build produces the whole image. Owned by root with no group or other write: the runtime
+# user (uid 1000, group 0) can read it but never change it. 755 because one mode covers the
+# directories too; theme content is messages and CSS only, nothing is executed.
+COPY --chown=root:root --chmod=755 themes/eko-crm /opt/keycloak/themes/eko-crm
 # Timestamp normalization per the official container guide (reproducible builds): the build's
 # provider last-modified tracking configuration then does not depend on the building machine's
 # clock. The provider is in place before the build, which selects the same-ID custom factory.

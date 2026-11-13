@@ -1,0 +1,37 @@
+/* Eko_CRM: restrained branding of Keycloak's login pages (G-4 A, ADR-0003-C29). Colours and
+   the header text only: no image, no font, no resource from another origin. */
+
+:root {
+    --eko-crm-green: #2f6b3a;
+    --eko-crm-green-dark: #24532d;
+    --eko-crm-background: #f2f4ef;
+    --keycloak-card-top-color: var(--eko-crm-green);
+    --pf-v5-global--primary-color--100: var(--eko-crm-green);
+    --pf-v5-global--primary-color--200: var(--eko-crm-green-dark);
+    --pf-v5-global--link--Color: var(--eko-crm-green);
+    --pf-v5-global--link--Color--hover: var(--eko-crm-green-dark);
+}
+
+/* The parent draws the Keycloak artwork as the page background; Eko_CRM uses a plain one. */
+.login-pf body {
+    background: var(--eko-crm-background);
+}
+
+/* The parent sets the header white and upper-case, with `!important`, for its dark artwork;
+   on the plain background the name is shown as written, in the brand colour. */
+#kc-header-wrapper {
+    color: var(--eko-crm-green) !important;
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    text-align: center;
+}
+
+.pf-v5-theme-dark body {
+    background: #1b1d1a;
+}
+
+.pf-v5-theme-dark #kc-header-wrapper {
+    color: #9cc9a3 !important;
+}

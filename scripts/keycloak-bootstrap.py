@@ -16,6 +16,27 @@ from typing import Any
 
 BASE_URL = "http://keycloak:8080"
 POLICY_FILE = Path("/tmp/eko112-role-mapping-policy.json")
+EXPORT_FILE = Path("/tmp/eko112-realm.json")
+# EKO-2-01: the application realm's gate-1 security and page settings, applied from the
+# versioned export on every run (a partial import on an existing realm leaves realm-level
+# settings alone) and read back live before the public listener may open.
+EXPORT_REALM_SETTINGS = (
+    "displayName",
+    "loginTheme",
+    "internationalizationEnabled",
+    "supportedLocales",
+    "defaultLocale",
+    "bruteForceProtected",
+    "failureFactor",
+    "waitIncrementSeconds",
+    "maxFailureWaitSeconds",
+    "permanentLockout",
+    "passwordPolicy",
+    "ssoSessionIdleTimeout",
+    "ssoSessionMaxLifespan",
+    "browserFlow",
+)
+CALLBACK_PATH = "/api/auth/callback"
 CUSTOM_FACTORY = "org.eko_crm.keycloak.events.FilteringJpaEventStoreProviderFactory"
 VERIFICATION_USER = "eko112-verification-probe"
 ACCOUNTS = {
@@ -403,6 +424,10 @@ def configure_application(client: ApiClient) -> None:
     application = management_client(client, token, "eko", "eko-backend")
     application["secret"] = required("OIDC_CLIENT_SECRET")
     application["directAccessGrantsEnabled"] = False
+    # The real callback: the export registers its path relative to the client's root URL, and
+    # the root URL is the application's own origin from the backend's own environment
+    # (compose.yaml wires APP_ORIGIN into this container), like the secret above.
+    application["rootUrl"] = required("APP_ORIGIN")
     request(
         client,
         "PUT",
@@ -421,6 +446,12 @@ def configure_application(client: ApiClient) -> None:
         raise RuntimeError("reviewer account is unavailable")
     assign_client_roles(client, token, "master", reviewer["id"], "eko-realm", REVIEWER_ROLES)
     realm = request(client, "GET", "/admin/realms/eko", token=token).body
+    expected = export_settings()
+    if expected["browserFlow"] not in flow_aliases(client, token):
+        # A realm created before the export carried this flow; a partial import cannot add it.
+        emit("application security settings not applied")
+        raise SystemExit(7)
+    realm.update(expected)
     development = setting("EKO112_DEVELOPMENT", "true") == "true"
     realm["resetPasswordAllowed"] = development
     realm["bruteForceProtected"] = setting("EKO112_APPLICATION_BRUTE_FORCE", "true") == "true"
@@ -443,6 +474,51 @@ def configure_application(client: ApiClient) -> None:
         emit("application bruteForceProtected false")
         raise SystemExit(5)
     emit("application bruteForceProtected true")
+    verify_application_settings(client, token, expected)
+
+
+def export_settings() -> dict[str, Any]:
+    document = json.loads(EXPORT_FILE.read_text(encoding="utf-8"))
+    return {key: document[key] for key in EXPORT_REALM_SETTINGS}
+
+
+def flow_aliases(client: ApiClient, token: str) -> set[str]:
+    flows = request(client, "GET", "/admin/realms/eko/authentication/flows", token=token).body
+    return {str(item.get("alias", "")) for item in flows}
+
+
+def verify_application_settings(client: ApiClient, token: str, expected: dict[str, Any]) -> None:
+    """Live precondition of the public listener (EKO-2-01): the realm holds the export's
+    session, password, lockout, MFA and page settings, its browser flow requires the password
+    and the one-time code, and the application client has the real callback and its audience."""
+    live = request(client, "GET", "/admin/realms/eko", token=token).body
+    drift = sorted(key for key, value in expected.items() if live.get(key) != value)
+    alias = urllib.parse.quote(str(expected["browserFlow"]), safe="")
+    executions = request(
+        client, "GET", f"/admin/realms/eko/authentication/flows/{alias}/executions", token=token
+    ).body
+    required_providers = {
+        item.get("providerId") for item in executions if item.get("requirement") == "REQUIRED"
+    }
+    if not {"auth-username-password-form", "auth-otp-form"} <= required_providers:
+        drift.append("browser flow")
+    if any(item.get("requirement") == "CONDITIONAL" for item in executions):
+        drift.append("browser flow condition")
+    application = management_client(client, token, "eko", "eko-backend")
+    if application.get("rootUrl") != required("APP_ORIGIN") or application.get(
+        "redirectUris"
+    ) != [CALLBACK_PATH]:
+        drift.append("callback")
+    if not any(
+        mapper.get("protocolMapper") == "oidc-audience-mapper"
+        and (mapper.get("config") or {}).get("included.client.audience") == "eko-backend"
+        for mapper in application.get("protocolMappers") or []
+    ):
+        drift.append("audience")
+    if drift:
+        emit("application security settings not applied")
+        raise SystemExit(7)
+    emit("application security settings verified")
 
 
 def raw_get(path: str, headers: dict[str, str]) -> tuple[int, bytes, Any]:

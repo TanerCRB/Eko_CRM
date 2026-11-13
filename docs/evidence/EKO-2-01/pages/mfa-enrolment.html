@@ -1,0 +1,197 @@
+<!DOCTYPE html><html class="login-pf" lang="pl" dir="ltr"><head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="color-scheme" content="light dark">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Zaloguj się do Eko_CRM</title>
+        <link rel="icon" href="/resources/epi20/login/eko-crm/img/favicon.ico">
+        <link href="/resources/epi20/common/keycloak/vendor/patternfly-v5/patternfly.min.css" rel="stylesheet">
+        <link href="/resources/epi20/common/keycloak/vendor/patternfly-v5/patternfly-addons.css" rel="stylesheet">
+        <link href="/resources/epi20/login/eko-crm/css/styles.css" rel="stylesheet">
+        <link href="/resources/epi20/login/eko-crm/css/eko-crm.css" rel="stylesheet">
+    <script type="importmap">
+        {
+            "imports": {
+                "rfc4648": "/resources/epi20/common/keycloak/vendor/rfc4648/rfc4648.js"
+            }
+        }
+    </script>
+      <script type="module" async="" blocking="render">
+          const DARK_MODE_CLASS = "pf-v5-theme-dark";
+          const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+          updateDarkMode(mediaQuery.matches);
+          mediaQuery.addEventListener("change", (event) => updateDarkMode(event.matches));
+
+          function updateDarkMode(isEnabled) {
+            const { classList } = document.documentElement;
+
+            if (isEnabled) {
+              classList.add(DARK_MODE_CLASS);
+            } else {
+              classList.remove(DARK_MODE_CLASS);
+            }
+          }
+      </script>
+    <script type="module" src="/resources/epi20/login/eko-crm/js/passwordVisibility.js"></script>
+    <script type="module">
+        import { startSessionPolling } from "/resources/epi20/login/eko-crm/js/authChecker.js";
+
+        startSessionPolling(
+            "/realms/eko/login-actions/restart?client_id=eko-backend&tab_id=[redacted]&client_data=[redacted]&skip_logout=true"
+        );
+    </script>
+    <script type="module">
+        document.addEventListener("click", (event) => {
+            const link = event.target.closest("a[data-once-link]");
+
+            if (!link) {
+                return;
+            }
+
+            if (link.getAttribute("aria-disabled") === "true") {
+                event.preventDefault();
+                return;
+            }
+
+            const { disabledClass } = link.dataset;
+
+            if (disabledClass) {
+                link.classList.add(...disabledClass.trim().split(/\s+/));
+            }
+
+            link.setAttribute("role", "link");
+            link.setAttribute("aria-disabled", "true");
+        });
+    </script>
+        <script type="module">
+            import { checkAuthSession } from "/resources/epi20/login/eko-crm/js/authChecker.js";
+
+            checkAuthSession(
+                "[redacted]"
+            );
+        </script>
+    <script>
+      // Workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=1404468
+      const isFirefox = true;
+    </script>
+</head>
+
+<body id="keycloak-bg" class="" data-page-id="login-login-config-totp">
+<div class="pf-v5-c-login">
+  <div class="pf-v5-c-login__container">
+    <header id="kc-header" class="pf-v5-c-login__header">
+      <div id="kc-header-wrapper" class="pf-v5-c-brand">Eko_CRM</div>
+    </header>
+    <main class="pf-v5-c-login__main">
+      <div class="pf-v5-c-login__main-header">
+        <h1 class="pf-v5-c-title pf-m-3xl" id="kc-page-title"><!-- template: login-config-totp.ftl -->
+
+        Konfiguracja aplikacji uwierzytelniającej
+</h1>
+      </div>
+      <div class="pf-v5-c-login__main-body">
+
+            <div class="pf-v5-c-alert pf-m-inline pf-v5-u-mb-md pf-m-warning">
+                <div class="pf-v5-c-alert__icon">
+                    
+                    <span class="fa fa-fw fa-exclamation-triangle"></span>
+                    
+                    
+                </div>
+                <span class="pf-v5-c-alert__title kc-feedback-text">Musisz skonfigurować aplikację uwierzytelniającą, aby aktywować swoje konto.</span>
+            </div>
+
+<!-- template: login-config-totp.ftl -->
+
+        <ol id="kc-totp-settings" class="pf-v5-c-list pf-v5-u-mb-md">
+            <li>
+                <p>Zainstaluj jedną z następujących aplikacji na telefonie komórkowym</p>
+
+                <ul id="kc-totp-supported-apps">
+                        <li>Microsoft Authenticator</li>
+                        <li>Google Authenticator</li>
+                        <li>FreeOTP</li>
+                </ul>
+            </li>
+
+                <li>
+                    <p>Otwórz aplikację i zeskanuj kod kreskowy</p>
+  <div class="kc-qr-code pf-v5-u-display-flex pf-v5-u-flex-direction-column pf-v5-u-align-items-center pf-v5-u-my-sm">
+      <img id="kc-totp-secret-qr-code" src="data:[redacted]" alt="Otwórz aplikację i zeskanuj kod kreskowy">
+                        <a href="https://auth.localhost:61810/realms/eko/login-actions/required-action?client_id=eko-backend&amp;tab_id=[redacted]&amp;client_data=[redacted]&amp;mode=manual&amp;execution=[redacted]" id="mode-manual">Nie możesz zeskanować?</a>
+  </div>
+                </li>
+            <li>
+                <p>Wprowadź jednorazowy kod podany przez aplikację i kliknij Prześlij, aby zakończyć konfigurację</p>
+                <p>Podaj nazwę urządzenia, aby pomóc w zarządzaniu urządzeniami OTP.</p>
+            </li>
+        </ol>
+
+        <form action="https://auth.localhost:61810/realms/eko/login-actions/required-action?session_code=[redacted]&amp;execution=[redacted]&amp;client_id=eko-backend&amp;tab_id=[redacted]&amp;client_data=[redacted]" class="pf-v5-c-form pf-v5-u-w-100" id="kc-totp-settings-form" method="post" novalidate="novalidate">
+            <div class="pf-v5-c-form__group">
+                <div class="pf-v5-c-form__label">
+                    <label class="pf-v5-c-form__label" for="form-vertical-name">
+                        <span class="pf-v5-c-form__label-text">Kod jednorazowy</span>&nbsp;<span class="pf-v5-c-form__label-required" aria-hidden="true">*</span>
+                    </label>
+                </div>
+                <div class="pf-v5-c-form-control ">
+                    <input type="text" required="" id="totp" name="totp" autocomplete="one-time-code" aria-invalid="" inputmode="numeric">
+
+                </div>
+                <input type="hidden" id="totpSecret" name="totpSecret" value="[redacted]">
+                
+            </div>
+            <div class="pf-v5-c-form__group">
+                <div class="pf-v5-c-form__label">
+                    <label class="pf-v5-c-form__label" for="form-vertical-name">
+                        <span class="pf-v5-c-form__label-text">Nazwa urządzenia</span>
+                    </label>
+                </div>
+
+                <div class="pf-v5-c-form-control ">
+                    <input type="text" id="userLabel" name="userLabel" autocomplete="off" aria-invalid="">
+
+                </div>
+            </div>
+
+            <div class="pf-v5-c-form__group">
+    <div id="kc-form-options" class="">
+        <div class=""> 
+  <div class="pf-v5-c-check">
+    <label for="logout-sessions" class="pf-v5-c-check">
+      <input class="pf-v5-c-check__input" type="checkbox" id="logout-sessions" name="logout-sessions">
+      <span class="pf-v5-c-check__label">Wyloguj z innych urządzeń</span>
+    </label>
+  </div>
+        </div>
+    </div>
+            </div>
+
+  <div class="pf-v5-c-form__group">
+    <div class="pf-v5-c-form__actions pf-v5-u-pt-xs pf-v5-u-flex-wrap">
+  <button class="pf-v5-c-button pf-m-primary pf-m-block" name="" id="saveTOTPBtn" type="submit">
+  Zatwierdź
+  </button>
+    </div>
+  </div>
+        </form>
+
+
+
+          <div class="pf-v5-c-login__main-footer">
+<!-- template: login-config-totp.ftl -->
+
+
+          </div>
+      </div>
+
+        <div class="pf-v5-c-login__main-footer">
+        </div>
+    </main>
+  </div>
+</div>
+
+
+</body></html>
