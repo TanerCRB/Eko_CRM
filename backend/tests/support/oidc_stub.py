@@ -103,6 +103,9 @@ class Stub:
     # Overrides of the issued tokens' claims, and claims added to them.
     access_overrides: dict[str, Any] = field(default_factory=dict)
     id_overrides: dict[str, Any] = field(default_factory=dict)
+    # QA (EKO-2-01): non-empty makes the refresh token a JWT carrying these claims, as Keycloak's
+    # refresh tokens are; empty keeps the opaque form every other carrier uses.
+    refresh_overrides: dict[str, Any] = field(default_factory=dict)
     next_user: User = field(default_factory=User)
     authorize_requests: list[dict[str, str]] = field(default_factory=list)
     token_calls: list[TokenCall] = field(default_factory=list)
@@ -158,6 +161,12 @@ class Stub:
             "name": f"{user.given_name} {user.family_name}",
         }
 
+    def _refresh_token(self, user: User, sid: str) -> str:
+        if not self.refresh_overrides:
+            return "stub-refresh-" + secrets.token_urlsafe(24)
+        claims = {**self._common(user, sid), "typ": "Refresh", "jti": secrets.token_hex(8)}
+        return self._sign({**claims, **self.refresh_overrides})
+
     def mint(self, user: User, sid: str, nonce: str | None) -> dict[str, Any]:
         access = {**self._common(user, sid), "aud": [CLIENT_ID], "typ": "Bearer",
                   "jti": secrets.token_hex(8), **self.access_overrides}  # fmt: skip
@@ -167,7 +176,7 @@ class Stub:
         tokens = {
             "access_token": self._sign({k: v for k, v in access.items() if v is not None}),
             "id_token": self._sign({k: v for k, v in id_claims.items() if v is not None}),
-            "refresh_token": "stub-refresh-" + secrets.token_urlsafe(24),
+            "refresh_token": self._refresh_token(user, sid),
         }
         self.issued.extend(tokens.values())
         return {
