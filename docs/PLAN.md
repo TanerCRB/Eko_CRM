@@ -417,7 +417,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** fixing runtime failures (#140–#144, closed); other release.yml job bounds; shortening/splitting the suite (EKO-1-25 C-3); pushing a tag or making a release (human-only); hang-detection beyond the bound value; EKO-1-20/weakening-1 (EKO-1-25 C-6).
   After EKO-1-25 (its C-4 deferred this Issue).
 
-- [ ] **EKO-1-28** — Committed regression guard for the bootstrap re-close failure branch (#119).
+- [x] **EKO-1-28** — Committed regression guard for the bootstrap re-close failure branch (#119).
   *Done when:* a committed runtime test drives `open_gate`'s re-close-failure path (the
   `proxy re-close failed; listeners not confirmed closed` record and `exit 1`) through a
   forced-fail mode or stub hook, contrasted with the success path on the same mechanism; deleting
@@ -428,6 +428,19 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** any other bootstrap branch's coverage; the secret-scan raw-format
   teeth (#120, EKO-1-29); behavior changes to the real restart path; CI bound changes.
   After EKO-1-12.
+  **Done 2026-11-13:** merged in [PR #151](https://github.com/TanerCRB/Eko_CRM/pull/151) as `28196a1`:
+  test-only hook `EKO128_FORCE_RECLOSE_FAIL` consulted only at the re-close point (pure addition
+  `133/0`, shipped `if/else/return 1` byte-identical, reviewer-traced leak-bounded by `set -e`),
+  `backend/tests/runtime/test_eko128_reclose_failed_branch.py` four cases (clause-content
+  discrimination, unset/empty shipped path, healthy-composition reach boundary), `--self-test`
+  9→13 reclose cases. Verification: guardian/reviewer/auditor PASS (reviewer Lows: budget carried
+  at ~42.2 min per runtime job, sed-verify diagnosability); QA PROOF HOLDS — Q-1/Q-2/Q-3/Q-6
+  independently killed with sha-witnessed reverts; Q-4/Q-5/Q-7 not run under host memory
+  exhaustion (pre-hook control on the dev trail; the order and stub-fallthrough contrasts keep
+  only the offline restart-count teeth) — accepted by the human at gate 2 with the merge; K-04
+  closed by the PR-head run [43318789453](https://github.com/TanerCRB/Eko_CRM/actions/runs/43318789453):
+  both runtime jobs pass, the four `test_eko128_*` IDs PASSED un-skipped in the listings.
+  Exception EKO-1-12/R-32 removed by this check-off. Dev assumptions A-01/A-02 ratified at gate 2.
 
 ## EKO-2 — Access
 
