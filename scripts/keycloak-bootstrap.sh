@@ -3,8 +3,20 @@
 
 set -Eeuo pipefail
 export MSYS2_ARG_CONV_EXCL='*'
+
+cleanup_checked_placement() {
+  # The placement-override directory of a release run (EKO-1-26): removed on EVERY exit path —
+  # the ERR traps, the named explicit exits after the placement exists, and the success tail.
+  # Development runs never set CHECKED_DIR, so the call is a no-op there. Defined before the
+  # first trap so any early failure already resolves the name; rm -rf is idempotent, so a path
+  # that already cleaned and kept the variable set cannot fail on the repeat.
+  if [ -n "${CHECKED_DIR:-}" ]; then
+    rm -rf "$CHECKED_DIR"
+  fi
+}
+
 # The placement-override directory (release runs only) never outlives a failed closed run.
-trap 'if [ -n "${CHECKED_DIR:-}" ]; then rm -rf "$CHECKED_DIR"; fi; echo "keycloak-bootstrap: failed closed (line $LINENO)" >&2' ERR
+trap 'cleanup_checked_placement; echo "keycloak-bootstrap: failed closed (line $LINENO)" >&2' ERR
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$ROOT"
@@ -172,6 +184,10 @@ case "$*" in
   *python\ /tmp/eko112-bootstrap.py*) printf '{"event":"master accounts ready"}\n' ;;
   *ps\ -q\ backend) printf 'fake-backend-container\n' ;;
   *ps\ -q\ keycloak) printf 'fake-keycloak-container\n' ;;
+  *up\ -d\ --force-recreate\ --wait*)
+    if printf '%s' "$*" | grep -q '\.override\.'; then :; else
+      [ "${EKO112_FAKE_FAIL_UP2:-false}" = true ] && exit 1
+    fi ;;
   *logs\ keycloak*)
     printf '%s\n' 'KC-SERVICES0047: jpa (org.eko_crm.keycloak.events.FilteringJpaEventStoreProviderFactory) is active' ;;
   *eko-keycloak-boot-identity.sh*) printf '123e4567-e89b-12d3-a456-426614174000\n' ;;
@@ -229,6 +245,23 @@ SHIM
   else
     fail "a checked list naming no keycloak image is refused before any compose call" \
       "exit $rc, calls $([ -s "$root/calls.e3" ] && echo present || echo absent), output: $(tr '\n' '|' <<< "$out")"
+  fi
+
+  # (e4) Trap window (EKO-1-26 F-3): after the RERUN=false block restores the ERR trap, a failing
+  # SECOND keycloak start must still delete the placement directory — the restored text carries
+  # the same cleanup arm as the file-top and bootstrap-override texts. The named-exit windows
+  # (backend helper, provider not active) are carried by backend/tests/static, not by this file.
+  out="$(EKO_CHECKED_IMAGES="$checked_five" EKO112_FAKE_FAIL_UP2=true EKO112_FAKE_LOG="$root/calls.e4" \
+    EKO112_FAKE_SNAP="$root/snap.e4" PATH="$root/bin:$PATH" bash "$self" "$root/release.env" 2>&1)"
+  rc=$?
+  placement_path="$(tr ' ' '\n' < "$root/calls.e4" 2>/dev/null | grep -m1 'checked-images\.yaml$')"
+  placement_dir="${placement_path%/*}"
+  if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'failed closed' \
+    && [ -n "$placement_path" ] && [ ! -e "$placement_dir" ]; then
+    ok "a failing second keycloak start under the restored trap removes the placement directory"
+  else
+    fail "a failing second keycloak start under the restored trap removes the placement directory" \
+      "exit $rc, override path '$placement_dir', output: $(tr '\n' '|' <<< "$out")"
   fi
 
   # (d) The whole self-test re-run from a scratch directory: nothing is left there, and the
@@ -310,9 +343,11 @@ DOCKER_ROOT="$(docker_path "$ROOT")"
 # the run. Outside a release run it stays empty and compose() keeps exactly the arguments this
 # script has always passed. The override renders in a directory beside the environment file
 # (docker_path() translates drive paths for the Compose CLI; a bare /tmp name would not survive
-# that translation), and that directory is removed by the ERR trap above and after the last
-# start below. Fail closed: a pair list naming no image for one of the five families is refused
-# before the run touches the composition at all, with the harness's message wording.
+# that translation), and cleanup_checked_placement deletes it on every exit path of the run:
+# all three ERR-trap texts, the explicit exits that can fire after its creation (backend
+# helper, provider not active, the refusal below) and the tail. Fail closed: a pair list
+# naming no image for one of the five families is refused before the run touches the
+# composition at all, with the harness's message wording.
 CHECKED_DIR=""
 COMPOSE_PLACEMENT=()
 
@@ -357,7 +392,7 @@ checked_override_content() {
 if [ -n "${EKO_CHECKED_IMAGES:-}" ]; then
   CHECKED_DIR="$(mktemp -d "${ENV_FILE}.checked.XXXXXX")"
   if ! checked_override_content > "$CHECKED_DIR/checked-images.yaml"; then
-    rm -rf "$CHECKED_DIR"
+    cleanup_checked_placement
     CHECKED_DIR=""
     exit 1
   fi
@@ -380,7 +415,9 @@ record() {
 }
 
 BACKEND_ID="$(compose ps -q backend)"
-[ -n "$BACKEND_ID" ] || { echo "keycloak-bootstrap: backend helper is not running" >&2; exit 1; }
+# The ERR trap never fires on an explicit exit (EKO-1-26 F-3): exits after the placement exists
+# run the cleanup themselves, under their own named codes.
+[ -n "$BACKEND_ID" ] || { echo "keycloak-bootstrap: backend helper is not running" >&2; cleanup_checked_placement; exit 1; }
 docker cp "$DOCKER_ROOT/scripts/keycloak-bootstrap.py" "$BACKEND_ID:/tmp/eko112-bootstrap.py" >/dev/null
 docker cp "$DOCKER_ROOT/identity/eko-realm.json" "$BACKEND_ID:/tmp/eko112-realm.json" >/dev/null
 docker cp "$DOCKER_ROOT/identity/eko-role-mapping-policy.json" "$BACKEND_ID:/tmp/eko112-role-mapping-policy.json" >/dev/null
@@ -451,6 +488,7 @@ verify_custom_provider() {
   count="$(compose logs keycloak 2>/dev/null | grep -F -c "KC-SERVICES0047: jpa (${factory})")" || count=0
   if [ "$count" -eq 0 ]; then
     echo "keycloak-bootstrap: custom event-store provider not active in the running server" >&2
+    cleanup_checked_placement
     exit 6
   fi
   record "custom provider selected"
@@ -561,7 +599,7 @@ compose restart proxy >/dev/null
 if [ "$RERUN" = false ]; then
   OVERRIDE="$(mktemp "${ENV_FILE}.override.XXXXXX")"
   DOCKER_OVERRIDE="$(docker_path "$OVERRIDE")"
-  trap 'rm -f "$OVERRIDE"; if [ -n "$CHECKED_DIR" ]; then rm -rf "$CHECKED_DIR"; fi; echo "keycloak-bootstrap: failed closed (line $LINENO)" >&2' ERR
+  trap 'rm -f "$OVERRIDE"; cleanup_checked_placement; echo "keycloak-bootstrap: failed closed (line $LINENO)" >&2' ERR
   cat > "$OVERRIDE" <<'YAML'
 services:
   keycloak:
@@ -581,7 +619,9 @@ YAML
   export EKO112_USE_BOOTSTRAP
   run_mode master
   rm -f "$OVERRIDE"
-  trap 'echo "keycloak-bootstrap: failed closed (line $LINENO)" >&2' ERR
+  # The restored trap must carry the cleanup arm (EKO-1-26 F-3, window 1): the second keycloak
+  # start and every gate after it fail closed under THIS text, bare would leak the directory.
+  trap 'cleanup_checked_placement; echo "keycloak-bootstrap: failed closed (line $LINENO)" >&2' ERR
   compose up -d --force-recreate --wait --wait-timeout 420 keycloak >/dev/null
   compose exec -T proxy touch /data/master-initialized >/dev/null
 else
@@ -606,6 +646,4 @@ fi
 compose exec -T -u 0 backend rm -f \
   /tmp/eko112-bootstrap.py /tmp/eko112-realm.json /tmp/eko112-role-mapping-policy.json >/dev/null
 # The placement override served every start of this run; it leaves nothing behind (EKO-1-26).
-if [ -n "$CHECKED_DIR" ]; then
-  rm -rf "$CHECKED_DIR"
-fi
+cleanup_checked_placement

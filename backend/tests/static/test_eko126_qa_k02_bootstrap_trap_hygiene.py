@@ -8,23 +8,32 @@ pre-start marker removal (the file-top ERR trap) and the first keycloak start (t
 bootstrap-override trap text). A third window — a failure at the second keycloak start, after
 the RERUN=false block restores the bare ERR-trap text — LEAKS the directory at this head, as do
 the explicit `exit 1`/`exit 6` paths (the ERR trap never fires on an explicit exit); that gap is
-finding EKO-1-26/F-3 for the developer, not an assertion here (an assertion of it would be red
-and this suite must stay green at the checkpoint).
+finding EKO-1-26/F-3. Fix round 2 closes it and this file asserts the fixed windows: `up2` (the
+second keycloak start under the RESTORED trap) joins the parametrized trap windows, and
+`backend`/`provider` (the two explicit exits after the placement exists) get their own test —
+an exit path keeps its named exit code and prints no trap message, only the directory must not
+survive it.
 """
 
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from tests.static.test_eko126_k02_bootstrap_checked_placement import GIVEN, posix
 from tests.support.repo import REPO_ROOT, bash
 
-# The recording double of the placement carriers plus two failure hooks. Windows: "markers"
+# The recording double of the placement carriers plus failure hooks. Trap windows: "markers"
 # fails the pre-start marker removal (under the file-top ERR trap), "up1" the first keycloak
-# start (under the bootstrap-override trap). Both traps clean the placement directory today.
+# start (under the bootstrap-override trap), "up2" the second keycloak start (under the trap
+# the RERUN=false block restores). Exit windows (F-3): "backend" empties the backend helper id
+# (the named exit 1) and "provider" prints no provider line (the named exit 6) — explicit
+# exits, where the ERR trap never fires and the cleanup must run before the exit itself.
 FAILING_SHIM = r"""#!/usr/bin/env bash
+FACTORY_PART1="KC-SERVICES0047: jpa (org.eko_crm.keycloak.events."
+FACTORY_PART2="FilteringJpaEventStoreProviderFactory) is active"
 printf '%s\n' "$*" >> "$EKO112_FAKE_LOG"
 if [ "${1:-}" = "compose" ]; then
   shift
@@ -44,14 +53,19 @@ case "$*" in
     [ "${EKO112_FAKE_RERUN:-false}" = true ] || exit 1 ;;
   *python\ /tmp/eko112-bootstrap.py*)
     printf '{"event":"master accounts ready"}\n' ;;
-  *ps\ -q\ backend) printf 'fake-backend-container\n' ;;
+  *ps\ -q\ backend)
+    [ "${EKO112_FAKE_NO_BACKEND:-false}" = true ] || printf 'fake-backend-container\n' ;;
   *ps\ -q\ keycloak) printf 'fake-keycloak-container\n' ;;
   *up\ -d\ --force-recreate\ --wait*)
     if printf '%s' "$*" | grep -q '\.override\.'; then
       [ "${EKO112_FAKE_FAIL_UP1:-false}" = true ] && exit 1
+    else
+      [ "${EKO112_FAKE_FAIL_UP2:-false}" = true ] && exit 1
     fi ;;
   *logs\ keycloak*)
-    printf '%s\n' 'KC-SERVICES0047: jpa (org.eko_crm.keycloak.events.FilteringJpaEventStoreProviderFactory) is active' ;;
+    if [ "${EKO112_FAKE_PROVIDER_OFF:-false}" != true ]; then
+      printf '%s\n' "$FACTORY_PART1$FACTORY_PART2"
+    fi ;;
   *eko-keycloak-boot-identity.sh*) printf '123e4567-e89b-12d3-a456-426614174000\n' ;;
 esac
 exit 0
@@ -60,10 +74,18 @@ exit 0
 WINDOW_HOOKS = {
     "markers": {"EKO112_FAKE_FAIL_MARKERS": "true"},
     "up1": {"EKO112_FAKE_FAIL_UP1": "true"},
+    "up2": {"EKO112_FAKE_FAIL_UP2": "true"},
 }
 
+# F-3's exit windows: named codes, no trap message, same directory obligation.
+EXIT_HOOKS = {
+    "backend": {"EKO112_FAKE_NO_BACKEND": "true"},
+    "provider": {"EKO112_FAKE_PROVIDER_OFF": "true"},
+}
+EXIT_CODES = {"backend": 1, "provider": 6}
 
-def _run_failing_bootstrap(tmp_path: Path, synthetic_env: Path, window: str) -> dict:
+
+def _run_failing_bootstrap(tmp_path: Path, synthetic_env: Path, window: str) -> dict[str, Any]:
     home = tmp_path / "bootstrap"
     home.mkdir()
     env_file = home / "bootstrap.env"
@@ -82,7 +104,7 @@ def _run_failing_bootstrap(tmp_path: Path, synthetic_env: Path, window: str) -> 
     child_env["EKO_CHECKED_IMAGES"] = GIVEN
     child_env["EKO112_FAKE_LOG"] = posix(log)
     child_env["EKO112_FAKE_SNAP"] = posix(snap)
-    child_env.update(WINDOW_HOOKS[window])
+    child_env.update({**WINDOW_HOOKS, **EXIT_HOOKS}[window])
     result = subprocess.run(
         [
             bash(),
@@ -128,4 +150,32 @@ def test_eko126_qa_k02_a_failing_release_run_removes_the_placement_directory(
     # trap must delete is always identifiable from the recorded arguments
     assert placements, run["calls"]
     checked_dir = Path(placements[0]).parent
-    assert not checked_dir.exists(), f"the placement override outlived the failed run: {checked_dir}"
+    assert not checked_dir.exists(), (
+        f"the placement override outlived the failed run: {checked_dir}"
+    )
+
+
+@pytest.mark.parametrize("window", sorted(EXIT_HOOKS))
+def test_eko126_qa_k02_an_explicit_exit_after_the_placement_removes_the_directory(
+    tmp_path: Path, synthetic_env: Path, window: str
+) -> None:
+    """F-3 window 2: the ERR trap never fires on `exit 1`/`exit 6`, so those paths must run the
+    placement cleanup before leaving. The named exit code stays exactly what the message
+    promises (a weakened or swallowed exit is a different run), no trap line is printed, and
+    the directory must not survive the exit."""
+    run = _run_failing_bootstrap(tmp_path, synthetic_env, window)
+    assert run["rc"] == EXIT_CODES[window], run["out"]
+    assert "failed closed" not in run["out"], run["out"]
+    placements = [
+        token
+        for line in run["calls"]
+        for token in line.split()
+        if token.endswith("checked-images.yaml")
+    ]
+    # both exit windows are reached only after the placement has been rendered and handed to a
+    # compose call, so the directory the exit must delete is identifiable from the record
+    assert placements, run["calls"]
+    checked_dir = Path(placements[0]).parent
+    assert not checked_dir.exists(), (
+        f"the placement override outlived the exited run: {checked_dir}"
+    )
