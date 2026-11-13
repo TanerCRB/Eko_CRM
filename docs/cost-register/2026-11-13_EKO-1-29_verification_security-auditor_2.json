@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-13",
+  "task": "EKO-1-29",
+  "phase": "verification",
+  "role": "security-auditor",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "High",
+  "agentId": "ac7e202ef5e3936e2",
+  "tokens": 96578,
+  "tokenSplit": null,
+  "tokensSource": "task-notification",
+  "measured": "record",
+  "toolCalls": 33,
+  "seconds": 1638,
+  "fixRound": 2,
+  "reworkCause": null,
+  "notes": "round-2 delta PASS WITH RESERVATIONS 0/0/1/0; S-4 FIXED + smuggling hunt against enumeration found no bypass; ReDoS clean (320k all-held 289ms, 100k docs 0.72ms worst line); no value echo; k07 complementarity green incl evidence grep vs 27-name inventory; S-5 Medium NEW: ++NAME=literal diff-of-a-diff passes BOTH scanners via (?!=\\+) over-exclusion - PRE-EXISTING at head, unnamed in accepted-pass list, census 0 - human decision: name with census or narrow guard to '+++ b/'; S-1 still standing"
+}
