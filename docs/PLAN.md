@@ -454,6 +454,11 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   wiring; the runtime-side log scans.
   After EKO-1-12.
 
+- [ ] **EKO-1-30** — Separate live from record bound constants in the EKO-1-27 guards so a future retune moves named nodes only, not history (#152).
+  *Done when:* a named retune-simulation test drives the imported violation functions with a bound ≠ 360 and every pair-frozen eko127 node stays green with no bare `AssertionError`, only docstring-classified must-move nodes redden; the guard docstring classifies every eko127 node must-move/must-stay-pinned and the simulation agrees node for node; the RAISE annotation no longer claims enforcement k02's claim node lacks (align: a new named plant rejects a rewritten provenance comment; drop: the sentence is gone); `BASE`/`HEAD`/recorded-360 and `release.yml` bytes unchanged, all existing plant names keep their verdicts.
+  **Out of scope (explicit):** an actual retune (no duration has reached 360; closing condition: first reaching run); the pair-frozen ci.yml k05 family (retune-inert by construction); comment-content rules beyond C-3 (needs a new gate decision); a repo-wide live-guard sweep (finding none today, verified).
+  After EKO-1-27 (its Reviewer findings R-01/R-02).
+
 ## EKO-2 — Access
 
 - [ ] **EKO-2-01** — Require login for the whole application.
