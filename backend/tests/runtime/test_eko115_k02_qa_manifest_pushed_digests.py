@@ -4,8 +4,12 @@ names the digests that were pushed, not only "the references the composition gav
 The developer's runtime test takes its expected value from the producer's own output, so a
 producer that writes the wrong digest into the composition still passes it (QA mutation M3,
 2026-11-05). Here the expected references are built independently of the producer: the project
-registry name for `backend`, and the repository composition's own tag for `postgres` and
-`keycloak`, each followed by the digest the push is said to have returned.
+registry location for the project images `backend` and `keycloak` (EKO-1-26 route A: keycloak
+joined the checked family and the release now publishes it, so its manifest name is the
+project registry reference with the RELEASE TAG — derived from the same `rc.PROJECT_REGISTRY`
+constant the producer renders from, never from the producer's rendered output, which would
+restore M3's blindness), and the repository composition's own tag for `postgres` (still a
+third-party pull), each followed by the digest the push is said to have returned.
 """
 
 import pytest
@@ -30,7 +34,7 @@ def expected_references() -> dict[str, str]:
     services = yaml.safe_load((REPO_ROOT / "compose.yaml").read_text(encoding="utf-8"))["services"]
     return {
         "backend": f"ghcr.io/tanercrb/eko-crm/backend:{TAG}@{PUSHED['backend']}",
-        "keycloak": f"{services['keycloak']['image']}@{PUSHED['keycloak']}",
+        "keycloak": f"{rc.PROJECT_REGISTRY}/keycloak:{TAG}@{PUSHED['keycloak']}",
         "postgres": f"{services['postgres']['image']}@{PUSHED['postgres']}",
     }
 
