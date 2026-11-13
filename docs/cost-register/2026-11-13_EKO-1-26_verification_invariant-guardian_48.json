@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-13",
+  "task": "EKO-1-26",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Low",
+  "agentId": "a0b91d95b29ee8e47",
+  "tokens": 336430,
+  "tokenSplit": { "input": 3545, "output": 19252, "cacheWrite": 56694, "cacheRead": 256939 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 19,
+  "seconds": 552,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "bounded delta audit b1afd1b..e70986a (manifest expectation CI-fix): PASS, 0 findings; judged the developer's refusal of render-derived expectations correct (producer independence, M3); R-01 carried; report .task/handoff/12-guardian-3.md"
+}
