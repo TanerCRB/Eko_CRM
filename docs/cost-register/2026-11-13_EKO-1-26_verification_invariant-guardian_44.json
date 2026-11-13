@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-13",
+  "task": "EKO-1-26",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Medium",
+  "agentId": "af4667960e1f12a52",
+  "tokens": 5754604,
+  "tokenSplit": { "input": 4185, "output": 70520, "cacheWrite": 168285, "cacheRead": 5511614 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 68,
+  "seconds": 2231,
+  "fixRound": 0,
+  "reworkCause": "one format re-emission (K-id tokens in the Undecidable section's closing decidability note — the unconditional rule; content unchanged); record may predate the final resumed emission's single call",
+  "notes": "boundary-check: clean (read-only wave); PASS, R-01 Low = refusal-path cleanup assertion gap (same edge as Reviewer note 1); all ADR/route-A controls read; report .task/handoff/12-guardian-1.md"
+}
