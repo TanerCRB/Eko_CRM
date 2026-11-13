@@ -22,6 +22,11 @@ usage() {
 # and checks nothing was left behind (EKO112_SELFTEST_NESTED bounds the recursion). Live
 # composition behavior (marker removal, reachability, residual-state records) is carried by
 # backend/tests/runtime, not by these offline cases.
+# (e) EKO-1-28 adds the reclose_case block below: the offline selection of the re-close
+# arm — which record the unset / empty / failing-restart / active-knob states produce, and
+# how many restarts each attempts.
+# (f) EKO-2-01 adds the origin_case block: the client root URL's default-port rule, run
+# offline against keycloak-bootstrap.py's own application_origin().
 self_test() {
   local self self_dir root repo_before open_gate_src out rc status failures=0 total=0
   trap - ERR
@@ -134,7 +139,110 @@ self_test() {
   identity_case "a valid UUID boot identity is accepted and reaches the marker write" \
     "123e4567-e89b-12d3-a456-426614174000" accept
 
-  # (e) F-1 A: the client root URL is APP_ORIGIN as the backend uses it, a default port dropped
+  # (e) EKO-1-28: the re-close arm's BRANCH SELECTION, run from the same extracted open_gate
+  # text as (c) with only the composition side stubbed. A step-counting `date` stub puts the
+  # reachability loop past its deadline on the first check (no 420 s wait offline); the
+  # compose stub succeeds the first restart and answers the re-close restart with the
+  # scenario's rc; `docker` is stubbed so the marker-removal one-off never spawns a
+  # container (this mode's contract: no case starts one). The restart-call count pins where
+  # the hook reaches: unset or empty, both restarts hit the logged stub; active, the
+  # replacement composes answers the re-close before the stub sees it (count 1), and a hook
+  # WIDENED to the first restart would drop the count to 0. These cases cannot prove live
+  # restart behavior — that is
+  # backend/tests/runtime/test_eko128_reclose_failed_branch.py on the real composition.
+  reclose_case() {
+    # reclose_case <name> <hook-state> <reclose-restart-rc> <expected status line> —
+    # hook-state is __unset__ (never set), "" (set empty) or a literal activation value.
+    local name="$1" hook="$2" restart_rc="$3" expected="$4"
+    local dir events calls status
+    dir="$root/reclose"
+    rm -rf "$dir"
+    mkdir -p "$dir"
+    events="$dir/events"
+    calls="$dir/calls"
+    : > "$events"
+    : > "$calls"
+    printf '0\n' > "$dir/tick"
+    status="$(
+      FAKE_IDENTITY="123e4567-e89b-12d3-a456-426614174000"
+      FAKE_RESTART_RC="$restart_rc"
+      RECLOSE_RESTART_SEEN=0
+      # open_gate's marker-removal one-off names the project's volume; the `docker` stub
+      # below never spawns it, but the expansion must be defined under `set -u`.
+      COMPOSE_PROJECT_NAME=eko-selftest-stub
+      unset EKO128_FORCE_RECLOSE_FAIL
+      if [ "$hook" != __unset__ ]; then
+        EKO128_FORCE_RECLOSE_FAIL="$hook"
+        export EKO128_FORCE_RECLOSE_FAIL
+      fi
+      record() { printf '%s\n' "$1" >> "$events"; }
+      compose() {
+        printf '%s\n' "$*" >> "$calls"
+        case "$1" in
+          ps) printf 'fake-proxy-container\n' ;;
+          exec)
+            # The gate's wget verification fails on every check; the deadline stub below
+            # leaves the loop before any retry, so one call is the worst case.
+            if [ "${4:-}" = wget ]; then return 1; fi
+            ;;
+          restart)
+            RECLOSE_RESTART_SEEN=$((RECLOSE_RESTART_SEEN + 1))
+            if [ "$RECLOSE_RESTART_SEEN" -ge 2 ] && [ "$FAKE_RESTART_RC" != 0 ]; then
+              return "$FAKE_RESTART_RC"
+            fi
+            ;;
+        esac
+        return 0
+      }
+      docker() {
+        printf 'docker %s\n' "$*" >> "$calls"
+        if [ "$1" = inspect ]; then printf 'fake-proxy-image\n'; fi
+        return 0
+      }
+      keycloak_boot_identity() { printf '%s\n' "$FAKE_IDENTITY"; return 0; }
+      # First call seeds the deadline, the next already exceeds it: the loop exits at its
+      # condition, and the run falls into the failure tail with no real waiting.
+      date() {
+        local step
+        step=$(( $(cat "$dir/tick") + 1 ))
+        printf '%s\n' "$step" > "$dir/tick"
+        printf '%s\n' "$((step * 1000))"
+      }
+      eval "$open_gate_src"
+      rc=0
+      open_gate public auth.localhost 443 eko 2> "$dir/gate.err" || rc=$?
+      printf 'rc=%s restarts=%s event=%s\n' "$rc" \
+        "$(grep -c '^restart proxy$' "$calls")" \
+        "$(tail -n 1 "$events")"
+    )"
+    if [ "$status" = "$expected" ] \
+      && grep -q "did not become reachable" "$dir/gate.err"; then
+      ok "$name"
+    else
+      fail "$name" "status '$status', gate stderr: $(tr '\n' ' ' < "$dir/gate.err")"
+    fi
+  }
+  # Shipped path (K-02): unset and empty are byte-identical — the real restart decides,
+  # and a succeeding re-close records the gate-specific residual, never the refusal.
+  reclose_case "re-close: unset hook with a succeeding restart records the residual tail" \
+    __unset__ 0 \
+    "rc=1 restarts=2 event=public verification failed; marker removed; admin listener remains open"
+  reclose_case "re-close: empty-string hook behaves as unset" \
+    "" 0 \
+    "rc=1 restarts=2 event=public verification failed; marker removed; admin listener remains open"
+  # The live branch, faithfully simulated: a FAILING re-close restart records the refusal
+  # even with the hook absent — the pre-hook behavior of this arm is preserved unchanged.
+  reclose_case "re-close: unset hook with a failing restart records the re-close refusal" \
+    __unset__ 1 \
+    "rc=1 restarts=2 event=public verification failed; marker removed; proxy re-close failed; listeners not confirmed closed"
+  # The hook arm: the refusal record WITHOUT a re-close attempt at all (one restart in the
+  # call log) — the knob never touches the first restart, and never re-closes while the
+  # record claims closure is unconfirmed.
+  reclose_case "re-close: active hook skips the restart and records the refusal" \
+    fail 0 \
+    "rc=1 restarts=1 event=public verification failed; marker removed; proxy re-close failed; listeners not confirmed closed"
+
+  # (f) EKO-2-01 F-1 A: the client root URL is APP_ORIGIN as the backend uses it, a default port dropped
   # and any other kept. Runs this repository's keycloak-bootstrap.py function itself, offline.
   origin_case() {
     local name="$1" raw="$2" expected="$3" got candidate
@@ -419,6 +527,33 @@ open_gate() {
     public) residual="admin listener remains open" ;;
     *) residual="listeners closed" ;;
   esac
+  # EKO-1-28 test-only hook (regression guard for THIS arm, Issue #119; pure addition — the
+  # if/else/fi/return lines below are byte-identical to the shipped text). A non-empty
+  # EKO128_FORCE_RECLOSE_FAIL answers the re-close restart as failed without the
+  # composition being touched, so backend/tests/runtime/test_eko128_reclose_failed_branch.py
+  # drives the else branch below — the same shared `record`/`return 1` a real restart fault
+  # takes (a hook arm with its own duplicated record would survive deletion of either, which
+  # is exactly the guardless state EKO-1-12/R-32 recorded); the --self-test reclose cases
+  # exercise the selection offline. The knob is consulted ONLY here — inside the
+  # verification-failure tail, after the marker removal — never at the first restart above
+  # or anywhere else the gate serves. Unset or empty skips the whole block (house `${VAR:-}`
+  # pattern), so every shipped caller — run_bootstrap without overrides, scripts/dev-env.sh,
+  # operator runs, --self-test — takes the real `compose restart proxy` decision. The
+  # replacement answers `restart proxy` itself: the record says closure is NOT confirmed, so
+  # silently re-closing while recording the refusal would fake the wire for the guard's
+  # sake, and nothing else can reach `compose` from here — this tail's only later call is
+  # the restart below, and the `return 1` ends the run before any other compose call.
+  # Nothing guards the knob from being set outside tests (Issue #119 "not proven"); it is
+  # test-only by documentation, and its name carries the task identifier.
+  if [ -n "${EKO128_FORCE_RECLOSE_FAIL:-}" ]; then
+    compose() {
+      if [ "${1:-}" = restart ] && [ "${2:-}" = proxy ]; then
+        return 1
+      fi
+      printf 'keycloak-bootstrap: EKO128 re-close hook: unexpected compose call: %s\n' "$*" >&2
+      return 2
+    }
+  fi
   if compose restart proxy >/dev/null; then
     record "${gate} verification failed; marker removed; ${residual}"
   else
