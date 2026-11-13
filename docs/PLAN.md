@@ -442,7 +442,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   both runtime jobs pass, the four `test_eko128_*` IDs PASSED un-skipped in the listings.
   Exception EKO-1-12/R-32 removed by this check-off. Dev assumptions A-01/A-02 ratified at gate 2.
 
-- [ ] **EKO-1-29** — Give the tracked-additions secret scan raw-format teeth (#120).
+- [x] **EKO-1-29** — Give the tracked-additions secret scan raw-format teeth (#120).
   *Done when:* `SECRET_ENV_ASSIGNMENT` in `backend/tests/static/test_eko112_k06_synthetic_and_secret_free.py`
   flags raw `NAME=value` assignment shapes in scanned files (not only diff-form `+`-prefixed lines),
   proven by a committed plaintext plant turning the scan red and its removal turning it green, in a
@@ -452,6 +452,22 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** changing what counts as a secret value beyond assignment shape; CI
   wiring; the runtime-side log scans.
   After EKO-1-12.
+  **Done 2026-11-13:** merged in [PR #159](https://github.com/TanerCRB/Eko_CRM/pull/159) as `412fc81`
+  (CI green at the head: static 2m33s, process-ci; runtime jobs skipping — paths outside their
+  triggers). The predicate now enumerates every assignment candidate (zero-width wrapper; the
+  leftmost-hold swallow that round 1 left — and that base's greedy match hid — is killed and
+  pinned): raw `NAME=literal` shapes fire under each of the four EKO-1-12 prefixes across
+  line-start, `;|&`, Unicode-separator, `env`/`-e`/`--env` (incl. attached) and quoted/comma-slot
+  contexts; diff-form teeth kept (guardian's full-tree base-vs-head floor scan: 0 lost fires);
+  self-reference hold narrowed to the statement-comma kwarg shape; linear prefilter and bounded
+  quantifiers (worst adversarial probe 589 ms/320k, tree scan ~7 ms). 242 committed guard items
+  (11 pre-existing + 116 + 65 + 50); QA M1..M7 killed one-mechanism-each, M8 behaviour-inert
+  confirmed with timing; live plant `proxy/qa129-plant.sh` red naming lines [2,3] then green.
+  Gate-2 human decisions: the `++`/`+++` glued-artifact family named as accepted-pass
+  (`cc62826`, census 0, QA M5 proves the guard is its cause); the pre-existing realm-value CI
+  traceback echo raised as follow-up #162. Ledger B-01..B-12 and the three supersessions
+  (census 14→17, slot-exclusion rationale, order-insensitivity comment) ratified with the merge.
+  Q3-2 recorded as already swept by PR #122. Exception EKO-1-12/Q3-1 removed by this check-off.
 
 ## EKO-2 — Access
 
