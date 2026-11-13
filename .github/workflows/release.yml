@@ -183,7 +183,8 @@ jobs:
     name: runtime tests on the composition
     needs: [admission, images]
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # EKO-1-27 (#138): the release-mode runtime suite ran 126.4/122.6 min (run 43043176502) and 125.3/115.3 min (run 43074142146), above the old 60; 360 is GitHub's job maximum, chosen at gate 1 (C-1).
+    timeout-minutes: 360
     permissions:
       contents: read
       packages: read

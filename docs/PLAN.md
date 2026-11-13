@@ -416,6 +416,23 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   *Done when:* the release-mode CI runtime job reaches its K-04 image guard green on a CI run — the checked-images family covers `localhost/eko-crm/keycloak:26.8.1-eko112` so no runtime test builds it in session; the release pipeline names the custom Keycloak image the route ADR-0004 requires; PR #135 rebased on this merge goes green.
   **Out of scope (explicit):** the boot-identity mechanism of PR #135; the remaining release-mode red tests #140-#144; `backup/` content; the ADR-0004 image-table row moves only through this task's gate 3.
 
+- [ ] **EKO-1-27** — Set the release.yml runtime job bound from the recorded suite durations so the next release tag's runtime job completes instead of cancelling (#138).
+  *Done when:* the `runtime` job of `release.yml` carries `timeout-minutes` equal to the value decided at gate 1 (G-1, recommended 360 to match `ci.yml`'s C-5 jobs) and ≥ the longest completed duration of the same suite on this task's tree (EKO-1-25 recorded 126.4 / 122.6 min); a static bound guard (Analyst-named, house style `test_eko125_k04/k05_*`) passes and a planted wrong value fails it; the PR body states the value against the recorded durations observed on this task's CI runs (URL in the PR, first `main` run in the gate-3 PR); a duration reaching the bound returns the value to gate 1; no release tag is pushed by the task; everything in `release.yml` except the one bound is unchanged. Confirmation at the next human-pushed release tag: the runtime job completes, not cancelled (G-2).
+  **Out of scope (explicit):** fixing runtime failures (#140–#144, closed); other release.yml job bounds; shortening/splitting the suite (EKO-1-25 C-3); pushing a tag or making a release (human-only); hang-detection beyond the bound value; EKO-1-20/weakening-1 (EKO-1-25 C-6).
+  After EKO-1-25 (its C-4 deferred this Issue).
+
+- [ ] **EKO-1-28** — Committed regression guard for the bootstrap re-close failure branch (#119).
+  *Done when:* a committed runtime test drives `open_gate`'s re-close-failure path (the
+  `proxy re-close failed; listeners not confirmed closed` record and `exit 1`) through a
+  forced-fail mode or stub hook, contrasted with the success path on the same mechanism; deleting
+  the record call or the `return 1` turns that committed test red (qa3-3's ad-hoc stub result is
+  reproduced in-tree); the shipped failure semantics of `scripts/keycloak-bootstrap.sh` are
+  unchanged for every caller that does not set the hook; exception EKO-1-12/R-32 is removed at
+  this task's gate 3.
+  **Out of scope (explicit):** any other bootstrap branch's coverage; the secret-scan raw-format
+  teeth (#120, EKO-1-29); behavior changes to the real restart path; CI bound changes.
+  After EKO-1-12.
+
 ## EKO-2 — Access
 
 - [ ] **EKO-2-01** — Require login for the whole application.
