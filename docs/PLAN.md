@@ -417,6 +417,18 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** fixing runtime failures (#140–#144, closed); other release.yml job bounds; shortening/splitting the suite (EKO-1-25 C-3); pushing a tag or making a release (human-only); hang-detection beyond the bound value; EKO-1-20/weakening-1 (EKO-1-25 C-6).
   After EKO-1-25 (its C-4 deferred this Issue).
 
+- [ ] **EKO-1-28** — Committed regression guard for the bootstrap re-close failure branch (#119).
+  *Done when:* a committed runtime test drives `open_gate`'s re-close-failure path (the
+  `proxy re-close failed; listeners not confirmed closed` record and `exit 1`) through a
+  forced-fail mode or stub hook, contrasted with the success path on the same mechanism; deleting
+  the record call or the `return 1` turns that committed test red (qa3-3's ad-hoc stub result is
+  reproduced in-tree); the shipped failure semantics of `scripts/keycloak-bootstrap.sh` are
+  unchanged for every caller that does not set the hook; exception EKO-1-12/R-32 is removed at
+  this task's gate 3.
+  **Out of scope (explicit):** any other bootstrap branch's coverage; the secret-scan raw-format
+  teeth (#120, EKO-1-29); behavior changes to the real restart path; CI bound changes.
+  After EKO-1-12.
+
 ## EKO-2 — Access
 
 - [ ] **EKO-2-01** — Require login for the whole application.
