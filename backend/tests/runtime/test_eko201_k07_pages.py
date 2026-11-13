@@ -269,6 +269,17 @@ def test_k07_page_policy_on_every_page_state(
     assert "login: page language is not Polish" in accounts.page_findings("login", english)
     nameless = login.replace("Eko_CRM", "Keycloak")
     assert "login: the Eko_CRM name is missing" in accounts.page_findings("login", nameless)
+    # F-4: the enrolment page names the button it shows; the parent's wording fails the check.
+    enrolment = capture.pages["mfa-enrolment"]
+    assert accounts.ENROLMENT_INSTRUCTION in accounts.visible_text(enrolment)
+    assert "Zatwierdź" in accounts.visible_text(enrolment)
+    parent_wording = enrolment.replace(
+        accounts.ENROLMENT_INSTRUCTION, "kliknij Prześlij, aby zakończyć konfigurację"
+    )
+    assert any(
+        "button not shown" in item
+        for item in accounts.page_findings("mfa-enrolment", parent_wording)
+    )
     replaced = login.replace("Zaloguj się do Eko_CRM", "Sign in to your account")
     found = accounts.page_findings("login", replaced)
     assert any("English default" in item for item in found), found

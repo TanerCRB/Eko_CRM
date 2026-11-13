@@ -13,6 +13,8 @@ interface AppShellProps {
   children: ReactNode;
   navigationItems?: readonly NavigationItem[];
   onNavigate?: (href: string) => void;
+  // The signed-in account's area at the foot of the sidebar (P2 profile placement).
+  account?: ReactNode;
 }
 
 const mobileNavigationQuery = "(max-width: 700px)";
@@ -22,6 +24,7 @@ export function AppShell({
   children,
   navigationItems = [{ href: "/", label: messages.dashboard, current: true }],
   onNavigate,
+  account,
 }: AppShellProps) {
   const navId = useId();
   const menuRef = useRef<HTMLButtonElement>(null);
@@ -107,6 +110,7 @@ export function AppShell({
             {item.label}
           </a>
         ))}
+        {account}
       </nav>
       <div className="workspace">
         <header className="topbar">

@@ -55,6 +55,8 @@ class MigrateSettings(Settings):
 
 _ORIGIN = re.compile(r"https?://[^/\s?#@]+")
 _BASE_URL = re.compile(r"https?://[^\s?#@]+[^/\s?#@]")
+_AUTHORITY = re.compile(r"(?P<scheme>https?)://(?P<host>\[[^\]/]*\]|[^:/\[\]]+)(?::(?P<port>\d+))?")
+_DEFAULT_PORTS = {"https": 443, "http": 80}
 # ADR-0003-C2: the realm's `accessTokenLifespan` (240 s, identity/eko-realm.json) plus these two
 # is at most 300 s.
 MAX_LEEWAY_PLUS_OFFSET_SECONDS = 60
@@ -87,7 +89,7 @@ class AuthSettings(BaseSettings):
     def _origin(cls, value: str) -> str:
         if not _ORIGIN.fullmatch(value):
             raise ValueError("not an origin")
-        return value
+        return without_default_port(value)
 
     @field_validator("app_oidc_issuer", "app_oidc_internal_url")
     @classmethod
@@ -95,6 +97,11 @@ class AuthSettings(BaseSettings):
         if value is not None and not _BASE_URL.fullmatch(value):
             raise ValueError("not a base URL")
         return value
+
+    @field_validator("app_oidc_issuer")
+    @classmethod
+    def _issuer_as_keycloak_writes_it(cls, value: str) -> str:
+        return without_default_port(value)
 
     @field_validator("app_oidc_client_secret")
     @classmethod
@@ -120,6 +127,20 @@ class AuthSettings(BaseSettings):
 
     def session_key(self) -> bytes:
         return _decode_key(self.app_session_encryption_key)
+
+
+def without_default_port(url: str) -> str:
+    """The URL with an explicit default port (443 for https, 80 for http) removed.
+
+    Keycloak writes `iss` and a browser writes `Origin` without it (EKO-2-01, F-1 A); any other
+    port is kept.
+    """
+    match = _AUTHORITY.match(url)
+    if match is None or match.group("port") is None:
+        return url
+    if int(match.group("port")) != _DEFAULT_PORTS[match.group("scheme")]:
+        return url
+    return f"{match.group('scheme')}://{match.group('host')}{url[match.end():]}"
 
 
 def _decode_key(value: SecretStr) -> bytes:

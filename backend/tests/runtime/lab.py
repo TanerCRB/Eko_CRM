@@ -28,6 +28,8 @@ from tests.support.repo import REPO_ROOT
 REVISIONS = Path(__file__).parent / "revisions"
 SHIPPED_HEAD = "0003"
 SHIPPED_TREE = ("0001", "0002", "0003")
+# The tables of the shipped revisions after 0002 (0003: sessions and login transactions).
+LATER_TABLES = ("app_session", "login_transaction")
 # pg_dump writes a random \restrict key into every dump unless one is given.
 DUMP_RESTRICT_KEY = "ekotestdump"
 HEALTH_URL = "http://backend:8000/api/health"
@@ -302,7 +304,10 @@ class Lab:
             self.sql("INSERT INTO alembic_version (version_num) VALUES (:'v')", v=row)
 
     def drop_lineage(self) -> None:
-        self.sql("DROP TABLE IF EXISTS schema_revision_lineage")
+        """The record 0002 creates, and with it what later revisions create: a database without
+        the lineage record is one no revision after 0001 has touched (EKO-2-01, F-2)."""
+        for table in (*LATER_TABLES, "schema_revision_lineage"):
+            self.sql(f"DROP TABLE IF EXISTS {table}")
 
     def at_0001(self) -> None:
         """The database as the release whose tree is {0001} left it: alembic_version only."""

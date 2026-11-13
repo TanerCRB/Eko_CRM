@@ -114,6 +114,12 @@ POLISH_MARKERS = {
 }
 
 
+# F-4 (Issue #21, 2026-11-13): the enrolment instruction must name the button the page shows
+# ("Zatwierdź", the parent's `doSubmit`), not the parent's "Prześlij".
+MISNAMED_BUTTONS = {"mfa-enrolment": ("kliknij Prześlij",)}
+ENROLMENT_INSTRUCTION = "kliknij Zatwierdź, aby zakończyć konfigurację"
+
+
 def visible_text(document: str) -> str:
     without = re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", document)
     return re.sub(r"\s+", " ", re.sub(r"(?s)<[^>]+>", " ", without)).strip()
@@ -138,6 +144,9 @@ def page_findings(state: str, document: str) -> list[str]:
     problems.extend(
         f"{state}: English default {phrase!r}" for phrase in ENGLISH_DEFAULTS if phrase in text
     )
+    for phrase in MISNAMED_BUTTONS.get(state, ()):
+        if phrase in text:
+            problems.append(f"{state}: instruction names a button not shown {phrase!r}")
     return problems
 
 

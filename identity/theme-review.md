@@ -29,3 +29,17 @@ version in that image.
   text in the parent (English fallback) and are used by the parent's `field.ftl`/`code.ftl` copy
   controls. The stylesheet `css/eko-crm.css` is added after the parent's `css/styles.css` and only
   sets colours, the page background and the header text.
+
+## 2026-11-13 — reviewed against Keycloak 26.8.1
+
+- Overridden templates: none.
+- Overridden message keys: `loginTitleHtml`, `loginAccountTitle`, `loginTotpTitle`,
+  `loginTotpStep3`, `code-clipboard-label`, `code-copy-label`, `code-copy-success`,
+  `code-copy-failure`.
+- Parent compared: `theme/keycloak.v2/login` and `theme/base/login` in
+  `lib/lib/main/org.keycloak.keycloak-themes-26.8.1.jar` of `quay.io/keycloak/keycloak:26.8.1`.
+- Change: `loginTotpStep3` added (human decision F-4, Issue #21, 2026-11-13). The parent's
+  Polish text tells the user to click "Prześlij", but the parent's `login-config-totp.ftl` labels
+  the enrolment button with `doSubmit` ("Zatwierdź"); the override names that button and keeps
+  the rest of the parent's wording. It is plain message text rendered with the parent's
+  escaping. The other keys, the stylesheet and the outcome of the 2026-11-12 entry are unchanged.

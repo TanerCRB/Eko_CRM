@@ -1,6 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { AccountPanel } from "./features/session/AccountPanel";
+import { SessionGate } from "./features/session/SessionGate";
 
 const ROOT_ID = "root";
 
@@ -12,7 +14,7 @@ export function mount(page: Document): () => void {
   const root = createRoot(container);
   root.render(
     <StrictMode>
-      <App />
+      <SessionGate>{(session) => <App account={<AccountPanel session={session} />} />}</SessionGate>
     </StrictMode>,
   );
   return () => {

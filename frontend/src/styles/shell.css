@@ -53,6 +53,26 @@ p { margin-bottom: var(--space-4); max-width: 75ch; }
 /* The current page is marked by aria-current and by weight, not by colour alone. */
 .nav-link[aria-current="page"] { background: var(--color-leaf); color: var(--color-forest-deep); font-weight: 600; }
 
+/* P2's profile block at the foot of the sidebar, here holding the name and logout. */
+.profile {
+  margin-top: auto;
+  display: flex; flex-direction: column; gap: var(--space-2);
+  padding: 14px 10px 0;
+  border-top: 1px solid var(--color-on-forest-line);
+}
+.profile-name { color: var(--color-on-forest-strong); overflow-wrap: anywhere; }
+.profile-logout {
+  width: 100%; margin: 0;
+  border: 0; background: transparent; text-align: left;
+}
+.profile-logout:disabled { opacity: .6; cursor: progress; }
+
+.session-screen {
+  max-width: 480px;
+  margin: 15vh auto 0;
+  padding: var(--space-6);
+}
+
 .workspace { margin-left: var(--sidebar-width); }
 .topbar {
   min-height: 76px;

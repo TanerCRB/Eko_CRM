@@ -26,4 +26,19 @@ export const messages = {
   welcomeTitle: "Eko CRM działa",
   welcomeBody:
     "Ta wersja potwierdza, że aplikacja się uruchamia, i nie zawiera jeszcze danych klientów.",
+  session: {
+    checking: "Sprawdzanie sesji…",
+    redirecting: "Przekierowanie do logowania…",
+    unavailable: "Logowanie jest chwilowo niedostępne.",
+    retrying: "Ponawiamy próbę połączenia…",
+    retryLater: "Spróbuj ponownie za chwilę.",
+    invalid: "Nie udało się sprawdzić sesji.",
+    retry: "Spróbuj ponownie",
+  },
+  account: {
+    label: "Konto",
+    unnamedUser: "Zalogowany użytkownik",
+    logout: "Wyloguj się",
+    logoutFailed: "Nie udało się wylogować. Spróbuj ponownie.",
+  },
 } as const;

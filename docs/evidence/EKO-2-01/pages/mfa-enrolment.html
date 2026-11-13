@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <title>Zaloguj się do Eko_CRM</title>
-        <link rel="icon" href="/resources/epi20/login/eko-crm/img/favicon.ico">
-        <link href="/resources/epi20/common/keycloak/vendor/patternfly-v5/patternfly.min.css" rel="stylesheet">
-        <link href="/resources/epi20/common/keycloak/vendor/patternfly-v5/patternfly-addons.css" rel="stylesheet">
-        <link href="/resources/epi20/login/eko-crm/css/styles.css" rel="stylesheet">
-        <link href="/resources/epi20/login/eko-crm/css/eko-crm.css" rel="stylesheet">
+        <link rel="icon" href="/resources/ymrv5/login/eko-crm/img/favicon.ico">
+        <link href="/resources/ymrv5/common/keycloak/vendor/patternfly-v5/patternfly.min.css" rel="stylesheet">
+        <link href="/resources/ymrv5/common/keycloak/vendor/patternfly-v5/patternfly-addons.css" rel="stylesheet">
+        <link href="/resources/ymrv5/login/eko-crm/css/styles.css" rel="stylesheet">
+        <link href="/resources/ymrv5/login/eko-crm/css/eko-crm.css" rel="stylesheet">
     <script type="importmap">
         {
             "imports": {
-                "rfc4648": "/resources/epi20/common/keycloak/vendor/rfc4648/rfc4648.js"
+                "rfc4648": "/resources/ymrv5/common/keycloak/vendor/rfc4648/rfc4648.js"
             }
         }
     </script>
@@ -34,9 +34,9 @@
             }
           }
       </script>
-    <script type="module" src="/resources/epi20/login/eko-crm/js/passwordVisibility.js"></script>
+    <script type="module" src="/resources/ymrv5/login/eko-crm/js/passwordVisibility.js"></script>
     <script type="module">
-        import { startSessionPolling } from "/resources/epi20/login/eko-crm/js/authChecker.js";
+        import { startSessionPolling } from "/resources/ymrv5/login/eko-crm/js/authChecker.js";
 
         startSessionPolling(
             "/realms/eko/login-actions/restart?client_id=eko-backend&tab_id=[redacted]&client_data=[redacted]&skip_logout=true"
@@ -66,7 +66,7 @@
         });
     </script>
         <script type="module">
-            import { checkAuthSession } from "/resources/epi20/login/eko-crm/js/authChecker.js";
+            import { checkAuthSession } from "/resources/ymrv5/login/eko-crm/js/authChecker.js";
 
             checkAuthSession(
                 "[redacted]"
@@ -120,16 +120,16 @@
                     <p>Otwórz aplikację i zeskanuj kod kreskowy</p>
   <div class="kc-qr-code pf-v5-u-display-flex pf-v5-u-flex-direction-column pf-v5-u-align-items-center pf-v5-u-my-sm">
       <img id="kc-totp-secret-qr-code" src="data:[redacted]" alt="Otwórz aplikację i zeskanuj kod kreskowy">
-                        <a href="https://auth.localhost:61810/realms/eko/login-actions/required-action?client_id=eko-backend&amp;tab_id=[redacted]&amp;client_data=[redacted]&amp;mode=manual&amp;execution=[redacted]" id="mode-manual">Nie możesz zeskanować?</a>
+                        <a href="https://auth.localhost:49485/realms/eko/login-actions/required-action?client_id=eko-backend&amp;tab_id=[redacted]&amp;client_data=[redacted]&amp;mode=manual&amp;execution=[redacted]" id="mode-manual">Nie możesz zeskanować?</a>
   </div>
                 </li>
             <li>
-                <p>Wprowadź jednorazowy kod podany przez aplikację i kliknij Prześlij, aby zakończyć konfigurację</p>
+                <p>Wprowadź jednorazowy kod podany przez aplikację i kliknij Zatwierdź, aby zakończyć konfigurację</p>
                 <p>Podaj nazwę urządzenia, aby pomóc w zarządzaniu urządzeniami OTP.</p>
             </li>
         </ol>
 
-        <form action="https://auth.localhost:61810/realms/eko/login-actions/required-action?session_code=[redacted]&amp;execution=[redacted]&amp;client_id=eko-backend&amp;tab_id=[redacted]&amp;client_data=[redacted]" class="pf-v5-c-form pf-v5-u-w-100" id="kc-totp-settings-form" method="post" novalidate="novalidate">
+        <form action="https://auth.localhost:49485/realms/eko/login-actions/required-action?session_code=[redacted]&amp;execution=[redacted]&amp;client_id=eko-backend&amp;tab_id=[redacted]&amp;client_data=[redacted]" class="pf-v5-c-form pf-v5-u-w-100" id="kc-totp-settings-form" method="post" novalidate="novalidate">
             <div class="pf-v5-c-form__group">
                 <div class="pf-v5-c-form__label">
                     <label class="pf-v5-c-form__label" for="form-vertical-name">
