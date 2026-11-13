@@ -412,7 +412,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** splitting the runtime suite beyond what the cause requires; reopening EKO-1-23; re-judging PRs merged while the jobs were cancelled; raising the bound without a named cause; splitting or parallelising the suite (C-3); fixing the hidden runtime failures and the `release.yml` runtime bound — follow-up Issues (C-4).
   **Done 2026-11-11:** merged in [PR #139](https://github.com/TanerCRB/Eko_CRM/pull/139) as a merge commit `ce1f5b0` — R-01's instruction, keeping the pinned pair `bf55c4d`..`4d1380e` reachable; verified at `3c86efa`. Cause (b) named from per-file timings (K-02, human at gate 2): EKO-1-12's runtime files add ~3630 s to the suite; no test hung or ran past its own bound. PR run [43043176502](https://github.com/TanerCRB/Eko_CRM/actions/runs/43043176502): both runtime jobs concluded `failure`, not `cancelled`, in 126.4 / 122.6 min under the 360-min bound. First `main` run at the merge: [43074142146](https://github.com/TanerCRB/Eko_CRM/actions/runs/43074142146) — both runtime jobs completed: composition 125.3 min (2 failures), release mode 115.3 min (6 failures) — K-01 gate-3 half observed, not assumed. Five of the six release-mode failures are the listed table's (#140–#144); the sixth — `test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement`, `playwright: net::ERR_NETWORK_CHANGED` — passed on the same tree in the PR run and is flagged flaky, raised as an Issue if it repeats on the next `main` run. Bound guards `test_eko125_k04/k05_*` on the pinned pair, mutations M0–M14 all killed (M0 by CI observation). Exceptions EKO-1-25/weakening-1, EKO-1-25/boundary-1, EKO-1-25/B-01; EKO-1-20/weakening-1 flagged for the human's revisit (C-6). `main`'s runtime stays red until #140–#144 land (C-4); `release.yml` bound #138.
 
-- [ ] **EKO-1-28** — Committed regression guard for the bootstrap re-close failure branch (#119).
+- [x] **EKO-1-28** — Committed regression guard for the bootstrap re-close failure branch (#119).
   *Done when:* a committed runtime test drives `open_gate`'s re-close-failure path (the
   `proxy re-close failed; listeners not confirmed closed` record and `exit 1`) through a
   forced-fail mode or stub hook, contrasted with the success path on the same mechanism; deleting
@@ -423,6 +423,19 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** any other bootstrap branch's coverage; the secret-scan raw-format
   teeth (#120, EKO-1-29); behavior changes to the real restart path; CI bound changes.
   After EKO-1-12.
+  **Done 2026-11-13:** merged in [PR #151](https://github.com/TanerCRB/Eko_CRM/pull/151) as `28196a1`:
+  test-only hook `EKO128_FORCE_RECLOSE_FAIL` consulted only at the re-close point (pure addition
+  `133/0`, shipped `if/else/return 1` byte-identical, reviewer-traced leak-bounded by `set -e`),
+  `backend/tests/runtime/test_eko128_reclose_failed_branch.py` four cases (clause-content
+  discrimination, unset/empty shipped path, healthy-composition reach boundary), `--self-test`
+  9→13 reclose cases. Verification: guardian/reviewer/auditor PASS (reviewer Lows: budget carried
+  at ~42.2 min per runtime job, sed-verify diagnosability); QA PROOF HOLDS — Q-1/Q-2/Q-3/Q-6
+  independently killed with sha-witnessed reverts; Q-4/Q-5/Q-7 not run under host memory
+  exhaustion (pre-hook control on the dev trail; the order and stub-fallthrough contrasts keep
+  only the offline restart-count teeth) — accepted by the human at gate 2 with the merge; K-04
+  closed by the PR-head run [43318789453](https://github.com/TanerCRB/Eko_CRM/actions/runs/43318789453):
+  both runtime jobs pass, the four `test_eko128_*` IDs PASSED un-skipped in the listings.
+  Exception EKO-1-12/R-32 removed by this check-off. Dev assumptions A-01/A-02 ratified at gate 2.
 
 ## EKO-2 — Access
 
