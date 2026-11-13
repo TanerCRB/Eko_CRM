@@ -442,6 +442,17 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   both runtime jobs pass, the four `test_eko128_*` IDs PASSED un-skipped in the listings.
   Exception EKO-1-12/R-32 removed by this check-off. Dev assumptions A-01/A-02 ratified at gate 2.
 
+- [ ] **EKO-1-29** — Give the tracked-additions secret scan raw-format teeth (#120).
+  *Done when:* `SECRET_ENV_ASSIGNMENT` in `backend/tests/static/test_eko112_k06_synthetic_and_secret_free.py`
+  flags raw `NAME=value` assignment shapes in scanned files (not only diff-form `+`-prefixed lines),
+  proven by a committed plaintext plant turning the scan red and its removal turning it green, in a
+  scanned path beyond `proxy/` if the plant design demands; the widened prefix set from EKO-1-12 stays
+  intact; exception EKO-1-12/Q3-1 is removed at this task's gate 3; the Q3-2 formatter-drift half is
+  re-checked against current main and recorded as already fixed or given its own carrier.
+  **Out of scope (explicit):** changing what counts as a secret value beyond assignment shape; CI
+  wiring; the runtime-side log scans.
+  After EKO-1-12.
+
 ## EKO-2 — Access
 
 - [ ] **EKO-2-01** — Require login for the whole application.

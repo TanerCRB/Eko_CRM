@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-13",
+  "task": "EKO-1-29",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "High",
+  "agentId": "acf8963922a8ec7f7",
+  "tokens": 79621,
+  "tokenSplit": null,
+  "tokensSource": "task-notification",
+  "measured": "record",
+  "toolCalls": 35,
+  "seconds": 1276,
+  "fixRound": 2,
+  "reworkCause": null,
+  "notes": "round-2 delta PASS 0/0/0/0 at f9e4c1ca; G-01A/B + G-03 closed by own probes; base-vs-head floor: 45-shape corpus AND full 45-file line-by-line scan 0 flips; the three adjudicated held-flips all named in evidence (comma-selfref former false positive, obfuscated $-values, lone-\\r unreachable via universal-newline read proven through repo.py); 25 pre-existing functions + all shared shape constants byte-identical by getsource import-compare; only mechanism regexes changed; c9 re-run proves rewritten evidence region inert; Q3-1 present as required; token totals from harness (gateway persists no usage)"
+}

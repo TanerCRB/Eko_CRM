@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-12",
+  "task": "EKO-1-29",
+  "phase": "verification",
+  "role": "reviewer",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "ac89c381209a8a70c",
+  "tokens": 69159,
+  "tokenSplit": null,
+  "tokensSource": "task-notification",
+  "measured": "record",
+  "toolCalls": 29,
+  "seconds": 1524,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "STOP 0/0/3/1; R-01 mid-line raw shapes unguarded (export second slot, chains, -e forms); R-02 path-blind self-reference hold suppresses PASSWORD=password class in shell; R-03 QUADRATIC regression measured 10k=8.6s vs base 0.2ms (contradicts auditor inherited reading); R-04 splitlines phantom line numbers; QA target list named; author-claims adjudicated incl. the 11-functions count error (8)"
+}
