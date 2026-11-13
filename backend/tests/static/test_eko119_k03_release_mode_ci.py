@@ -4,7 +4,10 @@ runs, and nothing in it writes to the registry. Each check fails on a one-change
 
 The unchanged-job and unchanged-release checks are EKO-1-19's claims and are judged on PR #96's
 parents (EKO_1_19_BASE, EKO_1_19_HEAD), read through Git objects only (EKO-1-23, #110): never
-`$CHANGESET_BASE`, `origin/main` or the working tree. "Builds once" stays judged on the live file.
+`$CHANGESET_BASE`, `origin/main` or the working tree. "Builds once" stays judged on the live file:
+EKO-1-26 widened that live invariant to the five project images, and its carrier is the dedicated
+test below, so EKO-1-19's pair claims stay insensitive to the working tree (EKO-1-23's harness
+K-05 block judges that carrier with a swapped live tree).
 """
 
 import copy
@@ -89,32 +92,14 @@ def job_blocks(text: str) -> dict[str, str]:
     return trimmed
 
 
-def masked_block(name: str, block: str) -> str:
-    """A job's block for the byte comparison: a retuned `timeout-minutes` is masked on every job
-    (EKO-1-20), the exact keycloak pre-build block is dropped once from the release-mode job only
-    (EKO-1-12 fix round 3, the F-1 pattern of the parsed half in rw._revert_allowed)."""
-    masked = wc.timeout_lines_masked(block)
-    if name == rw.RELEASE_MODE_CI_JOB:
-        masked = wc.keycloak_prebuild_lines_masked(masked)
-    return masked
-
-
 def assert_existing_jobs_unchanged(base: str, head: str) -> None:
-    """Byte-identical but for a retuned `timeout-minutes` (wc.timeout_lines_masked, EKO-1-20) and
-    the one exact keycloak pre-build block (wc.keycloak_prebuild_lines_masked, EKO-1-12)."""
-    before = {n: masked_block(n, b) for n, b in job_blocks(base).items()}
-    after = {n: masked_block(n, b) for n, b in job_blocks(head).items()}
+    """Byte-identical but for a retuned `timeout-minutes` (wc.timeout_lines_masked, EKO-1-20)."""
+    before = {n: wc.timeout_lines_masked(b) for n, b in job_blocks(base).items()}
+    after = {n: wc.timeout_lines_masked(b) for n, b in job_blocks(head).items()}
     assert {name: after.get(name) for name in before} == before
     base_flow, head_flow = yaml.safe_load(base), yaml.safe_load(head)
-    base_jobs = {
-        name: wc.timeout_masked(rw.drop_keycloak_prebuild(name, job))
-        for name, job in base_flow["jobs"].items()
-    }
-    now_jobs = {
-        name: wc.timeout_masked(rw.drop_keycloak_prebuild(name, head_flow["jobs"].get(name)))
-        for name in base_jobs
-    }
-    assert now_jobs == base_jobs
+    base_jobs = {name: wc.timeout_masked(job) for name, job in base_flow["jobs"].items()}
+    assert {name: wc.timeout_masked(head_flow["jobs"].get(name)) for name in base_jobs} == base_jobs
     head_keys = {k: v for k, v in head_flow.items() if k != "jobs"}
     assert head_keys == {k: v for k, v in base_flow.items() if k != "jobs"}
 
@@ -135,6 +120,13 @@ def test_eko119_k03_every_existing_ci_job_is_byte_identical() -> None:
 def test_eko119_k06_release_workflow_unchanged() -> None:
     base, head = eko_1_19_pair(RELEASE)
     assert base is not None and base == head
+
+
+def test_eko126_k04_live_release_builds_the_five_project_images_once() -> None:
+    """EKO-1-19's "builds once", judged on the live `release.yml` — what every head must meet
+    (ADR-0004-C31). EKO-1-26 K-04 widened the family to the custom Keycloak image; the live half
+    moves out of the pair-identical check here so the pair stays the pair and this stays live.
+    EKO-1-23's harness K-05 block reads exactly this carrier with a swapped live tree."""
     assert rw.build_once_violations(release()) == []
 
 
@@ -216,19 +208,32 @@ def _build_flag(flow: Workflow) -> None:
     step["run"] = step["run"].replace("backup\n", "backup --no-cache\n")
 
 
+def _save_without_keycloak(flow: Workflow) -> None:
+    """EKO-1-26 K-04: the archive loses the custom Keycloak image — drift between the files."""
+    step = rm._step(flow, rm.BUILD_JOB, "docker save")[1]
+    step["run"] = step["run"].replace(" eko-crm/keycloak:checked", "")
+
+
+def _keycloak_id_dropped(flow: Workflow) -> None:
+    """EKO-1-26 K-04: an identity step that is not given the keycloak ID verifies four of five."""
+    steps = [s for s in _job(flow)["steps"] if rw.IDENTITY in str(s.get("run", ""))]
+    del steps[0]["env"]["KEYCLOAK_ID"]
+
+
+def _keycloak_id_output_dropped(flow: Workflow) -> None:
+    del _job(flow, rm.BUILD_JOB)["outputs"]["keycloak-id"]
+
+
 def _setup_uv_in_build(flow: Workflow) -> None:
     _job(flow, rm.BUILD_JOB)["steps"].insert(1, {"uses": "astral-sh/setup-uv@" + "0" * 40})
 
 
-def _prebuild_after_snapshot(flow: Workflow) -> None:
-    """The EKO-1-12 keycloak pre-build step moved after the K-04 snapshot (EKO-1-12 fix round 3):
-    the session would then build the image itself and K-04 would flag its new name."""
-    steps = _job(flow)["steps"]
-    prebuild_at = rm._step(flow, rm.RELEASE_MODE_JOB, rm.KEYCLOAK_PREBUILD)[0]
-    assert prebuild_at >= 0, "the keycloak pre-build step in ci.yml"
-    step = steps.pop(prebuild_at)
-    snapshot_at = rm._step(flow, rm.RELEASE_MODE_JOB, rm.SNAPSHOT)[0]
-    steps.insert(snapshot_at + 1, step)
+def _rebuilds_in_release_mode(flow: Workflow) -> None:
+    """EKO-1-26 K-01/K-02 (route A): a Compose build step re-enters the release-mode job. The
+    transitional EKO-1-12 allowance (its pre-build step, tolerated only before the K-04 snapshot)
+    is gone — the fifth image is placed checked and built outside the session — so a build in
+    this job is red wherever it sits, not tolerated anywhere."""
+    _append_run("docker compose --profile dev build keycloak")(flow)
 
 
 PR_ONLY = f"github.event_name == 'pull_request' && {wc.TRIGGER_CONDITION}"
@@ -238,6 +243,10 @@ PLANTS: dict[str, Callable[[Workflow], None]] = {
     "checked-images-empty": _env("EKO_CHECKED_IMAGES", ""),
     "checked-images-three": _env(
         "EKO_CHECKED_IMAGES", " ".join(p for p in rm.CHECKED_PAIRS if "backup" not in p)
+    ),
+    # EKO-1-26 K-04: the family list missing only keycloak (the fourth pair kept) is drift.
+    "checked-images-no-keycloak": _env(
+        "EKO_CHECKED_IMAGES", " ".join(p for p in rm.CHECKED_PAIRS if not p.startswith("keycloak"))
     ),
     "pytest-narrowed": _narrowed,
     "pull-request-only": _set_job("if", PR_ONLY),
@@ -252,12 +261,16 @@ PLANTS: dict[str, Callable[[Workflow], None]] = {
     "build-flag-added": _build_flag,
     "no-save": _drop_step(rm.BUILD_JOB, "docker save"),
     "setup-uv-in-build": _setup_uv_in_build,
+    # EKO-1-26 K-04: keycloak prepared in one place only must not drift from the release run.
+    "save-drops-keycloak": _save_without_keycloak,
+    "identity-drops-keycloak-id": _keycloak_id_dropped,
+    "build-drops-keycloak-id-output": _keycloak_id_output_dropped,
     # K-04 (i), (ii) wiring
     "no-identity-after-tests": _last_identity_dropped,
     "no-snapshot": _drop_step(rm.RELEASE_MODE_JOB, rm.SNAPSHOT),
     "no-session-check": _drop_step(rm.RELEASE_MODE_JOB, rm.SESSION_CHECK),
-    # K-04 (iii) (EKO-1-12 fix round 3): the keycloak pre-build before the snapshot
-    "prebuild-after-snapshot": _prebuild_after_snapshot,
+    # K-04 (iii) (EKO-1-26): the release-mode job builds nothing — the superseded pre-build is red
+    "release-mode-rebuilds-keycloak": _rebuilds_in_release_mode,
     # K-06 (b)
     "docker-push": _append_run("docker push eko-crm/backend:checked"),
     "tag-for-registry": _append_run("docker tag eko-crm/backend:checked ghcr.io/tanercrb/x:1"),

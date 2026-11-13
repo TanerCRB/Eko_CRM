@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-13",
+  "task": "EKO-1-26",
+  "phase": "code",
+  "role": "developer-infrastructure",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Low",
+  "agentId": "a5c681948c8fca839",
+  "tokens": "no data",
+  "tokenSplit": null,
+  "tokensSource": "none",
+  "measured": "by hand",
+  "toolCalls": 24,
+  "seconds": 995,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "merge-resolution round (bootstrap (e)/(f) keep-both, self-test 17/17, 138 targeted green); the cost-capture record for agent a5c68194 aggregates rounds 1-3 + this round in rows 38/40 already — writing a per-round delta here would double-count; toolCalls/seconds from the notification usage line; report at .task/handoff/ (inline in PR thread)"
+}

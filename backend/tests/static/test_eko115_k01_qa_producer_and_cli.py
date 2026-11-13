@@ -55,9 +55,13 @@ def _cli(argv: list[str]) -> tuple[int, str]:
 
 
 def _render(tmp_path: Path) -> Path:
+    # EKO-1-26 route A: keycloak is a pushed project image, so its digest arrives in the pushes'
+    # file like the other four; the command names no keycloak reference (K-03).
     pushes = tmp_path / "digests.env"
     pushes.write_text(
-        "".join(f"{n}={DIGESTS[n]}\n" for n in ("backend", "frontend", "proxy", "backup")),
+        "".join(
+            f"{n}={DIGESTS[n]}\n" for n in ("backend", "frontend", "proxy", "backup", "keycloak")
+        ),
         encoding="utf-8",
     )
     target = tmp_path / "compose.release.yaml"
@@ -70,8 +74,6 @@ def _render(tmp_path: Path) -> Path:
             str(pushes),
             "--postgres",
             DIGESTS["postgres"],
-            "--keycloak",
-            DIGESTS["keycloak"],
             "--out",
             str(target),
         ]

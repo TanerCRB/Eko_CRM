@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-13",
+  "task": "EKO-1-26",
+  "phase": "verification",
+  "role": "qa",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Medium",
+  "agentId": "a60dce8abd1075452",
+  "tokens": 7667936,
+  "tokenSplit": { "input": 108, "output": 15254, "cacheWrite": 432671, "cacheRead": 7219903 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 17,
+  "seconds": 6501,
+  "fixRound": 2,
+  "reworkCause": "re-verification of fix round 2 (F-3) per the STOP-reverification rule — the round-1 mutation M10b survival opened F-3; earlier catcher: the Developer's own round-1 self-check of trap/exit paths against its comment claim",
+  "notes": "delta of cumulative record vs row 37; verdict PROOF HOLDS @56aec0a, 0 new findings, 6 mutations (5 killed + 1 EQUIVALENT recorded); pre-fix red independently reproduced via git-show swap; boundary: test dirs only"
+}

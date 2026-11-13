@@ -135,6 +135,8 @@ jobs:
 
   # The one build of the project images (ADR-0004-C31). ADR-0001-C4: Docker only, no Python or
   # Node.js on the runner. The image IDs are this run's identity of each image from here on.
+  # EKO-1-26 route A: the custom Keycloak image is the fifth project image — built from identity/,
+  # checked like the others, pushed by the publish job, named by that push's digest.
   images:
     name: image builds and image checks
     needs: admission
@@ -145,6 +147,7 @@ jobs:
       frontend-id: ${{ steps.ids.outputs.frontend }}
       proxy-id: ${{ steps.ids.outputs.proxy }}
       backup-id: ${{ steps.ids.outputs.backup }}
+      keycloak-id: ${{ steps.ids.outputs.keycloak }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -155,17 +158,18 @@ jobs:
           docker build -t eko-crm/frontend:checked frontend
           docker build -t eko-crm/proxy:checked proxy
           docker build -t eko-crm/backup:checked backup
+          docker build -t eko-crm/keycloak:checked identity
       - name: Image checks (ADR-0001-C5, ADR-0004-C9)
-        run: bash scripts/image-check.sh --frontend eko-crm/frontend:checked eko-crm/backend:checked eko-crm/frontend:checked eko-crm/proxy:checked eko-crm/backup:checked
+        run: bash scripts/image-check.sh --frontend eko-crm/frontend:checked eko-crm/backend:checked eko-crm/frontend:checked eko-crm/proxy:checked eko-crm/backup:checked eko-crm/keycloak:checked
       - name: Record image IDs
         id: ids
         shell: bash
         run: |
-          for name in backend frontend proxy backup; do
+          for name in backend frontend proxy backup keycloak; do
             echo "$name=$(docker image inspect --format '{{.Id}}' "eko-crm/$name:checked")" >> "$GITHUB_OUTPUT"
           done
       - name: Save the checked images
-        run: docker save -o "$RUNNER_TEMP/checked-images.tar" eko-crm/backend:checked eko-crm/frontend:checked eko-crm/proxy:checked eko-crm/backup:checked
+        run: docker save -o "$RUNNER_TEMP/checked-images.tar" eko-crm/backend:checked eko-crm/frontend:checked eko-crm/proxy:checked eko-crm/backup:checked eko-crm/keycloak:checked
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: checked-images
@@ -186,7 +190,6 @@ jobs:
       packages: read
     outputs:
       postgres: ${{ steps.pulled-digests.outputs.postgres }}
-      keycloak: ${{ steps.pulled-digests.outputs.keycloak }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -204,6 +207,7 @@ jobs:
           FRONTEND_ID: ${{ needs.images.outputs.frontend-id }}
           PROXY_ID: ${{ needs.images.outputs.proxy-id }}
           BACKUP_ID: ${{ needs.images.outputs.backup-id }}
+          KEYCLOAK_ID: ${{ needs.images.outputs.keycloak-id }}
         run: |
           docker load -i "$RUNNER_TEMP/checked-images.tar"
           bash scripts/release-images.sh check-identity
@@ -223,11 +227,13 @@ jobs:
       - name: Runtime tests on the checked images
         working-directory: backend
         env:
-          EKO_CHECKED_IMAGES: "backend=eko-crm/backend:checked frontend=eko-crm/frontend:checked proxy=eko-crm/proxy:checked backup=eko-crm/backup:checked"
+          EKO_CHECKED_IMAGES: "backend=eko-crm/backend:checked frontend=eko-crm/frontend:checked proxy=eko-crm/proxy:checked backup=eko-crm/backup:checked keycloak=eko-crm/keycloak:checked"
           RELEASE_RECORD_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.admission.outputs.tag }}
         run: uv run pytest -m "runtime or previous_release" tests/runtime -v
-      # The postgres and keycloak the runtime tests pulled by tag: the release names these digests.
+      # The postgres the runtime tests pulled by tag: the release names this digest. EKO-1-26
+      # route A: the custom keycloak image is a project image — its digest is the publish job's
+      # own push record below, and nothing here demands a registry digest it does not publish.
       - name: Record the third-party digests the runtime tests ran
         id: pulled-digests
         shell: bash
@@ -258,6 +264,7 @@ jobs:
           FRONTEND_ID: ${{ needs.images.outputs.frontend-id }}
           PROXY_ID: ${{ needs.images.outputs.proxy-id }}
           BACKUP_ID: ${{ needs.images.outputs.backup-id }}
+          KEYCLOAK_ID: ${{ needs.images.outputs.keycloak-id }}
         run: |
           docker load -i "$RUNNER_TEMP/checked-images.tar"
           bash scripts/release-images.sh check-identity
@@ -289,6 +296,8 @@ jobs:
           ACTOR: ${{ github.actor }}
         run: printf '%s' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
       # Push the loaded images under the release tag; the digests are the registry's answer.
+      # EKO-1-26 route A: the five project images — the custom keycloak among them — are pushed
+      # here, and this record (`digests.env`) is the only source of their digests.
       - name: Push the checked images
         shell: bash
         env:
@@ -297,15 +306,15 @@ jobs:
           FRONTEND_ID: ${{ needs.images.outputs.frontend-id }}
           PROXY_ID: ${{ needs.images.outputs.proxy-id }}
           BACKUP_ID: ${{ needs.images.outputs.backup-id }}
+          KEYCLOAK_ID: ${{ needs.images.outputs.keycloak-id }}
         run: bash scripts/release-images.sh push "$RELEASE_TAG" > "$RUNNER_TEMP/digests.env"
       - name: Render and check the release composition (ADR-0004-C29)
         working-directory: backend
         env:
           RELEASE_TAG: ${{ needs.admission.outputs.tag }}
           POSTGRES_DIGEST: ${{ needs.runtime.outputs.postgres }}
-          KEYCLOAK_DIGEST: ${{ needs.runtime.outputs.keycloak }}
         run: |
-          uv run python -m tests.support.release_composition render --tag "$RELEASE_TAG" --digests "$RUNNER_TEMP/digests.env" --postgres "$POSTGRES_DIGEST" --keycloak "$KEYCLOAK_DIGEST" --out "$RUNNER_TEMP/compose.release.yaml"
+          uv run python -m tests.support.release_composition render --tag "$RELEASE_TAG" --digests "$RUNNER_TEMP/digests.env" --postgres "$POSTGRES_DIGEST" --out "$RUNNER_TEMP/compose.release.yaml"
           uv run python -m tests.support.release_composition check --composition "$RUNNER_TEMP/compose.release.yaml"
       # The release exists from this step on; publish refuses a tag the record already holds.
       - name: Publish the release composition

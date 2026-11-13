@@ -70,12 +70,23 @@ def test_eko115_k01_release_composition_passes_the_digest_rule() -> None:
 
 def test_eko115_k01_project_images_name_the_given_digests() -> None:
     services = source(release_text())["services"]
-    for name in ("backend", "frontend", "proxy", "backup"):
+    # EKO-1-26 route A: the custom Keycloak image is the fifth project image — it names the
+    # project registry like the four before it, not a pulled third-party location.
+    for name in ("backend", "frontend", "proxy", "backup", "keycloak"):
         assert services[name]["image"] == f"ghcr.io/tanercrb/eko-crm/{name}:{TAG}@{DIGESTS[name]}"
     for name in ("migrate", "worker"):
         assert services[name]["image"] == services["backend"]["image"]
     assert services["postgres"]["image"] == f"{PG}@{DIGESTS['postgres']}"
-    assert services["keycloak"]["image"].endswith(f"@{DIGESTS['keycloak']}")
+
+
+def test_eko126_k03_release_names_the_custom_image_not_the_official_repository() -> None:
+    """EKO-1-26 K-03: whose digest the reference carries is a fact the digest form cannot show —
+    `c29_violations` passes a reference from the official repository with any digest alike
+    (finding B-01's substitution), so the rendered location itself is asserted here."""
+    image = str(source(release_text())["services"]["keycloak"]["image"])
+    assert image == f"{rc.PROJECT_REGISTRY}/keycloak:{TAG}@{DIGESTS['keycloak']}"
+    assert "keycloak/keycloak" not in image
+    assert not image.startswith("quay.io")
 
 
 @pytest.mark.parametrize("service", ["backend", "postgres", "keycloak"])
