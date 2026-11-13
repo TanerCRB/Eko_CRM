@@ -1478,3 +1478,25 @@ store rather than add an unproven provider or weaken event coverage.
 - **C — Remove `RESET_PASSWORD_ERROR`, `LOGIN`, or another required stored event type.** This is not
   an acceptable resolution: it weakens required audit coverage and the accepted retention rule
   instead of removing only the prohibited value.
+
+### 2026-11-11 — *Retention*'s stored event types are the reachable set (EKO-1-12, #53; the human's gate-2 decision of 2026-11-09)
+
+**What it decides.** Under the configuration EKO-1-12 ships — image
+`localhost/eko-crm/keycloak:26.8.1-eko112` with the ADR-0007 option-A provider, the versioned realm
+exports of both realms and the ordered bootstrap — Keycloak 26.8.1 emits neither `RESET_PASSWORD`
+nor any event that disables an account on brute force (`USER_DISABLED_BY_BRUTE_FORCE` has no
+`EventType` constant in the shipped build). The stored-event-type lists of *Retention* and of
+*Keycloak events off the server* are judged against the **reachable set**: the event types the
+accepted configuration can actually emit. A type the shipped configuration never emits is not a
+stored event and enters no retention count.
+
+**What it does not relax.** No audit coverage is reduced and no retention figure changes. The
+controls the two names stand for are proven otherwise and stayed proven at EKO-1-12: the
+password-reset request is stored as `SEND_RESET_PASSWORD`, and the brute-force lockout is proven
+behaviorally — a locked-out account loses access within the accepted bounds (K-05,
+`docs/evidence/EKO-1-12/reset-timing.md`).
+
+**Recorded as.** Exception EKO-1-12/G-02 (`docs/architecture/exception-register.md`, blocks again
+2026-11-30). Any later image, provider or realm-export change that makes such a type emittable
+re-opens this addendum: *Retention*'s lists must be re-derived from the then-reachable set and the
+exception re-assessed at that task's gate 2.
