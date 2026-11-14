@@ -8,11 +8,12 @@ identifiers, in `HttpOnly` `__Host-` cookies.
 
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, ConfigDict
 
 from app.auth.gate import LOGIN_COOKIE, SESSION_COOKIE, authenticator, current_caller
-from app.auth.sessions import LoginRefused
+from app.auth.sessions import LoginRefused, Unavailable
+from app.data.sessions import StorageUnavailable
 from app.domain.caller import Caller
 from app.domain.session_policy import ABSOLUTE_LIMIT, LOGIN_TRANSACTION_VALIDITY
 
@@ -59,9 +60,10 @@ def _clear(response: Response, name: str, samesite: Literal["lax", "strict"]) ->
     response.delete_cookie(name, path="/", secure=True, httponly=True, samesite=samesite)
 
 
-_REFUSED: dict[int | str, dict[str, Any]] = {
-    400: {"model": Problem, "description": "Login refused; no session was created."}
-}
+# A refused or unavailable callback is a top-level navigation the SPA never sees, so it goes to
+# the SPA's failure page instead of a JSON body (Reviewer R-03).
+LOGIN_FAILED_PAGE = "/logowanie-nieudane"
+_LOGIN_UNAVAILABLE: dict[int | str, dict[str, Any]] = {503: {"model": Problem}}
 _UNAUTHENTICATED: dict[int | str, dict[str, Any]] = {
     401: {"model": Problem},
     403: {"model": Problem},
@@ -74,7 +76,10 @@ _UNAUTHENTICATED: dict[int | str, dict[str, Any]] = {
     operation_id="login_start",
     status_code=303,
     response_model=Redirect,
-    responses={303: {"model": Redirect, "description": "To the identity server's login page."}},
+    responses={
+        303: {"model": Redirect, "description": "To the identity server's login page."},
+        **_LOGIN_UNAVAILABLE,
+    },
 )
 def login_start(request: Request, response: Response, return_to: str | None = None) -> Redirect:
     started = authenticator(request).start_login(return_to)
@@ -95,7 +100,15 @@ def login_start(request: Request, response: Response, return_to: str | None = No
     operation_id="login_callback",
     status_code=303,
     response_model=Redirect,
-    responses={303: {"model": Redirect, "description": "To the requested page."}, **_REFUSED},
+    responses={
+        303: {
+            "model": Redirect,
+            "description": (
+                f"To the requested page; to {LOGIN_FAILED_PAGE} when the login was refused or "
+                "could not be completed, with no session created."
+            ),
+        }
+    },
 )
 def login_callback(
     request: Request,
@@ -112,14 +125,9 @@ def login_callback(
             error,
             request.cookies.get(SESSION_COOKIE),
         )
-    except LoginRefused:
-        cleared = Response()
-        _clear(cleared, LOGIN_COOKIE, "lax")
-        raise HTTPException(
-            status_code=400,
-            detail="login refused",
-            headers={"set-cookie": cleared.headers["set-cookie"]},
-        ) from None
+    except (LoginRefused, Unavailable, StorageUnavailable):
+        _clear(response, LOGIN_COOKIE, "lax")
+        return _redirect(response, LOGIN_FAILED_PAGE)
     _clear(response, LOGIN_COOKIE, "lax")
     response.set_cookie(
         SESSION_COOKIE,

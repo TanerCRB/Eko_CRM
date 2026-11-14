@@ -9,6 +9,7 @@ a five-second timeout. Nothing here logs a token, code, state, nonce, verifier o
 
 import json
 import logging
+import re
 import threading
 import urllib.parse
 from dataclasses import dataclass
@@ -27,8 +28,12 @@ CALL_TIMEOUT_SECONDS = 5.0
 _PROTOCOL = "/protocol/openid-connect"
 # A token carrying either is never stored (ADR-0003 *Browser flow*, ADR-0003-C20).
 FORBIDDEN_CLAIMS = ("email", "preferred_username")
-# An unknown key identifier refetches the key set at most this often.
+# The key set is fetched at most this often, a failed attempt included (Reviewer R-01).
 _REFETCH_SECONDS = 10.0
+# The only OAuth error that means the user's grant was refused; any other code is the backend's
+# own fault (a wrong client secret) or Keycloak's, never the session's (Reviewer R-02).
+REFUSAL_CODE = "invalid_grant"
+_ERROR_CODE = re.compile(r"[a-z_]{1,64}")
 
 
 class IdentityRefused(Exception):
@@ -101,7 +106,9 @@ class OidcClient:
         self._http = http
         self._keys: dict[str, Any] = {}
         self._keys_lock = threading.Lock()
-        self._fetched_at: float | None = None
+        self._attempted_at: float | None = None
+        self._last_attempt_failed = False
+        self._fetching: threading.Event | None = None
 
     # Calls -------------------------------------------------------------------------------------
 
@@ -142,8 +149,13 @@ class OidcClient:
             except ValueError:
                 body = None
         if answer.status_code in (400, 401) and isinstance(body, dict):
-            if isinstance(body.get("error"), str):
+            code = body.get("error")
+            if code == REFUSAL_CODE:
                 raise IdentityRefused
+            if isinstance(code, str):
+                named = code if _ERROR_CODE.fullmatch(code) else "unrecognised"
+                logger.warning("identity server rejected the backend's request: %s", named)
+                raise IdentityUnavailable
         if answer.status_code != expected:
             logger.warning("identity server answered status %s", answer.status_code)
             raise IdentityUnavailable
@@ -177,9 +189,9 @@ class OidcClient:
 
     # Verification ------------------------------------------------------------------------------
 
-    def _fetch_keys(self) -> None:
+    def _fetch_keys(self, timeout: float) -> dict[str, Any]:
         try:
-            answer = self._http.get(f"{self._internal}{_PROTOCOL}/certs")
+            answer = self._http.get(f"{self._internal}{_PROTOCOL}/certs", timeout=timeout)
             answer.raise_for_status()
             listed = answer.json().get("keys", [])
         except (httpx.HTTPError, ValueError, AttributeError) as exc:
@@ -195,18 +207,52 @@ class OidcClient:
                 keys[entry["kid"]] = jwt.PyJWK(entry, algorithm="RS256").key
             except jwt.PyJWKError:
                 continue
-        self._keys = keys
+        return keys
 
-    def _key(self, kid: object, clock: Clock) -> Any:
+    def _key(self, kid: object, clock: Clock, deadline: float) -> Any:
+        """The key for `kid`: a cached key needs no lock; otherwise one fetch is in flight for
+        every request, and a request waits for it no longer than its own deadline."""
         if not isinstance(kid, str):
             raise TokenInvalid
-        with self._keys_lock:
-            if kid not in self._keys and (
-                self._fetched_at is None or clock.monotonic() - self._fetched_at >= _REFETCH_SECONDS
-            ):
-                self._fetch_keys()
-                self._fetched_at = clock.monotonic()
-            key = self._keys.get(kid)
+        cached = self._keys.get(kid)
+        if cached is not None:
+            return cached
+        while True:
+            with self._keys_lock:
+                cached = self._keys.get(kid)
+                if cached is not None:
+                    return cached
+                pending = self._fetching
+                if pending is None:
+                    now = clock.monotonic()
+                    last = self._attempted_at
+                    if last is not None and now - last < _REFETCH_SECONDS:
+                        # Within the interval the last attempt's outcome stands.
+                        if self._last_attempt_failed:
+                            raise IdentityUnavailable
+                        raise TokenInvalid
+                    self._attempted_at = now
+                    self._fetching = threading.Event()
+            if pending is None:
+                return self._fetch_for(kid, clock, deadline)
+            remaining = deadline - clock.monotonic()
+            if remaining <= 0 or not pending.wait(remaining):
+                raise IdentityUnavailable
+
+    def _fetch_for(self, kid: str, clock: Clock, deadline: float) -> Any:
+        fetched: dict[str, Any] | None = None
+        try:
+            timeout = max(0.1, min(CALL_TIMEOUT_SECONDS, deadline - clock.monotonic()))
+            fetched = self._fetch_keys(timeout)
+        finally:
+            with self._keys_lock:
+                if fetched is not None:
+                    self._keys = fetched
+                self._last_attempt_failed = fetched is None
+                done, self._fetching = self._fetching, None
+            if done is not None:
+                done.set()
+        key = self._keys.get(kid)
         if key is None:
             raise TokenInvalid
         return key
@@ -218,7 +264,7 @@ class OidcClient:
             raise TokenInvalid from None
         if header.get("alg") != "RS256":
             raise TokenInvalid
-        key = self._key(header.get("kid"), clock)
+        key = self._key(header.get("kid"), clock, clock.monotonic() + CALL_TIMEOUT_SECONDS)
         try:
             claims: dict[str, Any] = jwt.decode(
                 token,

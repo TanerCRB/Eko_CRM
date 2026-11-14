@@ -92,16 +92,18 @@ def layers(image: str) -> list[str]:
 
 
 def official_base() -> str:
-    """The official base the Dockerfile names, by repository and its pinned version."""
+    """The official base exactly as the Dockerfile pins it: tag and index digest (B-02)."""
     text = tc.DOCKERFILE.read_text(encoding="utf-8")
-    return BASE_REPOSITORY + ":" + tc.base_version(text)
+    reference = tc.base_reference(text)
+    assert reference.startswith(BASE_REPOSITORY + ":") and "@sha256:" in reference
+    return reference
 
 
 def changes_against_base(image: str) -> set[str]:
     base = official_base()
-    if layers(base) != layers(image)[: len(layers(base))]:
-        # The tag may have moved upstream since this host last pulled it; the build used the
-        # current one, so the comparison must too.
+    present = subprocess.run(["docker", "image", "inspect", base], capture_output=True, check=False)
+    if present.returncode != 0:
+        # The pinned base is not on this host yet: fetch exactly that digest.
         docker("pull", "-q", base, timeout=1200)
     base_layers = layers(base)
     assert base_layers == layers(image)[: len(base_layers)], "the image is not built on its base"

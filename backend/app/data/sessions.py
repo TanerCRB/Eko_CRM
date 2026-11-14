@@ -166,6 +166,17 @@ class SessionStore:
             )
             connection.commit()
 
+    def count_transactions_since(self, created_after: datetime) -> int:
+        """Transactions created after the instant (an index on `created_at` serves it)."""
+        with self._connection() as connection:
+            count = connection.execute(
+                select(func.count())
+                .select_from(LoginTransaction)
+                .where(LoginTransaction.created_at > created_after)
+            ).scalar_one()
+            connection.commit()
+        return int(count)
+
     def take_transaction(self, transaction_hash: str) -> StoredTransaction | None:
         """Deletes the transaction and returns it: a callback consumes it whatever its outcome."""
         with self._connection() as connection:
@@ -269,7 +280,15 @@ class SessionStore:
                 connection.commit()
             finally:
                 if free:
-                    _unlock(connection, session_id)
+                    # The holder's release rule (Reviewer R-04): a failed read leaves the
+                    # transaction aborted, so roll back first; if the unlock still fails, the
+                    # connection is closed, which releases the lock.
+                    try:
+                        connection.rollback()
+                        _unlock(connection, session_id)
+                    except SQLAlchemyError:
+                        connection.invalidate()
+                        raise
         return Probe(found, free)
 
     # Retention ---------------------------------------------------------------------------------

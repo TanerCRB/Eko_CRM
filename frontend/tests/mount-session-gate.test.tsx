@@ -68,6 +68,62 @@ describe("K-03: the page the entry mounts is behind the session gate", () => {
   });
 });
 
+describe("R-03: the refused-login page is the one destination outside the session gate", () => {
+  it.each(["/logowanie-nieudane", "/logowanie-nieudane?powod=x"])(
+    "renders %s without asking for the session and without redirecting",
+    async (path) => {
+      window.history.replaceState(null, "", path);
+      const { calls } = stubFetch({ [SESSION_URL]: [unauthenticated] });
+      mountPage();
+
+      expect(
+        screen.getByRole("heading", { level: 1, name: "Logowanie nie powiodło się" }),
+      ).toBeVisible();
+      expect(screen.getByRole("button", { name: "Spróbuj ponownie" })).toBeInTheDocument();
+      // Let any request or redirect a gate would start settle before asserting none happened.
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(calls).toEqual([]);
+      expect(assign).not.toHaveBeenCalled();
+      expect(shell()).not.toBeInTheDocument();
+    },
+  );
+
+  it("starts one new login to the root page from 'Spróbuj ponownie'", async () => {
+    window.history.replaceState(null, "", "/logowanie-nieudane");
+    const { calls } = stubFetch({});
+    mountPage();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "Spróbuj ponownie" }));
+
+    expect(assign).toHaveBeenCalledExactlyOnceWith("/api/auth/login?return_to=%2F");
+    expect(calls).toEqual([]);
+  });
+
+  it.each(["/", "/klienci", "/logowanie-nieudane-x", "/logowanie-nieudane/", "/x/logowanie-nieudane"])(
+    "contrast: %s still checks the session and redirects an anonymous visit",
+    async (path) => {
+      window.history.replaceState(null, "", path);
+      const { calls } = stubFetch({ [SESSION_URL]: [unauthenticated] });
+      mountPage();
+
+      await waitFor(() => {
+        expect(assign).toHaveBeenCalledExactlyOnceWith(
+          `/api/auth/login?return_to=${encodeURIComponent(path)}`,
+        );
+      });
+      // StrictMode runs the gate's effect twice in development, so count is not the claim here.
+      expect(calls.length).toBeGreaterThan(0);
+      expect(new Set(calls.map((call) => call.url))).toEqual(new Set([SESSION_URL]));
+      expect(
+        screen.queryByRole("heading", { name: "Logowanie nie powiodło się" }),
+      ).not.toBeInTheDocument();
+    },
+  );
+});
+
 // Records every touch of a browser store, so the auth flow is proven to use none of them.
 function trapBrowserStores() {
   const touched: string[] = [];
@@ -138,6 +194,22 @@ describe("K-01/K-02 boundary: the frontend never touches cookies or browser stor
       Reflect.get(document, "cookie");
       Reflect.get(window, "localStorage");
       expect(stores.touched).toEqual(["cookie:read", "localStorage:read"]);
+    } finally {
+      stores.restore();
+    }
+  });
+
+  it("R-03: the refused-login page and its new login touch no cookie or browser store", async () => {
+    const stores = trapBrowserStores();
+    try {
+      window.history.replaceState(null, "", "/logowanie-nieudane");
+      stubFetch({});
+      mountPage();
+      const user = userEvent.setup();
+      await user.click(screen.getByRole("button", { name: "Spróbuj ponownie" }));
+
+      expect(assign).toHaveBeenCalledExactlyOnceWith("/api/auth/login?return_to=%2F");
+      expect(stores.touched).toEqual([]);
     } finally {
       stores.restore();
     }

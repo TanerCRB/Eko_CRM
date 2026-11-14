@@ -34,6 +34,7 @@ EXPORT_REALM_SETTINGS = (
     "passwordPolicy",
     "ssoSessionIdleTimeout",
     "ssoSessionMaxLifespan",
+    "accessCodeLifespanLogin",
     "browserFlow",
 )
 CALLBACK_PATH = "/api/auth/callback"
@@ -464,10 +465,7 @@ def configure_application(client: ApiClient) -> None:
     assign_client_roles(client, token, "master", reviewer["id"], "eko-realm", REVIEWER_ROLES)
     realm = request(client, "GET", "/admin/realms/eko", token=token).body
     expected = export_settings()
-    if expected["browserFlow"] not in flow_aliases(client, token):
-        # A realm created before the export carried this flow; a partial import cannot add it.
-        emit("application security settings not applied")
-        raise SystemExit(7)
+    require_browser_flow(client, token, expected)
     realm.update(expected)
     development = setting("EKO112_DEVELOPMENT", "true") == "true"
     realm["resetPasswordAllowed"] = development
@@ -502,6 +500,15 @@ def export_settings() -> dict[str, Any]:
 def flow_aliases(client: ApiClient, token: str) -> set[str]:
     flows = request(client, "GET", "/admin/realms/eko/authentication/flows", token=token).body
     return {str(item.get("alias", "")) for item in flows}
+
+
+def require_browser_flow(client: ApiClient, token: str, expected: dict[str, Any]) -> None:
+    """R-07: an application realm without the export's browser flow is a realm persisted
+    before EKO-2-01 (a partial import adds no flow). It is not settings drift: its own message
+    and exit code, and the public listener stays closed. Recovery is an operator decision."""
+    if expected["browserFlow"] not in flow_aliases(client, token):
+        emit("application browser flow absent")
+        raise SystemExit(8)
 
 
 def verify_application_settings(client: ApiClient, token: str, expected: dict[str, Any]) -> None:

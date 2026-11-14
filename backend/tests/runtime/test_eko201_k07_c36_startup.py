@@ -115,6 +115,9 @@ def test_c36_fresh_bootstrap_and_restart_verify_before_opening_on_the_theme_imag
         realm.update(failureFactor=30, ssoSessionIdleTimeout=600, loginTheme="", passwordPolicy="")
         assert master.admin(token, "PUT", "", json_body=realm, realm="eko").status_code == 204
         run_bootstrap(fresh, record)
+        # QA-02: the re-run recreated Keycloak; a token from before it is no longer accepted.
+        master.close()
+        master, token = breakglass(fresh)
         live = master.admin_json(token, "GET", "", realm="eko")
         assert (live["failureFactor"], live["ssoSessionIdleTimeout"]) == (5, 1800)
         assert (live["loginTheme"], live["passwordPolicy"]) == (THEME_NAME, "length(12)")
@@ -130,8 +133,10 @@ def test_c36_fresh_bootstrap_and_restart_verify_before_opening_on_the_theme_imag
         assert deleted.status_code == 204, deleted.status_code
     finally:
         master.close()
-    refused = run_bootstrap(fresh, record, expected=7)
-    assert "application security settings not applied" in refused.stdout + refused.stderr
+    # R-07: an absent flow is not drift; its own message and exit code.
+    refused = run_bootstrap(fresh, record, expected=8)
+    assert "application browser flow absent" in refused.stdout + refused.stderr
+    assert "application security settings not applied" not in refused.stdout + refused.stderr
     assert listener_open(fresh, "admin")
     assert not listener_open(fresh, "auth")
 

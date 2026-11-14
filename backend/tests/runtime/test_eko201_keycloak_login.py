@@ -131,3 +131,65 @@ def test_k06_logout_ends_both_sessions_and_blocks_silent_reauthentication(
         assert app.logout(composition, session).status_code in (200, 401)
     finally:
         browser.close()
+
+
+def test_u02_back_channel_logout_with_a_rotated_out_refresh_token(
+    keycloak_running: Started, master: RealmClient
+) -> None:
+    """U-02 (security auditor): the backend's logout reads the stored refresh token without the
+    refresh lock, so a concurrent refresh can rotate it first and logout then sends the previous
+    token. Observed against Keycloak 26.8.1 with this realm (`revokeRefreshToken` true,
+    `refreshTokenMaxReuse` 0): see the assertions and docs/evidence/EKO-2-01/README.md."""
+    composition = keycloak_running.composition
+    env = composition.env
+    secret = env["OIDC_CLIENT_SECRET"]
+    token = breakglass(master)
+    password = "synthetic-" + secrets.token_urlsafe(24)
+    user_id = app.ensure_staff_account(master, token, "rotation", password)
+    client = RealmClient(composition, "eko", listener="auth")
+    try:
+        first = client.browser_token(
+            accounts.ACCOUNTS["rotation"], password, client_id="eko-backend", client_secret=secret
+        )
+        rotated = client.refresh("eko-backend", first["refresh_token"], secret)
+        assert rotated["refresh_token"] != first["refresh_token"], "premise: the token rotated"
+        sessions = master.admin_json(token, "GET", f"users/{user_id}/sessions", realm="eko")
+        assert len(sessions) == 1, "premise: one live SSO session"
+
+        # Contrast: the endpoint does check the token; a malformed one is refused and the SSO
+        # session stays.
+        bogus = client.request(
+            "POST",
+            "/realms/eko/protocol/openid-connect/logout",
+            data={
+                "client_id": "eko-backend",
+                "client_secret": secret,
+                "refresh_token": "eko201-not-a-refresh-token",
+            },
+        )
+        assert bogus.status_code == 400 and bogus.json().get("error") == "invalid_grant"
+        assert len(master.admin_json(token, "GET", f"users/{user_id}/sessions", realm="eko")) == 1
+
+        stale = client.request(
+            "POST",
+            "/realms/eko/protocol/openid-connect/logout",
+            data={
+                "client_id": "eko-backend",
+                "client_secret": secret,
+                "refresh_token": first["refresh_token"],
+            },
+        )
+        after = master.admin_json(token, "GET", f"users/{user_id}/sessions", realm="eko")
+        error = stale.json().get("error") if stale.content else None
+        observed = (stale.status_code, error, len(after))
+        assert observed == U02_OBSERVED, f"observed {observed}"
+    finally:
+        client.close()
+        # Whatever was observed, end the account's SSO session so no state leaks to the next test.
+        master.admin(token, "POST", f"users/{user_id}/logout", realm="eko")
+
+
+# Observed 2026-11-13 on Keycloak 26.8.1 (first run of this test): (HTTP status, OAuth error,
+# SSO sessions left). Keycloak accepts the rotated-out refresh token at the logout endpoint and
+# ends the SSO session, so the race U-02 describes does not leave SSO alive.
+U02_OBSERVED = (204, None, 0)

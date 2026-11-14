@@ -18,6 +18,7 @@ from tests.runtime.eko201.conftest import (
     SESSION_COOKIE,
     AppFactory,
     FakeClock,
+    refused_at_callback,
     session_count,
     set_cookies,
     transaction_count,
@@ -102,7 +103,7 @@ def test_k02_authorization_request_binds_state_nonce_and_pkce(
 
 def _refusal(browser: Any, path: str, pg: Postgres) -> None:
     answer = browser.send("GET", path)
-    assert answer.status_code == 400, answer.text
+    assert refused_at_callback(answer), answer.text
     assert SESSION_COOKIE not in {c.name for c in set_cookies(answer)}
     assert any(c.name == LOGIN_COOKIE and c.cleared for c in set_cookies(answer)), answer.headers
     assert session_count(pg) == 0
@@ -139,7 +140,7 @@ def test_k02_callback_without_the_transaction_cookie_is_refused(
     path = browser.at_identity_server(browser.start_login())
     browser.jar.pop(LOGIN_COOKIE)
     answer = browser.send("GET", path)
-    assert answer.status_code == 400
+    assert refused_at_callback(answer)
     assert session_count(pg) == 0
 
 
@@ -152,7 +153,7 @@ def test_k02_two_transactions_with_swapped_states_are_refused(
     second_path = second.at_identity_server(second.start_login())
     first_state = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(first_path).query))["state"]
     answer = second.send("GET", _with_state(second_path, first_state))
-    assert answer.status_code == 400
+    assert refused_at_callback(answer)
     assert session_count(pg) == 0
     # The first transaction is untouched by the second browser's refused callback.
     assert first.send("GET", first_path).status_code == 303
@@ -172,7 +173,8 @@ def test_k02_transaction_validity_is_at_most_ten_minutes(
     path = browser.at_identity_server(browser.start_login())
     clock.advance(seconds=age)
     answer = browser.send("GET", path)
-    assert answer.status_code == (303 if accepted else 400), answer.text
+    assert answer.status_code == 303, answer.text
+    assert refused_at_callback(answer) is not accepted, answer.headers
     assert session_count(pg) == (1 if accepted else 0)
     assert transaction_count(pg) == 0
 
@@ -188,7 +190,7 @@ def test_k02_replayed_callback_creates_no_second_session(
     assert session_count(pg) == 1
     browser.jar.pop(SESSION_COOKIE)
     browser.jar[LOGIN_COOKIE] = login_cookie
-    assert browser.send("GET", path).status_code == 400
+    assert refused_at_callback(browser.send("GET", path))
     assert session_count(pg) == 1
 
 
@@ -198,9 +200,9 @@ def test_k02_out_of_order_callback_after_a_newer_login_start_is_refused(
     browser = browser_for(make_app())
     old_path = browser.at_identity_server(browser.start_login())
     new_path = browser.at_identity_server(browser.start_login())
-    assert browser.send("GET", old_path).status_code == 400
+    assert refused_at_callback(browser.send("GET", old_path))
     assert session_count(pg) == 0
-    assert browser.send("GET", new_path).status_code == 400
+    assert refused_at_callback(browser.send("GET", new_path))
 
 
 def test_k02_nonce_mismatch_in_the_id_token_is_refused(
@@ -208,7 +210,7 @@ def test_k02_nonce_mismatch_in_the_id_token_is_refused(
 ) -> None:
     stub.id_overrides["nonce"] = "other-nonce-" + "n" * 30
     browser = browser_for(make_app())
-    assert browser.login().status_code == 400
+    assert refused_at_callback(browser.login())
     assert session_count(pg) == 0
 
 
@@ -217,7 +219,7 @@ def test_k02_identity_server_refusing_the_code_creates_no_session(
 ) -> None:
     stub.code_mode = "refuse"
     browser = browser_for(make_app())
-    assert browser.login().status_code == 400
+    assert refused_at_callback(browser.login())
     assert session_count(pg) == 0
     assert transaction_count(pg) == 0
 
@@ -228,7 +230,7 @@ def test_k02_error_answer_from_the_identity_server_is_refused(
     browser = browser_for(make_app())
     browser.start_login()
     answer = browser.send("GET", "/api/auth/callback?error=access_denied&state=x")
-    assert answer.status_code == 400
+    assert refused_at_callback(answer)
     assert session_count(pg) == 0
     assert transaction_count(pg) == 0
 
@@ -282,7 +284,7 @@ def test_k02_token_carrying_email_or_username_is_not_stored(
     overrides = stub.access_overrides if where == "access" else stub.id_overrides
     overrides[claim] = "synthetic.rep@example.invalid"
     browser = browser_for(make_app())
-    assert browser.login().status_code == 400
+    assert refused_at_callback(browser.login())
     assert session_count(pg) == 0
     # Contrast: the approved name claims alone are stored and reach the session answer.
     overrides.pop(claim)

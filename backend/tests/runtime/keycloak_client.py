@@ -87,10 +87,53 @@ def run_bootstrap(
         f"bootstrap exited {result.returncode}, expected {expected}\n"
         f"{result.stdout[-2000:]}\n{result.stderr[-2000:]}\n{logs}"
     )
+    assert_running_keycloak_is_the_built_one(composition)
     return result
 
 
+# QA-01: the Keycloak image each composition's carriers must run, by image ID, as built from
+# the tree under test by `prepare`. The tag is shared across worktrees, so whatever it held
+# before is never trusted; `run_bootstrap` checks the running server against this record.
+BUILT_KEYCLOAK: dict[str, str] = {}
+
+
+def keycloak_image_reference(composition: Composition) -> str:
+    """The image the composition (its override files included) runs for `keycloak`."""
+    rendered = json.loads(composition.compose("config", "--format", "json").stdout)
+    reference: str = rendered["services"]["keycloak"]["image"]
+    return reference
+
+
+def image_id(reference: str) -> str:
+    return subprocess.run(
+        ["docker", "image", "inspect", "--format", "{{.Id}}", reference],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()  # fmt: skip
+
+
+def build_keycloak(composition: Composition) -> str:
+    """Build the composition's Keycloak image from this tree and record its ID (QA-01). An
+    override that replaces the image without a build (a fixture image) builds nothing; the
+    record is then that fixture image."""
+    composition.compose("build", "keycloak", timeout=1800)
+    built = image_id(keycloak_image_reference(composition))
+    BUILT_KEYCLOAK[composition.project] = built
+    return built
+
+
+def assert_running_keycloak_is_the_built_one(composition: Composition) -> None:
+    """QA-01 self-check: the Keycloak the bootstrap started is the image `prepare` built from
+    this tree, never another worktree's build left behind the shared tag."""
+    built = BUILT_KEYCLOAK.get(composition.project)
+    assert built is not None, "the composition's Keycloak image was not built by prepare"
+    if not composition.compose("ps", "-a", "-q", "keycloak").stdout.split():
+        return
+    running = composition.inspect("keycloak")["Image"]
+    assert running == built, "the running Keycloak is not the image built from this tree"
+
+
 def prepare(composition: Composition) -> None:
+    build_keycloak(composition)
     composition.compose(
         "up",
         "--build",

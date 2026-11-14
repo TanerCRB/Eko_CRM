@@ -23,6 +23,18 @@ host with Docker Engine 29.8.2; nothing here claims production behavior.
 The tag is shared by every worktree on a host. Rebuilding it here replaced the image that other
 worktrees' compositions start.
 
+## Base image pins (B-02, fix round 1, 2026-11-13)
+
+Both `FROM` lines of `identity/Dockerfile` name their base by version tag and index digest, as
+`proxy/Dockerfile` does. Checked by `backend/tests/static/test_eko201_dockerfile_pins.py`.
+
+| Stage | Reference | Source of the digest |
+|---|---|---|
+| Keycloak base | `quay.io/keycloak/keycloak:26.8.1@sha256:3f3c5f8e03c614774b4bd9173b88391fefa4153bfc010d8012d59ad825377332` | The republished index this task's builds used, accepted by the human on 2026-11-13 (#21). |
+| Maven builder (`provider-build`) | `maven:3.9.14-eclipse-temurin-21@sha256:98819eb3745bd2007c3f1a19b59085c1fa3929aecb7dbfa431dfcf5a4f18ce3c` | `docker buildx imagetools inspect maven:3.9.14-eclipse-temurin-21` on 2026-11-13 (index digest). It equals the repository digest of the copy this host already held and had built every earlier image of this task with. |
+
+The authenticity of either index (signature or vendor release note) is not checked here (U-03).
+
 ## Probes (scratch Keycloak 26.8.1, `start-dev`, one container, removed afterwards)
 
 ### 2026-11-12 — event types MFA makes emittable (ADR-0005 reachable-set addendum, G-E A)
@@ -84,3 +96,7 @@ All commands ran from `backend/` with `uv run pytest -p no:cacheprovider`; runti
 | R9 | 2026-11-13T09:45 | Fail-first for R8: the same scenario (`run_k03`) on a composition whose `frontend` is built from `825f1d8`, the shell before the session gate (scratch override and script outside the repository) | built by the run | Red in step 1: the anonymous `/` never left `<app-host>` for Keycloak (30 s `TimeoutError` waiting for `<auth-host>`). The served bundle has the shell's "Bliżej Twoich klientów" and neither "Sprawdzanie sesji" nor `api/auth/login`, so the red is the missing gate, not an environment failure. |
 | R10 | 2026-11-13T09:52 | F-1 A bootstrap wiring: `tests/static/test_eko201_bootstrap_origin.py` before and after `application_origin()` in `scripts/keycloak-bootstrap.py`; `bash scripts/keycloak-bootstrap.sh --self-test`; then `test_eko201_k07_theme_image.py`, `test_eko201_keycloak_login.py`, `test_eko201_k07_pages.py`, `test_eko201_k03_shell_browser.py` | `sha256:cdb4bc4a…` (rebuilt by the image carrier) | Before: 10 failed, 8 passed (no `application_origin`); after: 18 passed. Self-test 12/12 (3 new origin cases: 443 dropped, 8443 kept, http on 443 kept). Runtime: 9 passed in 396.2 s. |
 | R11 | 2026-11-13 | Default suite (`uv run pytest`) after R10 | — | 2152 passed, 543 deselected, 0 failed. |
+| R12 | 2026-11-13 | Fix round 1, fail-first: `test_eko201_dockerfile_pins.py` before the pins (5 failed, 1 passed); `test_eko201_bootstrap_preconditions.py` before `require_browser_flow` (3 failed, 2 passed); `test_eko201_realm_export.py` before `accessCodeLifespanLogin` (3 failed, 41 passed); QA-01 scratch probe: with a theme-less fixture image tagged over the shared tag, the pre-change start path (`up` with no Keycloak build) created the Keycloak container from that stale image | — | All red for the missing behavior; after the changes all green (179 passed across the owned static/unit files). |
+| R13 | 2026-11-13T20:55 | U-02 against Keycloak 26.8.1, `test_u02_back_channel_logout_with_a_rotated_out_refresh_token`: log in through eko-backend, refresh once (the refresh token rotates), then call the logout endpoint with the previous, rotated-out refresh token | built by `prepare` | First run (the observation): HTTP 204, no OAuth error, 0 SSO sessions left: Keycloak accepts the rotated-out token for logout and ends the SSO session. Contrast in the same test: a malformed refresh token gets 400 `invalid_grant` and the session stays. The race U-02 describes therefore does not leave SSO alive on this version. Same run: K-02/K-03/K-06 login carriers and the K-03 composed carrier with the R-03 step (replayed callback lands on `/logowanie-nieudane`, "Spróbuj ponownie" starts a login) passed. |
+| R14 | 2026-11-13T21:02 | Final runtime set on the final tree: `test_eko201_qa01_image_from_tree.py`, `test_eko201_k07_theme_image.py`, `test_eko201_qa_theme_image.py`, `test_eko201_keycloak_login.py`, `test_eko201_k03_shell_browser.py`, `test_eko201_k07_c36_startup.py` | `sha256:f27ba504216d1cb772fc80077c4d48092f0e621eb7ee2005947bea644caa60c3` (left on the shared tag) | 13 passed in 1132.1 s, C36 included (QA-02: fresh master token after the bootstrap re-run; the absent-flow phase now ends with exit 8 "application browser flow absent"). |
+| R15 | 2026-11-13 | Default suite after R14 | — | 2169 passed, 589 deselected, 0 failed. |

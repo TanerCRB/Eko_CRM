@@ -193,6 +193,14 @@ def browser_for() -> Iterator[Callable[[FastAPI], Browser]]:
         client.__exit__(None, None, None)
 
 
+# Where a refused or unavailable login callback sends the browser (fix round 1, Reviewer R-03).
+LOGIN_FAILED_PAGE = "/logowanie-nieudane"
+
+
+def refused_at_callback(response: httpx.Response) -> bool:
+    return response.status_code == 303 and response.headers.get("location") == LOGIN_FAILED_PAGE
+
+
 def session_count(pg: Postgres) -> int:
     return int(pg.rows("SELECT count(*) FROM app_session")[0][0])
 

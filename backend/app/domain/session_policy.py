@@ -7,6 +7,10 @@ from datetime import datetime, timedelta
 IDLE_LIMIT = timedelta(minutes=30)
 ABSOLUTE_LIMIT = timedelta(hours=10)
 LOGIN_TRANSACTION_VALIDITY = timedelta(minutes=10)
+# Open (unexpired, unconsumed) login transactions at once (Security Auditor B-01). About 50 staff
+# start a few logins each per ten minutes; 1000 leaves that twentyfold room while bounding what
+# anonymous callers can make persist to about 2.4 MB (a row is at most ~2.4 KB).
+OPEN_LOGIN_TRANSACTION_LIMIT = 1000
 # Retention bounds count from creation; "no later than" includes the bound (ADR-0005).
 SESSION_RETENTION = ABSOLUTE_LIMIT
 LOGIN_TRANSACTION_RETENTION = timedelta(hours=1)

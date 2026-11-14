@@ -34,7 +34,12 @@ from app.core.clock import Clock
 from app.data.database import POOL_TIMEOUT_SECONDS
 from app.data.sessions import RefreshHolder, SessionStore, StorageUnavailable, StoredSession
 from app.domain.caller import Caller
-from app.domain.session_policy import SessionTimes, login_transaction_valid_at
+from app.domain.session_policy import (
+    LOGIN_TRANSACTION_VALIDITY,
+    OPEN_LOGIN_TRANSACTION_LIMIT,
+    SessionTimes,
+    login_transaction_valid_at,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +83,8 @@ def safe_return_to(value: str | None) -> str:
         or not value.startswith("/")
         or value.startswith("//")
         or "\\" in value
-        or any(ord(c) < 0x20 or ord(c) == 0x7F for c in value)
+        # Printable ASCII only: the value becomes a `Location` header (Reviewer R-06).
+        or any(not 0x20 <= ord(c) <= 0x7E for c in value)
         or value == "/api"
         or value.startswith("/api/")
     ):
@@ -108,6 +114,13 @@ class Authenticator:
     # Login -------------------------------------------------------------------------------------
 
     def start_login(self, return_to: str | None) -> LoginStart:
+        now = self.clock.now()
+        # Anonymous callers start logins; their open transactions are capped (Auditor B-01).
+        if self.store.count_transactions_since(now - LOGIN_TRANSACTION_VALIDITY) >= (
+            OPEN_LOGIN_TRANSACTION_LIMIT
+        ):
+            logger.warning("open login transactions at their limit; login start refused")
+            raise Unavailable
         transaction, state, nonce = new_opaque(), new_opaque(), new_opaque()
         verifier = new_verifier()
         key = digest(transaction)
@@ -117,7 +130,7 @@ class Authenticator:
             digest(nonce),
             self.sealer.seal(verifier.encode("ascii"), key),
             safe_return_to(return_to),
-            self.clock.now(),
+            now,
         )
         location = self.oidc.authorization_url(state, nonce, pkce_challenge(verifier))
         return LoginStart(transaction, location)

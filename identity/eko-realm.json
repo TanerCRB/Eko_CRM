@@ -26,6 +26,7 @@
   "passwordPolicy": "length(12)",
   "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 36000,
+  "accessCodeLifespanLogin": 600,
   "accessTokenLifespan": 240,
   "revokeRefreshToken": true,
   "refreshTokenMaxReuse": 0,

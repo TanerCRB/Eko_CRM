@@ -98,6 +98,12 @@ class Stub:
     code_mode: str = "answer"
     refresh_mode: str = "answer"
     logout_mode: str = "answer"
+    # The OAuth error code a "refuse" answers with on /token and /logout; `invalid_client` is
+    # answered with 401, as Keycloak answers a wrong client secret, every other code with 400.
+    refusal_code: str = "invalid_grant"
+    # "answer" or "hang" for the key set; every /certs request is counted.
+    certs_mode: str = "answer"
+    certs_calls: int = 0
     # Seconds an answering refresh waits before it answers.
     refresh_delay_seconds: float = 0.0
     # Overrides of the issued tokens' claims, and claims added to them.
@@ -213,6 +219,10 @@ def _handler(stub: Stub) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
             self.wfile.write(data)
 
+        def _refuse(self) -> None:
+            code = stub.refusal_code
+            self._send(401 if code == "invalid_client" else 400, {"error": code})
+
         def _hang(self) -> None:
             # Accepts the request and never answers until the test releases it.
             stub.release.wait(timeout=120)
@@ -222,6 +232,11 @@ def _handler(stub: Stub) -> type[BaseHTTPRequestHandler]:
             parsed = urllib.parse.urlsplit(self.path)
             query = dict(urllib.parse.parse_qsl(parsed.query))
             if parsed.path == f"{prefix}/certs":
+                with stub.lock:
+                    stub.certs_calls += 1
+                if stub.certs_mode == "hang":
+                    self._hang()
+                    return
                 with stub.lock:
                     keys = list(stub.published)
                 self._send(200, {"keys": keys})
@@ -298,7 +313,7 @@ def _handler(stub: Stub) -> type[BaseHTTPRequestHandler]:
                 self._send(500, {"error": "server_error"})
                 return
             if mode == "refuse":
-                self._send(400, {"error": "invalid_grant"})
+                self._refuse()
                 return
             if grant == "authorization_code":
                 self._exchange(form)
@@ -346,6 +361,9 @@ def _handler(stub: Stub) -> type[BaseHTTPRequestHandler]:
                 return
             if stub.logout_mode == "hang":
                 self._hang()
+                return
+            if stub.logout_mode == "refuse":
+                self._refuse()
                 return
             if stub.logout_mode == "error":
                 self._send(500, {"error": "server_error"})

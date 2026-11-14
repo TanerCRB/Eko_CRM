@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { AccountPanel } from "./features/session/AccountPanel";
+import { LOGIN_FAILED_PATH, LoginFailed } from "./features/session/LoginFailed";
 import { SessionGate } from "./features/session/SessionGate";
 
 const ROOT_ID = "root";
@@ -14,7 +15,11 @@ export function mount(page: Document): () => void {
   const root = createRoot(container);
   root.render(
     <StrictMode>
-      <SessionGate>{(session) => <App account={<AccountPanel session={session} />} />}</SessionGate>
+      {page.location.pathname === LOGIN_FAILED_PATH ? (
+        <LoginFailed />
+      ) : (
+        <SessionGate>{(session) => <App account={<AccountPanel session={session} />} />}</SessionGate>
+      )}
     </StrictMode>,
   );
   return () => {

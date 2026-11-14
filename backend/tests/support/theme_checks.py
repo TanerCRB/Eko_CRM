@@ -169,8 +169,16 @@ LISTED = re.compile(r"`([^`]+)`")
 
 
 def base_version(dockerfile_text: str) -> str:
+    """The base's version tag; a `@sha256:` pin after it (B-02) is not part of the version."""
+    return base_reference(dockerfile_text).split("@", 1)[0].split(":", 1)[1]
+
+
+def base_reference(dockerfile_text: str) -> str:
+    """The official Keycloak base exactly as `FROM` names it, tag and digest included."""
     found: list[str] = re.findall(
-        r"^FROM quay\.io/keycloak/keycloak:(\S+)\s*$", dockerfile_text, re.MULTILINE
+        r"^FROM (quay\.io/keycloak/keycloak:[^@\s]+(?:@sha256:[0-9a-f]{64})?)\s*$",
+        dockerfile_text,
+        re.MULTILINE,
     )
     assert len(found) == 1, f"expected one official Keycloak base, found {found}"
     return found[0]

@@ -56,6 +56,21 @@ def check_session_limits(realm: Realm) -> None:
     assert realm["ssoSessionMaxLifespan"] == 10 * 60 * 60
 
 
+def check_login_lifetime(realm: Realm) -> None:
+    """R-03: Keycloak's login must not outlive the backend's 10-minute login transaction, or a
+    slow first login (password change, OTP enrolment) succeeds at Keycloak and is refused at the
+    callback."""
+    from app.domain.session_policy import LOGIN_TRANSACTION_VALIDITY
+
+    validity = int(LOGIN_TRANSACTION_VALIDITY.total_seconds())
+    assert validity == 600
+    assert realm.get("accessCodeLifespanLogin") == validity
+
+
+def test_r03_keycloak_login_lifetime_equals_the_login_transaction(realm: Realm) -> None:
+    check_login_lifetime(realm)
+
+
 def check_password_minimum(realm: Realm) -> None:
     rules = policy(realm)
     assert rules.get("length") == "12", f"password policy {realm.get('passwordPolicy')!r}"
@@ -164,6 +179,12 @@ EXPORT_CONTRASTS = [
     ("idle-1799", set_key("ssoSessionIdleTimeout", 1799), check_session_limits),
     ("max-36001", set_key("ssoSessionMaxLifespan", 36001), check_session_limits),
     ("max-35999", set_key("ssoSessionMaxLifespan", 35999), check_session_limits),
+    ("login-lifetime-601", set_key("accessCodeLifespanLogin", 601), check_login_lifetime),
+    (
+        "login-lifetime-default",
+        lambda realm: realm.pop("accessCodeLifespanLogin"),
+        check_login_lifetime,
+    ),
     ("password-11", set_key("passwordPolicy", "length(11)"), check_password_minimum),
     ("password-13", set_key("passwordPolicy", "length(13)"), check_password_minimum),
     ("password-none", set_key("passwordPolicy", ""), check_password_minimum),

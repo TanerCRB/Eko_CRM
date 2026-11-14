@@ -1,5 +1,8 @@
 # syntax=docker/dockerfile:1
-FROM maven:3.9.14-eclipse-temurin-21 AS provider-build
+# Both bases are pinned by version tag and index digest (EKO-2-01 B-02), as proxy/Dockerfile
+# does: a moved upstream tag cannot change what one commit builds. A base change updates both
+# the tag and the digest, and the theme review record (identity/theme-review.md) for Keycloak.
+FROM maven:3.9.14-eclipse-temurin-21@sha256:98819eb3745bd2007c3f1a19b59085c1fa3929aecb7dbfa431dfcf5a4f18ce3c AS provider-build
 WORKDIR /workspace
 COPY provider/pom.xml pom.xml
 RUN mvn -q dependency:go-offline
@@ -10,7 +13,7 @@ COPY provider/src src
 # non-zero exit of the test fails this RUN, and therefore the image build.
 RUN mvn -q package && mvn -q dependency:build-classpath -Dmdep.outputFile=target/classpath.txt && java -cp "target/classes:target/test-classes:$(cat target/classpath.txt)" org.eko_crm.keycloak.events.FilteringJpaEventStoreProviderTest
 
-FROM quay.io/keycloak/keycloak:26.8.1
+FROM quay.io/keycloak/keycloak:26.8.1@sha256:3f3c5f8e03c614774b4bd9173b88391fefa4153bfc010d8012d59ad825377332
 COPY --chown=keycloak:keycloak --chmod=644 --from=provider-build /workspace/target/eko112-event-store-1.0.0.jar /opt/keycloak/providers/
 # The one login theme (ADR-0003 and ADR-0004 addenda of 2026-11-12), copied before the build so
 # one build produces the whole image. Owned by root with no group or other write: the runtime

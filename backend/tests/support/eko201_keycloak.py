@@ -17,6 +17,7 @@ ACCOUNTS = {
     "locked": "eko201-locked",
     "required": "eko201-required",
     "shell": "eko201-shell",
+    "rotation": "eko201-rotation",
 }
 ADDRESSES = {key: f"{name}@example.org" for key, name in ACCOUNTS.items()}
 FIRST_NAME = "EKO201"

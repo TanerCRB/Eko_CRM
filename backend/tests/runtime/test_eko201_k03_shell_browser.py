@@ -9,6 +9,8 @@ running Keycloak with MFA, against the SPA's session gate.
 - The browser presents `__Host-eko_session` on its own `/api/auth/session` call: the
   `SameSite=Strict` session cookie reaches the backend after a login that ended with a
   cross-site redirect chain from `<auth-host>`.
+- R-03: replaying the login callback (its transaction already consumed) lands on the SPA's
+  failure page "Logowanie nie powiodło się"; "Spróbuj ponownie" starts a login again.
 - Logout ends in a full load of `/` that is sent to login with `return_to=%2F`; the old cookie
   then gets 401 on `/api/auth/session`, and Keycloak shows its form again (no silent SSO).
 
@@ -37,6 +39,9 @@ pytestmark = pytest.mark.runtime
 NAVIGATION = "Nawigacja główna"
 ACCOUNT = "Konto"
 LOGOUT = "Wyloguj się"
+LOGIN_FAILED_PATH = "/logowanie-nieudane"
+LOGIN_FAILED = "Logowanie nie powiodło się"
+RETRY = "Spróbuj ponownie"
 DEEP_LINKS = [("/", "Pulpit"), ("/klienci", "Klienci"), ("/klienci?x=1", "Klienci")]
 TIMEOUT_MS = 30_000
 
@@ -189,6 +194,16 @@ def run_k03(started: Started, chromium_executable: Path) -> None:
                     presented.append(cookie)
 
             page.on("request", session_call)
+            callbacks: list[str] = []
+            page.on(
+                "request",
+                lambda request: (
+                    callbacks.append(request.url)
+                    if request.is_navigation_request()
+                    and urlsplit(request.url).path == "/api/auth/callback"
+                    else None
+                ),
+            )
             logins = started_logins(page, composition)
             page.goto(origin + "/klienci?x=1")
             assert at_keycloak_form(page, composition)
@@ -216,6 +231,23 @@ def run_k03(started: Started, chromium_executable: Path) -> None:
                 page.goto(origin + path)
                 shell_present(page, heading)
             assert logins == ["/klienci?x=1"], f"a valid session was sent to login: {logins}"
+            assert app.session_view(composition, cookie["value"]).status_code == 200
+
+            # 4b. R-03: a refused callback (the same callback replayed: its transaction is
+            # consumed) lands on the SPA's Polish failure page, not a JSON body, renders no
+            # shell, and "Spróbuj ponownie" starts a login again (return_to "/").
+            assert len(callbacks) == 1, f"callback navigations: {len(callbacks)}"
+            page.goto(callbacks[0])
+            page.wait_for_url(origin + LOGIN_FAILED_PATH, timeout=TIMEOUT_MS)
+            expect(page.get_by_role("heading", level=1, name=LOGIN_FAILED)).to_be_visible()
+            expect(page.get_by_role("navigation", name=NAVIGATION)).to_have_count(0)
+            shots.take(page, "login-failed")
+            page.get_by_role("button", name=RETRY).click()
+            # The SSO session is still alive, so the retry comes back without a form.
+            page.wait_for_url(origin + "/", timeout=TIMEOUT_MS)
+            assert logins[-1] == "/", f"retry did not start a login: {logins}"
+            shell_present(page, "Pulpit")
+            cookie = next(c for c in context.cookies() if c["name"] == app.SESSION_COOKIE)
             old_session = cookie["value"]
             assert app.session_view(composition, old_session).status_code == 200
 

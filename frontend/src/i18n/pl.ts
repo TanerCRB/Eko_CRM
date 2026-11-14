@@ -41,4 +41,10 @@ export const messages = {
     logout: "Wyloguj się",
     logoutFailed: "Nie udało się wylogować. Spróbuj ponownie.",
   },
+  loginFailed: {
+    title: "Logowanie nie powiodło się",
+    explanation:
+      "Logowanie trwało zbyt długo albo zostało przerwane. Zaloguj się jeszcze raz, aby przejść do aplikacji.",
+    retry: "Spróbuj ponownie",
+  },
 } as const;

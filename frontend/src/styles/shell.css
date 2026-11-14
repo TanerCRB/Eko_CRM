@@ -72,6 +72,7 @@ p { margin-bottom: var(--space-4); max-width: 75ch; }
   margin: 15vh auto 0;
   padding: var(--space-6);
 }
+.session-product { font-family: var(--font-display); font-weight: 600; color: var(--color-muted); }
 
 .workspace { margin-left: var(--sidebar-width); }
 .topbar {

@@ -22,7 +22,12 @@ from typing import Any
 import httpx
 import pytest
 
-from tests.runtime.eko201.conftest import AppFactory, FakeClock, session_count
+from tests.runtime.eko201.conftest import (
+    AppFactory,
+    FakeClock,
+    refused_at_callback,
+    session_count,
+)
 from tests.runtime.eko201.processes import Backend, backend, backends, login
 from tests.support import oidc_stub
 from tests.support.pg_instance import Postgres
@@ -61,7 +66,7 @@ def test_qa_k01_login_token_whose_only_defect_is_its_audience_is_refused(
         assert answer.status_code == 303, answer.text
         assert session_count(pg) == 1
     else:
-        assert answer.status_code == 400, answer.text
+        assert refused_at_callback(answer), answer.text
         assert session_count(pg) == 0
 
 
@@ -101,7 +106,7 @@ def test_qa_k02_refresh_token_carrying_email_or_username_is_not_stored(
         assert answer.status_code == 303, answer.text
         assert session_count(pg) == 1
     else:
-        assert answer.status_code == 400, answer.text
+        assert refused_at_callback(answer), answer.text
         assert session_count(pg) == 0
 
 
