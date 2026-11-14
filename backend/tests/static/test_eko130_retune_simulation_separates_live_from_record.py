@@ -272,9 +272,9 @@ def test_eko130_k01_the_simulated_bound_reddens_exactly_the_must_move_nodes(
     assert deaths == []
     entries = classification()
     assert _agreement(red, entries) == []
-    assert (
-        entries.get("test_eko127_k01_release_runtime_bound_is_the_live_value") == "move"
-    ), "the live value check must be the simulated bound's red half"
+    assert entries.get("test_eko127_k01_release_runtime_bound_is_the_live_value") == "move", (
+        "the live value check must be the simulated bound's red half"
+    )
     assert red == {node_id for node_id, tag in entries.items() if tag == "move"}
 
 
@@ -337,9 +337,9 @@ def test_eko130_k01_the_separation_is_by_wiring_not_by_value() -> None:
     pair = _bound_pair_assignments(k01)
     assert "RECORDED_BOUND" in pair, "the record pair must be named, not the live alias"
     recorded = pair["RECORDED_BOUND"]
-    assert (
-        isinstance(recorded, ast.Constant) and recorded.value == 360
-    ), "RECORDED_BOUND must be the literal history, not an alias of the live BOUND"
+    assert isinstance(recorded, ast.Constant) and recorded.value == 360, (
+        "RECORDED_BOUND must be the literal history, not an alias of the live BOUND"
+    )
     _helper_call(pair, "BOUND_LINE", "bound_line_of", "BOUND")
     _helper_call(pair, "RECORDED_BOUND_LINE", "bound_line_of", "RECORDED_BOUND")
     _helper_call(pair, "RECORDED_RAISE", "raise_for", "RECORDED_BOUND")
@@ -348,8 +348,7 @@ def test_eko130_k01_the_separation_is_by_wiring_not_by_value() -> None:
         imported = {
             alias.name
             for statement in tree.body
-            if isinstance(statement, ast.ImportFrom)
-            and (statement.module or "").endswith(K01_FILE)
+            if isinstance(statement, ast.ImportFrom) and (statement.module or "").endswith(K01_FILE)
             for alias in statement.names
         }
         live_only = imported & {"BOUND", "BOUND_LINE", "RAISE"}

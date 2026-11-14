@@ -135,10 +135,18 @@ def test_eko130_qa_the_bare_death_classifier_separates_a_verdict_from_plant_mach
         desynced = job_edit(k01.RELEASE, k01.RUNTIME, f"    {k01.TIMEOUT}: 361\n", "")
         repo.commit(k01.HEAD, desynced)
 
-    monkeypatch.setattr(k02, test_eko130_qa_synthetic_verdict_death.__name__,
-                        test_eko130_qa_synthetic_verdict_death, raising=False)
-    monkeypatch.setattr(k02, test_eko130_qa_synthetic_bare_death.__name__,
-                        test_eko130_qa_synthetic_bare_death, raising=False)
+    monkeypatch.setattr(
+        k02,
+        test_eko130_qa_synthetic_verdict_death.__name__,
+        test_eko130_qa_synthetic_verdict_death,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        k02,
+        test_eko130_qa_synthetic_bare_death.__name__,
+        test_eko130_qa_synthetic_bare_death,
+        raising=False,
+    )
 
     state, note = sim._verdict(
         k02, test_eko130_qa_synthetic_verdict_death.__name__, tmp_path / "v", monkeypatch, False
