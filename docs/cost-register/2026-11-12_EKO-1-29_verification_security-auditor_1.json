@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-12",
+  "task": "EKO-1-29",
+  "phase": "verification",
+  "role": "security-auditor",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "ac6eb60e1cb2a93b8",
+  "tokens": 79078,
+  "tokenSplit": null,
+  "tokensSource": "task-notification",
+  "measured": "record",
+  "toolCalls": 28,
+  "seconds": 1313,
+  "fixRound": 0,
+  "reworkCause": "first delivery bounced on markers.sh prose/id mismatch (None. vs none) - one resumed cycle",
+  "notes": "PASS WITH RESERVATIONS 0/0/3/4; S-1 pre-existing realm-value CI traceback echo (human decision owed at gate 2); S-2 quadratic DIFF branch measured (reviewer later attributed to this change); S-3 PEP8/echo/printf accidental shapes; Lows: obfuscation, keyword-adjacent plurals, non-UTF8 exemption, self-named values; new-scan no-echo, vacuity and k07 complementarity verified; ADMIN_POSTGRES_PASSWORD rename confirmed non-weakening by execution"
+}
