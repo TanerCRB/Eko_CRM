@@ -99,11 +99,12 @@ ASSIGNMENT_TAIL = re.compile(
 # (`PASSWORD=password` regressed from firing on base to holding). The hold is now the
 # narrowest statement that describes a Python kwarg passing a variable into itself:
 # the value equals the name and the kwarg comma terminates it. `PASSWORD=password`,
-# `key=KEY` and `TOKEN=token` fire again. In scripts/keycloak-bootstrap.py 29 lines
-# pass `token` by self-reference: 17 carry the comma (14 hold through this rule at
-# line start, 3 mid-line call sites hold because no assignment context reaches them)
-# and 12 carry none (all mid-line, same reason); none fires — the dev-3 G-03 census
-# correction, pinned by test_eko129_c3_keycloak_bootstrap_self_reference_census_holds.
+# `key=KEY` and `TOKEN=token` fire again. In scripts/keycloak-bootstrap.py 32 lines
+# pass `token` by self-reference (29 before EKO-2-01 added three admin-API calls):
+# 17 carry the comma (14 hold through this rule at line start, 3 mid-line call sites
+# hold because no assignment context reaches them) and 15 carry none (all mid-line,
+# same reason); none fires — the dev-3 G-03 census correction, pinned by
+# test_eko129_c3_keycloak_bootstrap_self_reference_census_holds.
 _SECRET_KEYWORDS = ("password", "secret", "token", "credential", "key")
 SECRET_SCAN_PREFIXES = ("identity/", "proxy/", "docs/evidence/EKO-1-12/", "scripts/keycloak-")
 
@@ -591,17 +592,19 @@ def test_eko129_c2_real_newline_cut_owns_the_diff_form_line() -> None:
 
 
 def test_eko129_c3_keycloak_bootstrap_self_reference_census_holds() -> None:
-    # G-03 count correction, pinned: scripts/keycloak-bootstrap.py carries 17 lines
-    # with the comma form `token=token,` and 29 lines with `token=token` in total
-    # (10 `token=token)`, 2 bare at line end); none fires. 14 of the comma lines hold
-    # through the self-reference rule (leading kwargs), the other 15 hold because no
-    # assignment context reaches a mid-line Python kwarg.
+    # G-03 count correction, pinned; recounted for EKO-2-01, whose three new admin-API
+    # calls pass `token=token` (29 -> 32, the comma form unchanged at 17):
+    # scripts/keycloak-bootstrap.py carries 17 lines with the comma form `token=token,`
+    # and 32 lines with `token=token` in total (12 `token=token)`, 3 bare at line end);
+    # none fires. 14 of the comma lines hold through the self-reference rule (leading
+    # kwargs); the other 18 lines (3 mid-line comma, 12 `token=token)`, 3 bare) hold
+    # because no assignment context reaches a mid-line Python kwarg.
     relative = "scripts/keycloak-bootstrap.py"
     text = read_text(relative)
     assert text is not None
     lines = text.split("\n")
     assert sum(1 for line in lines if "token=token," in line) == 17
-    assert sum(1 for line in lines if "token=token" in line) == 29
+    assert sum(1 for line in lines if "token=token" in line) == 32
     assert find_literal_secret_assignment_lines(relative, text) == []
 
 
