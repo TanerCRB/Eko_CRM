@@ -17,6 +17,13 @@ which base the live branch has — and it stays inert after the merge (EKO-1-25 
 no fixture here reads the live PR base). Differences from EKO-1-25, per the Analyst's note:
 one job in `release.yml` instead of two in `ci.yml`, and the base carries no comment above the
 bound (line 181 is `runs-on:`), so only the head side must have it.
+
+EKO-1-30 (#152): every bound value and line text here reads the RECORD pair (`RECORDED_BOUND`,
+`RECORDED_BOUND_LINE`, `RECORDED_RAISE`) imported from k01 — this file is #138's pair-frozen
+history, and the live bound a future retune moves lives in the live pair, so a retune reddens
+no node of this file. `k02_violations` takes the bound as a parameter (the recorded value at
+its call sites) and derives the expected head-side line text from it, so the retune simulation
+can move value and line together (K-05) without touching history.
 """
 
 import difflib
@@ -34,13 +41,14 @@ from tests.static.test_eko125_k04_runtime_collection_unchanged import both, job_
 from tests.static.test_eko127_k01_release_runtime_bound_is_the_recorded_value import (
     BASE,
     BASES,
-    BOUND,
-    BOUND_LINE,
     HEAD,
-    RAISE,
+    RECORDED_BOUND,
+    RECORDED_BOUND_LINE,
+    RECORDED_RAISE,
     RELEASE,
     RUNTIME,
     TIMEOUT,
+    bound_line_of,
 )
 from tests.support import workflow_checks as wc
 from tests.support.fixed_pair import ABSENT, Throwaway, edit, file_at
@@ -58,9 +66,12 @@ def _without_bound(job: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in job.items() if key != TIMEOUT}
 
 
-def parsed_violations(base: Workflow, head: Workflow) -> list[str]:
+def parsed_violations(base: Workflow, head: Workflow, bound: int = RECORDED_BOUND) -> list[str]:
     """Every workflow-level key and every job must match across the pair except the runtime
-    job's `timeout-minutes`, which must be the explicit integer `BOUND` on the head side."""
+    job's `timeout-minutes`, which must be the explicit integer `bound` on the head side.
+    The default is the RECORD pair's value (EKO-1-30 C-1): this file judges #138's pinned
+    history, and a retune of the live bound must not move it; the simulation drives the
+    paired-application check by passing the simulated value explicitly."""
     problems: list[str] = []
     for key in sorted(set(base) | set(head), key=str):
         if key != "jobs" and base.get(key) != head.get(key):
@@ -79,8 +90,8 @@ def parsed_violations(base: Workflow, head: Workflow) -> list[str]:
             continue
         if TIMEOUT not in after:
             problems.append(f"job {name}: no explicit {TIMEOUT}")
-        elif type(after[TIMEOUT]) is not int or after[TIMEOUT] != BOUND:
-            problems.append(f"job {name}: {TIMEOUT} is {after[TIMEOUT]!r}, not {BOUND}")
+        elif type(after[TIMEOUT]) is not int or after[TIMEOUT] != bound:
+            problems.append(f"job {name}: {TIMEOUT} is {after[TIMEOUT]!r}, not {bound}")
         rest_before, rest_after = _without_bound(before), _without_bound(after)
         for key in sorted(set(rest_before) | set(rest_after)):
             if rest_before.get(key) != rest_after.get(key):
@@ -94,10 +105,14 @@ def parsed_violations(base: Workflow, head: Workflow) -> list[str]:
     return problems + wc.failures_fail_the_run({"jobs": runtime})
 
 
-def _masked(text: str, side: str, problems: list[str]) -> list[str]:
+def _masked(text: str, side: str, problems: list[str], bound: int) -> list[str]:
     """The file's lines with the runtime job's bound line masked and the one comment line
-    directly above it dropped. On the head side the bound line must read exactly `BOUND_LINE`,
-    with a comment line directly above it (C-3 makes that line required, not merely allowed)."""
+    directly above it dropped. On the head side the bound line must read exactly the text
+    `bound_line_of(bound)` derives, with a comment line directly above it (C-3 makes that
+    line required, not merely allowed — the comment is dropped after its existence, indent,
+    `#` prefix and position are checked; its content is never compared). The expected line
+    is derived from the bound at call time (EKO-1-30 K-05): a move of the value cannot be
+    answered with a line left behind."""
     lines = text.split("\n")
     dropped: set[int] = set()
     jobs = lines.index("jobs:") if "jobs:" in lines else len(lines)
@@ -115,8 +130,9 @@ def _masked(text: str, side: str, problems: list[str]) -> list[str]:
         return lines
     [at] = hits
     above = wc.JOB_COMMENT.fullmatch(lines[at - 1]) is not None
-    if side == "head" and lines[at] != BOUND_LINE:
-        problems.append(f"job {RUNTIME}: {lines[at].strip()!r} is not {BOUND_LINE.strip()!r}")
+    expected = bound_line_of(bound)
+    if side == "head" and lines[at] != expected:
+        problems.append(f"job {RUNTIME}: {lines[at].strip()!r} is not {expected.strip()!r}")
     if side == "head" and not above:
         problems.append(f"job {RUNTIME}: no comment line directly above {TIMEOUT}")
     lines[at] = MASK
@@ -125,12 +141,12 @@ def _masked(text: str, side: str, problems: list[str]) -> list[str]:
     return [line for i, line in enumerate(lines) if i not in dropped]
 
 
-def text_violations(base: str, head: str) -> list[str]:
+def text_violations(base: str, head: str, bound: int = RECORDED_BOUND) -> list[str]:
     """Whole-file byte equality once the runtime job's bound (and its one comment line) are
     masked away; a difference anywhere else in the file — another job, indentation, key order —
     is a difference beyond the bound."""
     problems: list[str] = []
-    before, after = _masked(base, "base", problems), _masked(head, "head", problems)
+    before, after = _masked(base, "base", problems, bound), _masked(head, "head", problems, bound)
     if before != after:
         diff = difflib.unified_diff(before, after, "base", "head", lineterm="", n=0)
         shown = [line for line in diff if line[:1] in "+-" and line[:3] not in ("---", "+++")]
@@ -138,14 +154,16 @@ def text_violations(base: str, head: str) -> list[str]:
     return problems
 
 
-def k02_violations(base: str, head: str) -> list[str]:
+def k02_violations(base: str, head: str, bound: int = RECORDED_BOUND) -> list[str]:
     """The K-02 claim between two commits, read through Git objects only; a missing commit
-    raises (`fixed_pair.file_at`)."""
+    raises (`fixed_pair.file_at`). The bound parameter is #138's recorded value by default;
+    EKO-1-30's simulation passes its simulated bound together with a head built by
+    `raise_for` at the same value, never one without the other (K-05 paired application)."""
     base_text, head_text = file_at(base, RELEASE), file_at(head, RELEASE)
     if base_text is None or head_text is None:
         return [f"{RELEASE} missing"]
-    problems = parsed_violations(yaml.safe_load(base_text), yaml.safe_load(head_text))
-    return problems + text_violations(base_text, head_text)
+    problems = parsed_violations(yaml.safe_load(base_text), yaml.safe_load(head_text), bound)
+    return problems + text_violations(base_text, head_text, bound)
 
 
 # The claim on the pinned pair -----------------------------------------------------------------
@@ -166,7 +184,7 @@ def test_eko127_k02_contrast_the_base_before_the_raise_fails() -> None:
     report it — 60 is not the bound, the bound line is not the exact text, and the required
     provenance comment line above it is missing."""
     found = k02_violations(BASE, BASE)
-    assert f"job {RUNTIME}: {TIMEOUT} is 60, not {BOUND}" in found
+    assert f"job {RUNTIME}: {TIMEOUT} is 60, not {RECORDED_BOUND}" in found
     assert any(p.startswith(f"job {RUNTIME}: '{TIMEOUT}: 60' is not") for p in found)
     assert f"job {RUNTIME}: no comment line directly above {TIMEOUT}" in found
 
@@ -180,9 +198,11 @@ def test_eko127_k02_a_simulated_head_with_only_the_raise_passes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The claim node's green side, provable before the checkpoint stamp: a throwaway head —
-    the pinned base with `RAISE` applied and nothing else — passes both judgment forms."""
+    the pinned base with `RECORDED_RAISE` applied and nothing else — passes both judgment
+    forms. A record node (gate 1 of #152): the raise text is #138's and a retune never
+    rebuilds it."""
     repo = Throwaway(tmp_path / "repo", HEAD, monkeypatch)
-    simulated = repo.commit(BASE, RAISE)
+    simulated = repo.commit(BASE, RECORDED_RAISE)
     assert k02_violations(BASE, simulated) == []
 
 
@@ -190,7 +210,7 @@ def test_eko127_k02_a_simulated_head_with_only_the_raise_passes(
 
 
 def _bound(value: str) -> Callable[[Throwaway], None]:
-    return job_edit(RELEASE, RUNTIME, f"{BOUND_LINE}\n", f"    {TIMEOUT}: {value}\n")
+    return job_edit(RELEASE, RUNTIME, f"{RECORDED_BOUND_LINE}\n", f"    {TIMEOUT}: {value}\n")
 
 
 def _bound_dropped() -> Callable[[Throwaway], None]:
@@ -199,7 +219,7 @@ def _bound_dropped() -> Callable[[Throwaway], None]:
     def change(repo: Throwaway) -> None:
         mode, _ = repo.entry(RELEASE)
         text = repo.text(RELEASE)
-        found = re.compile(rf"    #[^\n]*\n{re.escape(BOUND_LINE)}\n").search(text)
+        found = re.compile(rf"    #[^\n]*\n{re.escape(RECORDED_BOUND_LINE)}\n").search(text)
         assert found is not None
         repo.put(RELEASE, repo.blob(text[: found.start()] + text[found.end() :]), mode)
 
@@ -214,13 +234,13 @@ PLANTS: dict[str, tuple[Callable[[Throwaway], None], str]] = {
         ),
         f"job {RUNTIME}: no explicit {TIMEOUT}",
     ),
-    "bound-restored-to-60": (_bound("60"), f"{TIMEOUT} is 60, not {BOUND}"),
+    "bound-restored-to-60": (_bound("60"), f"{TIMEOUT} is 60, not {RECORDED_BOUND}"),
     "continue-on-error-beside-the-bound": (
         job_edit(
             RELEASE,
             RUNTIME,
-            f"{BOUND_LINE}\n",
-            f"{BOUND_LINE}\n    continue-on-error: true\n",
+            f"{RECORDED_BOUND_LINE}\n",
+            f"{RECORDED_BOUND_LINE}\n    continue-on-error: true\n",
         ),
         f"{RUNTIME}: continue-on-error",
     ),
@@ -259,11 +279,21 @@ PLANTS: dict[str, tuple[Callable[[Throwaway], None], str]] = {
         "job publish changed",
     ),
     "a-second-bound-line-in-the-runtime-job": (
-        job_edit(RELEASE, RUNTIME, f"{BOUND_LINE}\n", f"{BOUND_LINE}\n{BOUND_LINE}\n"),
+        job_edit(
+            RELEASE,
+            RUNTIME,
+            f"{RECORDED_BOUND_LINE}\n",
+            f"{RECORDED_BOUND_LINE}\n{RECORDED_BOUND_LINE}\n",
+        ),
         "has 2 timeout-minutes lines, not one",
     ),
     "a-second-comment-line-above-the-bound": (
-        job_edit(RELEASE, RUNTIME, f"{BOUND_LINE}\n", f"    # planted\n{BOUND_LINE}\n"),
+        job_edit(
+            RELEASE,
+            RUNTIME,
+            f"{RECORDED_BOUND_LINE}\n",
+            f"    # planted\n{RECORDED_BOUND_LINE}\n",
+        ),
         "differs beyond the bound",
     ),
     "a-step-level-timeout": (
@@ -271,7 +301,12 @@ PLANTS: dict[str, tuple[Callable[[Throwaway], None], str]] = {
         "has its own timeout-minutes",
     ),
     "a-trailing-inline-comment-on-the-bound-line": (
-        job_edit(RELEASE, RUNTIME, f"{BOUND_LINE}\n", f"{BOUND_LINE} # planted\n"),
+        job_edit(
+            RELEASE,
+            RUNTIME,
+            f"{RECORDED_BOUND_LINE}\n",
+            f"{RECORDED_BOUND_LINE} # planted\n",
+        ),
         "is not 'timeout-minutes: 360'",
     ),
     "the-concurrency-group-edited": (
@@ -282,12 +317,12 @@ PLANTS: dict[str, tuple[Callable[[Throwaway], None], str]] = {
         ),
         "workflow key 'concurrency' changed",
     ),
-    "value-361": (_bound("361"), f"{TIMEOUT} is 361, not {BOUND}"),
-    "value-boolean": (_bound("true"), f"{TIMEOUT} is True, not {BOUND}"),
-    "value-float": (_bound("360.0"), f"{TIMEOUT} is 360.0, not {BOUND}"),
-    "value-negative": (_bound("-1"), f"{TIMEOUT} is -1, not {BOUND}"),
-    "value-quoted": (_bound('"360"'), f"{TIMEOUT} is '360', not {BOUND}"),
-    "value-zero": (_bound("0"), f"{TIMEOUT} is 0, not {BOUND}"),
+    "value-361": (_bound("361"), f"{TIMEOUT} is 361, not {RECORDED_BOUND}"),
+    "value-boolean": (_bound("true"), f"{TIMEOUT} is True, not {RECORDED_BOUND}"),
+    "value-float": (_bound("360.0"), f"{TIMEOUT} is 360.0, not {RECORDED_BOUND}"),
+    "value-negative": (_bound("-1"), f"{TIMEOUT} is -1, not {RECORDED_BOUND}"),
+    "value-quoted": (_bound('"360"'), f"{TIMEOUT} is '360', not {RECORDED_BOUND}"),
+    "value-zero": (_bound("0"), f"{TIMEOUT} is 0, not {RECORDED_BOUND}"),
     "whitespace-only-in-another-job": (
         edit(
             RELEASE,
@@ -323,4 +358,4 @@ def test_eko127_k02_the_verdict_ignores_the_live_base(
     monkeypatch.setenv("CHANGESET_BASE", ABSENT)
     assert k02_violations(BASE, HEAD) == []
     planted = repo.commit(HEAD, PLANTS["bound-restored-to-60"][0])
-    assert f"job {RUNTIME}: {TIMEOUT} is 60, not {BOUND}" in k02_violations(BASE, planted)
+    assert f"job {RUNTIME}: {TIMEOUT} is 60, not {RECORDED_BOUND}" in k02_violations(BASE, planted)
