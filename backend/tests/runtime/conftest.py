@@ -74,6 +74,8 @@ def parse_instant(value: str) -> datetime:
 
 # EKO-1-15 K-02 (ADR-0004-C31): in a release run the runtime tests run the images built once and
 # checked, loaded under the names EKO_CHECKED_IMAGES gives, and never rebuild them.
+# EKO-1-26 K-01 and K-02 (route A): the custom Keycloak image joins the placed family — it too
+# is built and identity-verified outside the session, so the session never builds it in session.
 CHECKED_SERVICES = {
     "proxy": "proxy",
     "frontend": "frontend",
@@ -81,8 +83,9 @@ CHECKED_SERVICES = {
     "backend": "backend",
     "migrate": "backend",
     "worker": "backend",
+    "keycloak": "keycloak",
 }
-BUILT_SERVICES = ("proxy", "frontend", "backup", "backend")
+BUILT_SERVICES = ("proxy", "frontend", "backup", "backend", "keycloak")
 
 
 @functools.cache
@@ -101,10 +104,13 @@ def checked_images_override() -> Path | None:
         if service in BUILT_SERVICES:
             lines.append("    build: !reset null")
         if service == "backup":
-            # The manifest names the backend image the composition runs, as the anchor does.
+            # The manifest names the images the composition actually runs, as the anchors do.
+            # EKO-1-26 K-02 (C-4 edge): keycloak's manifest name mirrors the placed checked image
+            # exactly like backend's, so the release-mode manifest never names a non-running image.
             lines += [
                 "    environment:",
                 f"      BACKUP_MANIFEST_BACKEND_IMAGE: {images['backend']}",
+                f"      BACKUP_MANIFEST_KEYCLOAK_IMAGE: {images['keycloak']}",
             ]
     override = Path(tempfile.mkdtemp(prefix="eko-checked-")) / "checked-images.yaml"
     override.write_text("\n".join(lines) + "\n", encoding="utf-8")

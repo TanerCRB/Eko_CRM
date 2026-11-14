@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-13",
+  "task": "EKO-1-26",
+  "phase": "code",
+  "role": "developer-infrastructure",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Low",
+  "agentId": "a5c681948c8fca839",
+  "tokens": 12881213,
+  "tokenSplit": null,
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 44,
+  "seconds": 58158,
+  "fixRound": 0,
+  "reworkCause": "CI-defect round (step 18): the merged tree's eko115 manifest QA expectation pinned the pre-route-A anchor name; earlier catcher: none realistic locally — the expectation only meets the shipped render in a runtime job, which local gates for a statics-only task do not run",
+  "notes": "delta of cumulative record since fix round 2; the row spans BOTH the merge-resolution and the CI-fix resumptions (row 46 carries no token data for the merge round — the cumulative record was not captured at that checkpoint; disclosed); seconds are wall-clock between captures, idle included; CI-fix battery: 4 runtime + 75 static + 14 collection + ruff/mypy green, failing test PASSED locally"
+}

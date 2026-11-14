@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-13",
+  "task": "EKO-1-26",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Medium",
+  "agentId": "a5845ee22422f3b03",
+  "tokens": 661129,
+  "tokenSplit": { "input": 3689, "output": 30441, "cacheWrite": 73113, "cacheRead": 553886 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 26,
+  "seconds": 777,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "merge re-verification (fix diff 56aec0a..b1afd1b): PASS, R-01 carried; placement regions byte-intact, lockstep holds, no suppressions; no fresh boundary snapshot taken (in-progress merge state; resolution reviewed via git show — disclosed in journal); report .task/handoff/12-guardian-2.md"
+}

@@ -5,10 +5,6 @@ project images locally and names no image of the project registry.
 The unchanged-jobs claim is EKO-1-15's and is judged on PR #85's parents (EKO_1_15_BASE,
 EKO_1_15_HEAD), read through Git objects only (EKO-1-23, #110): never `$CHANGESET_BASE`,
 `origin/main` or the working tree; the other checks read the live `ci.yml`. The runtime half
-
-The closed list of allowed differences also holds, since EKO-1-12 fix round 3 (2026-11-11) and on
-the EKO-1-15 F-1 precedent, exactly one step: the keycloak pre-build of the release-mode job,
-listed as `release_workflow.CI_KEYCLOAK_PREBUILD_STEP` and dropped once from each side.
 (the development profile started with the project registry unreachable) is not here.
 """
 
