@@ -15,6 +15,10 @@ longer swallows a later literal assignment, diff-form `+` markers fire again aft
 Unicode line separators, the preceding-slot context accepts quoted first values and
 comma terminators, the attached `--env=`/`-e` flag forms fire, and the true
 `token=token` census of scripts/keycloak-bootstrap.py is pinned.
+
+EKO-1-31 (Issue #162): the realm scan's failure report names the offending field path only —
+the helper no longer lets pytest render the realm's values into the CI traceback. Detection
+is unchanged.
 """
 
 import json
@@ -174,8 +178,16 @@ def walk_secret_fields(value: Any, path: str = "") -> list[tuple[str, Any]]:
 
 
 def assert_no_forbidden_secret_fields(realm: dict[str, Any]) -> None:
+    # EKO-1-31 (Issue #162): a violation must reach CI as a path-only report. pytest renders the
+    # raising frame's argument (the whole parsed realm) and the rewritten assert echoes the value
+    # in its breakdown — the two channels that made the failure log a second persistent copy of
+    # the secret it caught. The frame hide plus the explicit raise silence both; the violation,
+    # the AssertionError contract of the two helper users below and the message (the field path)
+    # are unchanged.
+    __tracebackhide__ = True
     for path, value in walk_secret_fields(realm):
-        assert isinstance(value, str) and ENV_PLACEHOLDER.fullmatch(value), path
+        if not (isinstance(value, str) and ENV_PLACEHOLDER.fullmatch(value)):
+            raise AssertionError(path)
 
 
 def test_k06_export_has_no_users_or_separate_user_files() -> None:
