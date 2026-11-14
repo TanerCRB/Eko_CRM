@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-13",
+  "task": "EKO-1-29",
+  "phase": "code",
+  "role": "developer-backend",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "High",
+  "agentId": "a93cd02a61da07d79",
+  "tokens": 40850058,
+  "tokenSplit": { "input": 14286, "output": 420133, "cacheWrite": 1667915, "cacheRead": 38747724 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 111,
+  "seconds": 7996,
+  "fixRound": 2,
+  "reworkCause": "auditor S-4 + guardian G-01 STOP at fix round 1: leftmost-match swallow (base-fired classes lost) and separator-diff loss; dev-2 did not enumerate candidates nor re-run base-vs-head shape corpus before claiming no-loss",
+  "notes": "boundary-check: clean (t5, guard+evidence); checkpoint ffd4020; RAW_CANDIDATES zero-width enumeration + DIFF_LINE_MARKER/ASSIGNMENT_TAIL split (start+1 restart proven insufficient - recorded); attached --env=/-e= forms; slot quoted/comma contexts; census-after 45 files 0/0 flips no other-task file touched; guard 192->242 (+50 derivation stated, 4 truth-pin families disclosed as green-at-head); kill-proofs K1..K7 with redundancy notes for QA; k07 plant collision found+fixed via dev-1 prefix precedent (B-11); FULL SUITE NOT re-run after plant swap by dev - driver re-runs locally (bprgt5l6b) + CI authoritative; earlier crashed run had 1 unidentified failure name - clean CI pass demanded at gate 2; ledger B-07..B-12; timing linear all probes (320k all-held 589ms worst)"
+}

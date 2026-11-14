@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-12",
+  "task": "EKO-1-29",
+  "phase": "code",
+  "role": "developer-backend",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "acef69c5167f058c9",
+  "tokens": 18419088,
+  "tokenSplit": { "input": 12579, "output": 279268, "cacheWrite": 700054, "cacheRead": 17427187 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 95,
+  "seconds": 5978,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "boundary-check: clean (t2, k06 file + docs/evidence/EKO-1-29); weakening/leftovers clean on 6bc977a..7c7f427; static 1918 passed, k06 11->127, ruff format/check + mypy + links green; plants proxy/+identity/ red->green, mutations a/b/c kill different halves, all reverted (0 MUTATION markers, plant temps deleted); deviations for ratification: D-1/A-05 raw plant renamed ADMIN_POSTGRES_PASSWORD= (k07 C9 all-tracked scan flags bare inventory names; verified by probe; k03 edge ships verbatim diff-form), A-06 constant split RAW_/DIFF_ behind extracted predicate, A-01 name==value self-reference holds (14 kwargs lines in scripts), A-02 raw anchors line-start, A-03/A-04 hold-semantics untested-as-named, A-07 plants were working-tree edits not commits (dev cannot commit); process: interim handback burned slot, final delivered via resumed cycle; checkpoint 7c7f427"
+}

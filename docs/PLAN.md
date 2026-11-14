@@ -416,12 +416,13 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   *Done when:* the release-mode CI runtime job reaches its K-04 image guard green on a CI run — the checked-images family covers `localhost/eko-crm/keycloak:26.8.1-eko112` so no runtime test builds it in session; the release pipeline names the custom Keycloak image the route ADR-0004 requires; PR #135 rebased on this merge goes green.
   **Out of scope (explicit):** the boot-identity mechanism of PR #135; the remaining release-mode red tests #140-#144; `backup/` content; the ADR-0004 image-table row moves only through this task's gate 3.
 
-- [ ] **EKO-1-27** — Set the release.yml runtime job bound from the recorded suite durations so the next release tag's runtime job completes instead of cancelling (#138).
+- [x] **EKO-1-27** — Set the release.yml runtime job bound from the recorded suite durations so the next release tag's runtime job completes instead of cancelling (#138).
   *Done when:* the `runtime` job of `release.yml` carries `timeout-minutes` equal to the value decided at gate 1 (G-1, recommended 360 to match `ci.yml`'s C-5 jobs) and ≥ the longest completed duration of the same suite on this task's tree (EKO-1-25 recorded 126.4 / 122.6 min); a static bound guard (Analyst-named, house style `test_eko125_k04/k05_*`) passes and a planted wrong value fails it; the PR body states the value against the recorded durations observed on this task's CI runs (URL in the PR, first `main` run in the gate-3 PR); a duration reaching the bound returns the value to gate 1; no release tag is pushed by the task; everything in `release.yml` except the one bound is unchanged. Confirmation at the next human-pushed release tag: the runtime job completes, not cancelled (G-2).
   **Out of scope (explicit):** fixing runtime failures (#140–#144, closed); other release.yml job bounds; shortening/splitting the suite (EKO-1-25 C-3); pushing a tag or making a release (human-only); hang-detection beyond the bound value; EKO-1-20/weakening-1 (EKO-1-25 C-6).
   After EKO-1-25 (its C-4 deferred this Issue).
+  **Done 2026-11-13:** merged in [PR #154](https://github.com/TanerCRB/Eko_CRM/pull/154) as a merge commit `105450a` (merge-commit, not squash — the pinned pair `044e957`..`bb5f855` verified reachable from `main`); verified at `728f204` (surface byte-identical from `ea4e3ab` through the EKO-1-28 merge-in; Guardian round 1 PASS on the merge diff). The bound 60→360 (C-1) with the one provenance comment (C-3); guards `backend/tests/static/test_eko127_k01/k02/k03_*.py` — 53 nodes, k01 a live invariant, k02/k03 pair-frozen — green locally and in CI; QA round 0: mutations M-1a/b/c, M-2b, M-3b and guard-gutting M-4..M-8 all killed (Base `bb5f855`, patches in the PR). K-04 (human, accepted at gate 2): PR run [43406013490](https://github.com/TanerCRB/Eko_CRM/actions/runs/43406013490) — `runtime-checked` 148.5 min, composition 154.1 min, completed not-cancelled under 360 on the merged suite; first `main` run at the merge [43416999762](https://github.com/TanerCRB/Eko_CRM/actions/runs/43416999762) — 147.7 / 155.7 min, both success (observed, not assumed). K-05 (human, accepted): origin tags still only `v0.1.0`/`v0.1.1`, no release run in the window, no tag pushed by the task. The release variant of the job stays untimed as a whole (C-2): the next human-pushed tag confirms, a follow-up Issue is due if its runtime job cancels. Guardian and Auditor PASS; Reviewer PASS with 3 Low → follow-ups #152, #153; exception EKO-1-27/boundary-1 entered in the exception register; role write-set gap #137 stands.
 
-- [ ] **EKO-1-28** — Committed regression guard for the bootstrap re-close failure branch (#119).
+- [x] **EKO-1-28** — Committed regression guard for the bootstrap re-close failure branch (#119).
   *Done when:* a committed runtime test drives `open_gate`'s re-close-failure path (the
   `proxy re-close failed; listeners not confirmed closed` record and `exit 1`) through a
   forced-fail mode or stub hook, contrasted with the success path on the same mechanism; deleting
@@ -432,6 +433,46 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** any other bootstrap branch's coverage; the secret-scan raw-format
   teeth (#120, EKO-1-29); behavior changes to the real restart path; CI bound changes.
   After EKO-1-12.
+  **Done 2026-11-13:** merged in [PR #151](https://github.com/TanerCRB/Eko_CRM/pull/151) as `28196a1`:
+  test-only hook `EKO128_FORCE_RECLOSE_FAIL` consulted only at the re-close point (pure addition
+  `133/0`, shipped `if/else/return 1` byte-identical, reviewer-traced leak-bounded by `set -e`),
+  `backend/tests/runtime/test_eko128_reclose_failed_branch.py` four cases (clause-content
+  discrimination, unset/empty shipped path, healthy-composition reach boundary), `--self-test`
+  9→13 reclose cases. Verification: guardian/reviewer/auditor PASS (reviewer Lows: budget carried
+  at ~42.2 min per runtime job, sed-verify diagnosability); QA PROOF HOLDS — Q-1/Q-2/Q-3/Q-6
+  independently killed with sha-witnessed reverts; Q-4/Q-5/Q-7 not run under host memory
+  exhaustion (pre-hook control on the dev trail; the order and stub-fallthrough contrasts keep
+  only the offline restart-count teeth) — accepted by the human at gate 2 with the merge; K-04
+  closed by the PR-head run [43318789453](https://github.com/TanerCRB/Eko_CRM/actions/runs/43318789453):
+  both runtime jobs pass, the four `test_eko128_*` IDs PASSED un-skipped in the listings.
+  Exception EKO-1-12/R-32 removed by this check-off. Dev assumptions A-01/A-02 ratified at gate 2.
+
+- [x] **EKO-1-29** — Give the tracked-additions secret scan raw-format teeth (#120).
+  *Done when:* `SECRET_ENV_ASSIGNMENT` in `backend/tests/static/test_eko112_k06_synthetic_and_secret_free.py`
+  flags raw `NAME=value` assignment shapes in scanned files (not only diff-form `+`-prefixed lines),
+  proven by a committed plaintext plant turning the scan red and its removal turning it green, in a
+  scanned path beyond `proxy/` if the plant design demands; the widened prefix set from EKO-1-12 stays
+  intact; exception EKO-1-12/Q3-1 is removed at this task's gate 3; the Q3-2 formatter-drift half is
+  re-checked against current main and recorded as already fixed or given its own carrier.
+  **Out of scope (explicit):** changing what counts as a secret value beyond assignment shape; CI
+  wiring; the runtime-side log scans.
+  After EKO-1-12.
+  **Done 2026-11-13:** merged in [PR #159](https://github.com/TanerCRB/Eko_CRM/pull/159) as `412fc81`
+  (CI green at the head: static 2m33s, process-ci; runtime jobs skipping — paths outside their
+  triggers). The predicate now enumerates every assignment candidate (zero-width wrapper; the
+  leftmost-hold swallow that round 1 left — and that base's greedy match hid — is killed and
+  pinned): raw `NAME=literal` shapes fire under each of the four EKO-1-12 prefixes across
+  line-start, `;|&`, Unicode-separator, `env`/`-e`/`--env` (incl. attached) and quoted/comma-slot
+  contexts; diff-form teeth kept (guardian's full-tree base-vs-head floor scan: 0 lost fires);
+  self-reference hold narrowed to the statement-comma kwarg shape; linear prefilter and bounded
+  quantifiers (worst adversarial probe 589 ms/320k, tree scan ~7 ms). 242 committed guard items
+  (11 pre-existing + 116 + 65 + 50); QA M1..M7 killed one-mechanism-each, M8 behaviour-inert
+  confirmed with timing; live plant `proxy/qa129-plant.sh` red naming lines [2,3] then green.
+  Gate-2 human decisions: the `++`/`+++` glued-artifact family named as accepted-pass
+  (`cc62826`, census 0, QA M5 proves the guard is its cause); the pre-existing realm-value CI
+  traceback echo raised as follow-up #162. Ledger B-01..B-12 and the three supersessions
+  (census 14→17, slot-exclusion rationale, order-insensitivity comment) ratified with the merge.
+  Q3-2 recorded as already swept by PR #122. Exception EKO-1-12/Q3-1 removed by this check-off.
 
 ## EKO-2 — Access
 
