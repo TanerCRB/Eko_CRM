@@ -470,6 +470,19 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   (census 14→17, slot-exclusion rationale, order-insensitivity comment) ratified with the merge.
   Q3-2 recorded as already swept by PR #122. Exception EKO-1-12/Q3-1 removed by this check-off.
 
+- [ ] **EKO-1-31** — Stop CI tracebacks echoing realm secret values when the k06 realm scan fails (#162).
+  *Done when:* a committed guard test drives the real k06 realm-scan machinery to a failing report over
+  an in-memory realm carrying one synthetic planted secret and asserts the report names the field path
+  and nowhere contains the value (reverting the reporting fix reddens the guard), proven together with a
+  QA plant-and-remove cycle whose captured CI log shows the same on the static job; the scan still fails
+  the planted realm, every existing k06 node keeps name and verdict, failure reports outside this family
+  are unchanged, the new test's own synthetic values pass the k06 scans, the suite is green at the
+  merged tip.
+  **Out of scope (explicit):** the detection predicate and the raw-format scan (closed EKO-1-12/EKO-1-29
+  decisions); a repo-wide traceback policy; runtime-side log scans (carried from EKO-1-29); the
+  users-dict personal-data echo (ADR-0005 lens, own task); Actions log retention.
+  After EKO-1-29.
+
 ## EKO-2 — Access
 
 - [ ] **EKO-2-01** — Require login for the whole application.
