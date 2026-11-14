@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-13",
+  "task": "EKO-1-26",
+  "phase": "verification",
+  "role": "qa",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "High",
+  "agentId": "a60dce8abd1075452",
+  "tokens": 62991336,
+  "tokenSplit": { "input": 5764, "output": 260904, "cacheWrite": 1251498, "cacheRead": 61473170 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 289,
+  "seconds": 50856,
+  "fixRound": 0,
+  "reworkCause": "row covers the whole agent (cumulative record; resumed four times): round 1 = initial verification PROOF IS EMPTY (F-1 bootstrap anchor leak, F-2 SERVICES; 13 mutations killed; contaminated 4h47m session); two header re-emissions after markers.sh prose-vs-block mismatch (driver's partial grammar note at fault — see memory evaluator-prompt-markers-format); round 2 = re-verification after fix PROOF HOLDS (10 mutations, one SURVIVED -> committed trap-hygiene contrast; F-3 MEDIUM opened); K-01 predicate UNDECIDABLE both rounds (host memory collapse, then co-tenant EKO-2-01 session on the shared daemon)",
+  "notes": "boundary-check: clean both rounds (test dirs only); verdict events: qa@be371fe proof-is-empty, qa@e3250fc proof-holds; reports at .task/handoff/11-qa-1.md and 11-qa-2.md"
+}

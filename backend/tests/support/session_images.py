@@ -18,7 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-SERVICES = ("backend", "frontend", "proxy", "backup", "migrate", "worker")
+SERVICES = ("backend", "frontend", "proxy", "backup", "migrate", "worker", "keycloak")
 COMPOSE_NAME = re.compile(rf".+-({'|'.join(SERVICES)})")
 PROJECT_LABEL = "com.docker.compose.project"
 # Planted contrasts built from a shipped image on purpose (lab.py, eko113.py,

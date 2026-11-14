@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-12",
+  "task": "EKO-1-26",
+  "phase": "code",
+  "role": "developer-infrastructure",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "High",
+  "agentId": "a56c226ab1ca25dad",
+  "tokens": 18692116,
+  "tokenSplit": { "input": 312, "output": 45434, "cacheWrite": 775986, "cacheRead": 17870384 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 55,
+  "seconds": 5267,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "merge-integration round (delta of cumulative record vs row 35): dropped #135's transitional prebuild step+rule+allowances+plants per accepted draft; file deletion of test_eko112_k04_keycloak_prebuild_ci_step.py refused by the role's permission classifier pending a named human decision — human confirmed 'A' 2026-11-12, driver executed git rm; post-deletion full static running at hand-back (expected 1786/0); boundary unchanged (.github/ scripts/ backend/tests/); report mirrored from handback into .task/handoff/7-developer-infrastructure-2.md"
+}

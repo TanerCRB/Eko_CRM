@@ -5,8 +5,9 @@
 #                                                   # build recorded (BACKEND_ID, FRONTEND_ID, ...)
 #   bash scripts/release-images.sh push <tag>       # pushes the checked images under <tag>;
 #                                                   # stdout: <name>=sha256:<digest> per image
-#   bash scripts/release-images.sh pulled-digests   # stdout: postgres= and keycloak= digests of
-#                                                   # the images the runtime tests pulled by tag
+#   bash scripts/release-images.sh pulled-digests   # stdout: postgres= digest of the image the
+#                                                   # runtime tests pulled by tag (EKO-1-26 route A
+#                                                   # moved keycloak to the pushed family above)
 #   bash scripts/release-images.sh --self-test      # contrast cases against a stand-in docker
 #
 # Nothing is built here: every image pushed is one the image checks and runtime tests ran on.
@@ -19,7 +20,10 @@ trap 'echo "release-images: the script itself failed (line $LINENO)" >&2; exit 2
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 COMPOSE="$HERE/../compose.yaml"
-NAMES="backend frontend proxy backup"
+# EKO-1-26 route A (ADR-0004 addendum draft): the custom Keycloak image is the fifth project
+# image — built from identity/ by the checked-images/images job, identity-checked and pushed here
+# like the four before it; its digest is the push's own record, never a pulled reference.
+NAMES="backend frontend proxy backup keycloak"
 REGISTRY_PREFIX="ghcr.io/tanercrb/eko-crm"
 RELEASE_TAG_RE='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
 DIGEST_RE='sha256:[0-9a-f]{64}'
@@ -74,7 +78,9 @@ composition_reference() {
 
 pulled_digests() {
   local service reference name digest
-  for service in postgres keycloak; do
+  # EKO-1-26 K-03: postgres only — no step demands a registry digest for an image the pipeline
+  # does not publish; the compose-named keycloak reference is built, checked and pushed above.
+  for service in postgres; do
     reference="$(composition_reference "$service")"
     [ -n "$reference" ] || { echo "release-images: no $service image in compose.yaml" >&2; exit 2; }
     if ! docker image inspect "$reference" > /dev/null 2>&1; then
@@ -134,9 +140,12 @@ STAND_IN
     : > "$root/log"
     env PATH="$root/bin:$PATH" STUB_LOG="$root/log" STUB_FAIL_PUSH= STUB_NO_DIGEST= \
       BACKEND_ID="$(sha 1)" FRONTEND_ID="$(sha 2)" PROXY_ID="$(sha 3)" BACKUP_ID="$(sha 4)" \
+      KEYCLOAK_ID="$(sha 5)" \
       STUB_ID_BACKEND="$(sha 1)" STUB_ID_FRONTEND="$(sha 2)" STUB_ID_PROXY="$(sha 3)" \
-      STUB_ID_BACKUP="$(sha 4)" STUB_DIGEST_BACKEND="$(sha 11)" STUB_DIGEST_FRONTEND="$(sha 12)" \
+      STUB_ID_BACKUP="$(sha 4)" STUB_ID_KEYCLOAK="$(sha 5)" \
+      STUB_DIGEST_BACKEND="$(sha 11)" STUB_DIGEST_FRONTEND="$(sha 12)" \
       STUB_DIGEST_PROXY="$(sha 13)" STUB_DIGEST_BACKUP="$(sha 14)" \
+      STUB_DIGEST_KEYCLOAK="$(sha 15)" \
       "${overrides[@]}" bash "$self" "$@" > "$root/out" 2> "$root/err"
   }
   expect() {
@@ -157,7 +166,10 @@ STAND_IN
   digests() {
     local line lines=() name
     for name in "$@"; do
-      case "$name" in backend) line=11 ;; frontend) line=12 ;; proxy) line=13 ;; backup) line=14 ;; esac
+      case "$name" in
+        backend) line=11 ;; frontend) line=12 ;; proxy) line=13 ;; backup) line=14 ;;
+        keycloak) line=15 ;;
+      esac
       lines+=("$name=$(sha "$line")")
     done
     printf '%s\n' "${lines[@]}"
@@ -165,7 +177,7 @@ STAND_IN
 
   run_release -- check-identity; code=$?
   expect "check-identity passes when every checked image has its recorded ID" exit_is 0
-  expect "check-identity inspects all four images" [ "$(grep -c '^image inspect' "$root/log")" -eq 4 ]
+  expect "check-identity inspects all five images" [ "$(grep -c '^image inspect' "$root/log")" -eq 5 ]
 
   run_release STUB_ID_FRONTEND="$(sha 99)" -- check-identity; code=$?
   expect "check-identity fails (1) on a changed image ID" exit_is 1
@@ -176,9 +188,13 @@ STAND_IN
   run_release -- push v1.2.0; code=$?
   expect "push accepts the release tag v1.2.0" exit_is 0
   expect "push prints the registry digest of every image, in order" \
-    out_is "$(digests backend frontend proxy backup)"
+    out_is "$(digests backend frontend proxy backup keycloak)"
   expect "push tags the checked image under the release tag" \
     grep -qx "tag eko-crm/proxy:checked $REGISTRY_PREFIX/proxy:v1.2.0" "$root/log"
+  # EKO-1-26 K-03 naming rule: the custom Keycloak image is pushed to the project registry under
+  # `keycloak` — the one location the release composition may name — not from another path.
+  expect "push tags the custom keycloak image into the project registry" \
+    grep -qx "tag eko-crm/keycloak:checked $REGISTRY_PREFIX/keycloak:v1.2.0" "$root/log"
   expect "push runs no build" no_call build
 
   for tag in 1.2.0 v1.2 v01.2.0 v1.2.0-rc.1 V1.2.0 "v1.2.0 " ""; do

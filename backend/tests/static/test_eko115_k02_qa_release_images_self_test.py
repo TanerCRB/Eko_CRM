@@ -4,8 +4,9 @@ unnoticed.
 The developer's contrasts accept any non-zero exit from a mutated copy, so a copy that crashed
 (missing file, syntax error, exit 127) would count as caught. These contrasts demand exit 1 (the
 self-test's own verdict) and the named case that guards the removed rule. They also cover rules
-the developer's four contrasts do not: the recorded-ID check, all four images inspected, the tag
-refused before any docker call, and a failed push ending the step.
+the developer's four contrasts do not: the recorded-ID check, all five images inspected (EKO-1-26
+route A moved the family from four to five), the tag refused before any docker call, and a failed
+push ending the step.
 """
 
 import subprocess
@@ -30,7 +31,7 @@ MUTATIONS = [
         "every image inspected",
         "  local name want got\n  for name in $NAMES; do",
         "  local name want got\n  for name in backend frontend proxy; do",
-        "FAIL check-identity inspects all four images",
+        "FAIL check-identity inspects all five images",
     ),
     (
         "tag refused before any docker call",
