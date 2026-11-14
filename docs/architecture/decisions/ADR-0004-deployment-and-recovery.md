@@ -2052,3 +2052,32 @@ separate dated action gives every carrier one name per control while the record 
 gate used on the day it decided. The collision was found by the Architect's 2026-11-10 impact map
 and accepted with it at the same gate.
 
+
+### 2026-11-14 — The custom Keycloak image is a project-built image
+
+**What it records.** The addendum of 2026-11-06 made the `keycloak` service run a custom image
+built from `identity/`; the *Images* rule of the Decision and the addendum of 2026-11-04 already
+carry every image "built at the release tag, checked and pushed by the release run, and
+referenced by digest in the release composition". From this date the custom Keycloak image
+belongs to that set: the release run builds it from `identity/` once, runs its checks on that
+build, and the `publish` job pushes it to the project registry under
+`ghcr.io/tanercrb/eko-crm/keycloak` and records its digest, like the project images already
+there. A release composition references it by that digest; *Deployment* and *Restore procedure*
+pull it like the other release images. The development profile is unchanged: `compose.yaml`
+keeps the `localhost/eko-crm/keycloak:<full-version>` anchor and the `build:` from `identity/`,
+and the registry is used at deployment only.
+
+Two recorded references are read as superseded for the shared environments: the `keycloak` row
+of the table of *Image versions first used* (the base of `identity/Dockerfile` remains the
+official `quay.io/keycloak/keycloak:26.8.1`) and the `keycloak` row of *Composition and
+placement* ("the official Keycloak image, pinned"): the service runs the custom image, per the
+accepted addendum of 2026-11-06.
+
+No rule or control changes: ADR-0004-C29, C30 and C31 apply to this image unchanged, and C30's
+reading of the publish job is not widened.
+
+**Why.** The release machinery named a keycloak digest it could not obtain from a registry that
+did not hold the image (exception EKO-1-12/R-02, closed by EKO-1-26, Issue #118). Approved by
+the human at gate 1 of EKO-1-26 (route A, draft
+`EKO-1-26-keycloak-release-location-draft-2026-11-11.md`); merged in PR #157. This is not a
+deviation: it records how the image the project builds meets rules already accepted.
