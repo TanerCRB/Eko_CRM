@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-14",
+  "task": "EKO-1-31",
+  "phase": "analysis",
+  "role": "product-owner",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Medium",
+  "agentId": "a140fc17c5af3dec4",
+  "tokens": 938184,
+  "tokenSplit": {
+    "input": 4202,
+    "output": 40184,
+    "cacheWrite": 68053,
+    "cacheRead": 825745
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 29,
+  "seconds": 1556,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "story completed in-place (#162): DoD 5 conditions, Out-of-scope 5 items, labels state:analysis+role:backend, [EKO-1-31] title prefix; PO re-verified the echo with a synthetic plant in a scratch dir (both leak channels: helper argument rendering + rewritten-assert breakdown); judgment calls: family-only scope (G-1-B kept), adjacent users-dict personal-data echo scoped out with ADR-0005 rationale (G-2), dual carrier committed-test+CI-plant (G-3). boundary: none needed (registered, read-only + gh writes; main tree and worktree verified clean after call)"
+}
