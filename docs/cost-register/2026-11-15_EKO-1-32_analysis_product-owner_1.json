@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-15",
+  "task": "EKO-1-32",
+  "phase": "analysis",
+  "role": "product-owner",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Medium",
+  "agentId": "a29743af3db6e7030",
+  "tokens": 184112,
+  "tokenSplit": { "input": 3632, "output": 14684, "cacheWrite": 34620, "cacheRead": 131176 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 13,
+  "seconds": 358,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "product-owner — sonnet (medium) requested; cost-capture record says qwen3.8-flash, recorded per measurement rule. boundary-check: clean (--none). Verdict STORY FIXED, no clarifications; body applied to #166 (H1/heading levels normalized to #152 template, empty Clarifications placeholder added); G-1 (bound required vs RECORDED_BOUND default vs AST-only) and G-2 (glob assert vs commented freeze) carried to gate 1."
+}
