@@ -1,0 +1,8 @@
+{
+  "kind": "gate",
+  "task": "EKO-1-30",
+  "gate": 1,
+  "waitingSince": "2026-11-13T22:41:21Z",
+  "decidedAt": "2026-11-14T11:52:58Z",
+  "outcome": "approved: G-1 A, G-2 A (drop), Q-A A, Q-B A; fast-lane record approved; two analyst-proposed Out-of-scope lines approved; scope fingerprint 0ea38245d4168ade1ce05463d63f6748215535c3 accepted unchanged; answer: \"Akceptuje rekomendacje\" + push authorization + label change delegated to the session"
+}

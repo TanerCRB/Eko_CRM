@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-14",
+  "task": "EKO-1-30",
+  "phase": "verification",
+  "role": "security-auditor",
+  "model": "qwen3.8-max",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Medium",
+  "agentId": "ae41cdc364e4b56c3",
+  "tokens": 1304802,
+  "tokenSplit": { "input": 3799, "output": 35328, "cacheWrite": 95142, "cacheRead": 1170533 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 42,
+  "seconds": 1737,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "boundary-check: n/a (registered read-only role). Model trail: opus requested (hard tier, evaluator), measured qwen3.8-max. PASS, zero findings; read e91de3f via git show (noted HEAD 88158ce adds only the QA cost row - audited paths identical); corrected a premise in the supervisor's trigger brief: the new doc-check .sh is NOT wired into any workflow, same posture as the EKO-1-02..1-22 family. Shell-injection, execution-surface, repo-poisoning, secret-exposure, temp-abuse, skip-mode and supply-chain threat paths all traced to controls. Standing (not caused): doc-check family CI-inert, EKO-1-27 live-tree blindness, SHA-reachability hook-is-process."
+}

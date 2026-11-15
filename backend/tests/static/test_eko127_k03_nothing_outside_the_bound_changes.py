@@ -14,6 +14,9 @@ mechanism than K-02's content comparison, so each guard fails independently of t
 pair is read through Git objects only, never `$CHANGESET_BASE`, `origin/main`, `HEAD` or the
 working tree. Task bookkeeping paths (docs/PLAN.md reservation, cost-register rows) lie outside
 the frozen prefixes and do not trip the check — they are on the pair by design.
+
+EKO-1-30 (#152): the raise text this file plants is the record's `RECORDED_RAISE`; nothing
+here reads the live bound pair, so a future retune reddens no node of this file (gate 1, C-1).
 """
 
 import subprocess
@@ -27,7 +30,7 @@ from tests.static.test_eko127_k01_release_runtime_bound_is_the_recorded_value im
     BASE,
     BASES,
     HEAD,
-    RAISE,
+    RECORDED_RAISE,
     RELEASE,
 )
 from tests.support.fixed_pair import ABSENT, Throwaway, add, edit, modify
@@ -73,9 +76,11 @@ def test_eko127_k03_a_simulated_head_with_only_the_raise_passes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The claim node's green side, provable before the checkpoint stamp: a throwaway head —
-    the pinned base with `RAISE` applied and nothing else — changes exactly `release.yml`."""
+    the pinned base with `RECORDED_RAISE` applied and nothing else — changes exactly
+    `release.yml`. A record node (gate 1 of #152): the raise text is #138's and a retune
+    never rebuilds it."""
     repo = Throwaway(tmp_path / "repo", HEAD, monkeypatch)
-    simulated = repo.commit(BASE, RAISE)
+    simulated = repo.commit(BASE, RECORDED_RAISE)
     assert changed_violations(BASE, simulated) == []
 
 

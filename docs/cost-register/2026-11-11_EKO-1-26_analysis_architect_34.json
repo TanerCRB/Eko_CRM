@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-11",
+  "task": "EKO-1-26",
+  "phase": "analysis",
+  "role": "architect",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "High",
+  "agentId": "a1deabc6bba4644e8",
+  "tokens": 2161891,
+  "tokenSplit": { "input": 4379, "output": 37518, "cacheWrite": 140264, "cacheRead": 1979730 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 40,
+  "seconds": 509,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "boundary-check: clean (only allowed path docs/architecture/decisions/ used; the draft was moved to .task/handoff/4-architect-draft.md pending the gate-1 route decision — not committed on the branch); verdict REQUIRES A HUMAN DECISION, recommendation route A"
+}

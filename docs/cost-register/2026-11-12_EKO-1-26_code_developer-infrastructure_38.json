@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-12",
+  "task": "EKO-1-26",
+  "phase": "code",
+  "role": "developer-infrastructure",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "High",
+  "agentId": "a5c681948c8fca839",
+  "tokens": 14998475,
+  "tokenSplit": { "input": 14269, "output": 146706, "cacheWrite": 797113, "cacheRead": 14040387 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 111,
+  "seconds": 16668,
+  "fixRound": 1,
+  "reworkCause": "QA STOP F-1 (bootstrap composes without the checked-images override; CI K-04 predicted red) — could have been caught earlier by: the Developer's own round-1 grep for compose invocations outside base_args (the script was in its changed set via --self-test), and the Analyst's K-01 Edges named the name-reuse gap but not the bootstrap carrier gap",
+  "notes": "spans the session restart (transcript resumed; stop+resume recorded once); boundary-check clean (scripts/ backend/tests/); checkpoint e3250fc; report at .task/handoff/10-developer-fix-1.md"
+}

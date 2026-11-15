@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-14",
+  "task": "EKO-1-30",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "qwen3.8-max",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "High",
+  "agentId": "ade75c97d6995dabb",
+  "tokens": 1679263,
+  "tokenSplit": { "input": 4039, "output": 59078, "cacheWrite": 136074, "cacheRead": 1480072 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 34,
+  "seconds": 2984,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "boundary-check: n/a (registered read-only role). Model trail: opus requested (hard tier, evaluator), measured qwen3.8-max. PASS, zero findings; verdict block clean first try. Disclosed one substitution: did not execute the doc-check self-test (role constraint reserves execution to QA) - verified the script by reading and matched QA's recorded 6/6 run one-for-one against the committed invocations; also verified pinned-pair reachability as ancestors of origin/main (decouples merge-commit rule from this branch's fate). Deliberate calibration list: A-01 compact carrier, env-recipe 3-vs-4 vars, QA D-01..D-03 disclosures - named but not findings. K-01 M-1 tension judged met on binding material; three-way concordance (dev/QA/guardian/reviewer) for gate 2."
+}
