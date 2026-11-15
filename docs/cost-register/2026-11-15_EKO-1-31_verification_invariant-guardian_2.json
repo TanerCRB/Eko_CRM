@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-15",
+  "task": "EKO-1-31",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Medium",
+  "agentId": "a79dcb9e546dc7de4",
+  "tokens": 605905,
+  "tokenSplit": {
+    "input": 4094,
+    "output": 14340,
+    "cacheWrite": 54706,
+    "cacheRead": 532765
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 26,
+  "seconds": 626,
+  "fixRound": 1,
+  "reworkCause": "re-verification after CI mypy defect fix (13b802e) + merge of main (84d845a); cause of the round: QA checkpoint passed without a mypy re-run locally (step 11a gap) — caught by CI; carried to task-memory as a process lesson",
+  "notes": "PASS 0/0/0/0 @ 6d74d426 (code 84d845a + evidence doc); fix commit audited exactly-2-hunks nothing rode in; plant lifecycle net-zero HEAD clean; incoming eko127/130/132 orthogonal (zero diff lines on all our mechanisms); K-03 snapshot + K-04 parse + QA control + full-tree C9 re-run green; K-05 re-scoped artifacts-supplied provenance-pending; boundary-check --none clean; verdict block validated"
+}
