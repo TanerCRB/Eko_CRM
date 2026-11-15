@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-15",
+  "task": "EKO-1-31",
+  "phase": "verification",
+  "role": "qa",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "High",
+  "agentId": "a9f5eeec912b05efa",
+  "tokens": 6248101,
+  "tokenSplit": {
+    "input": 4878,
+    "output": 77148,
+    "cacheWrite": 437942,
+    "cacheRead": 5728133
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 82,
+  "seconds": 7950,
+  "fixRound": 0,
+  "reworkCause": "markers.sh verdict exit 1 — Undecidable section prose named K-01 while block listed K-05 (format, not finding); one bounce to QA, corrected sections recovered via node-extract after second SubagentHandback was refused (one-report-per-cycle cap); supervisor spliced verbatim",
+  "notes": "PROOF HOLDS UNDECIDABLE=K-05 0/0/0/2 @ e9c6453; M1..M6 all KILLED with right-reason evidence; added test_eko131_qa_contrast.py positive control (closed real vacuity: K-01 passes under blanket --tb=no; control reddens — demonstrated under re-applied M4); F-1 K-01/K-02 mutation coupling (criteria-text), F-2 channel orthogonality converts planned foundation to evidence; boundary-check: clean (backend/tests/ only addition); tree byte-clean post-mutations; static re-run 2121 passed; Windows TMP-parent-pinning env note"
+}
