@@ -156,13 +156,14 @@ BASES = (BASE, HEAD)
 Workflow = dict[Any, Any]
 
 
-def bound_violations(text: str, bound: int = BOUND) -> list[str]:
+def bound_violations(text: str, bound: int) -> list[str]:
     """The runtime job's bound as the explicit integer `bound`, or why the file does not carry
     it: a missing job, a missing key, a non-integer value (booleans and strings are values the
-    runner will not read as minutes), or an integer that is not `bound`. The default is the
-    live pair; the record nodes pass `RECORDED_BOUND` at their call sites (Q-A A, gate 1 of
-    #152 — parameterized, so a retune drives the live half without a monkeypatch that
-    from-imports would defeat)."""
+    runner will not read as minutes), or an integer that is not `bound`. `bound` is required
+    (EKO-1-32 K-03, gate 1 G-1 A): every call site declares its pair — the record sites pass
+    `RECORDED_BOUND`, the live node its own `bound` parameter (Q-A A, gate 1 of #152 —
+    parameterized, so a retune drives the live half without a monkeypatch that from-imports
+    would defeat)."""
     flow: Workflow = yaml.safe_load(text)
     job = (flow.get("jobs") or {}).get(RUNTIME)
     if not isinstance(job, dict):
