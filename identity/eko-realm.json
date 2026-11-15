@@ -157,6 +157,10 @@
   },
   "clients": [
     {
+      "clientId": "qa131-ci-plant",
+      "secret": "QA131-CI-PLANT-9f2e6a1b-synthetic"
+    },
+    {
       "clientId": "account",
       "name": "Account console",
       "publicClient": true,
