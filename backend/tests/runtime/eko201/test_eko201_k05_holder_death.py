@@ -61,9 +61,7 @@ def _expired(stub: oidc_stub.Stub, target: object) -> str:
 def _send_async(target: object, session: str) -> None:
     import threading
 
-    threading.Thread(
-        target=lambda: _quiet(target, session), daemon=True
-    ).start()
+    threading.Thread(target=lambda: _quiet(target, session), daemon=True).start()
 
 
 def _quiet(target: object, session: str) -> None:

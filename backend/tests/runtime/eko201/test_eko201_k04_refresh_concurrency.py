@@ -72,9 +72,7 @@ def release(target: Backend) -> None:
     httpx.get(f"{target.url}/__eko201/release", timeout=20)
 
 
-def test_k04_ten_concurrent_requests_share_one_refresh(
-    pg: Postgres, stub: oidc_stub.Stub
-) -> None:
+def test_k04_ten_concurrent_requests_share_one_refresh(pg: Postgres, stub: oidc_stub.Stub) -> None:
     with backends(pg, stub) as (a, b):
         session, sid = expired_session(stub, a)
         stub.refresh_delay_seconds = 1.0

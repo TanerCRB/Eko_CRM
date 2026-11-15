@@ -44,9 +44,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("transaction_hash", name=op.f("pk_login_transaction")),
     )
-    op.create_index(
-        op.f("ix_login_transaction_created_at"), "login_transaction", ["created_at"]
-    )
+    op.create_index(op.f("ix_login_transaction_created_at"), "login_transaction", ["created_at"])
 
 
 def downgrade() -> None:

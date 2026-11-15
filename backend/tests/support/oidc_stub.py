@@ -135,7 +135,8 @@ class Stub:
     def refreshes(self, sid: str | None = None) -> list[TokenCall]:
         with self.lock:
             return [
-                c for c in self.token_calls
+                c
+                for c in self.token_calls
                 if c.grant_type == "refresh_token" and (sid is None or c.sid == sid)
             ]
 
@@ -251,8 +252,12 @@ def _handler(stub: Stub) -> type[BaseHTTPRequestHandler]:
                         method=query.get("code_challenge_method"),
                         redirect_uri=query.get("redirect_uri", ""),
                     )
-                target = query.get("redirect_uri", "") + "?" + urllib.parse.urlencode(
-                    {"code": code, "state": query.get("state", ""), "iss": stub.issuer}
+                target = (
+                    query.get("redirect_uri", "")
+                    + "?"
+                    + urllib.parse.urlencode(
+                        {"code": code, "state": query.get("state", ""), "iss": stub.issuer}
+                    )
                 )
                 self._send(302, headers={"Location": target})
             else:

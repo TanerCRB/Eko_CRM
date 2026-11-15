@@ -148,9 +148,7 @@ def session_read(caller: Annotated[Caller, Depends(current_caller)]) -> SessionI
     return SessionInfo(subject=caller.subject, name=caller.name)
 
 
-@router.post(
-    "/logout", operation_id="logout", response_model=LoggedOut, responses=_UNAUTHENTICATED
-)
+@router.post("/logout", operation_id="logout", response_model=LoggedOut, responses=_UNAUTHENTICATED)
 def logout(
     request: Request, response: Response, caller: Annotated[Caller, Depends(current_caller)]
 ) -> LoggedOut:

@@ -301,4 +301,3 @@ class Authenticator:
         except IdentityUnavailable:
             raise Unavailable from None
         self.store.delete(session.id)
-

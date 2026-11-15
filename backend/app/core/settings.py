@@ -140,7 +140,7 @@ def without_default_port(url: str) -> str:
         return url
     if int(match.group("port")) != _DEFAULT_PORTS[match.group("scheme")]:
         return url
-    return f"{match.group('scheme')}://{match.group('host')}{url[match.end():]}"
+    return f"{match.group('scheme')}://{match.group('host')}{url[match.end() :]}"
 
 
 def _decode_key(value: SecretStr) -> bytes:

@@ -240,9 +240,7 @@ def test_k01_every_protected_operation_answers_per_session_state(
             assert session_count(pg) == before, (method, path)
 
 
-def test_k01_health_stays_public_and_status_only(
-    make_app: AppFactory, browser_for: Any
-) -> None:
+def test_k01_health_stays_public_and_status_only(make_app: AppFactory, browser_for: Any) -> None:
     browser = browser_for(make_app())
     got = browser.send("GET", "/api/health")
     assert (got.status_code, got.json()) == (200, {"status": "ok"})
