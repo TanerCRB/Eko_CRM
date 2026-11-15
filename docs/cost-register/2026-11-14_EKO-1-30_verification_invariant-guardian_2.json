@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-14",
+  "task": "EKO-1-30",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "qwen3.8-max",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Low",
+  "agentId": "a6722458ce65a9028",
+  "tokens": 445860,
+  "tokenSplit": { "input": 3710, "output": 34718, "cacheWrite": 54535, "cacheRead": 352897 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 20,
+  "seconds": 1232,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "boundary-check: n/a (registered read-only role). Model trail: opus requested (hard tier, evaluator re-run on fix diff), measured qwen3.8-max. PASS 0/0/0/0 on ef80aa8; first-try markers clean. Method disclosed: empty-AST-dump caught via 0-byte check, re-run under venv python -I with positive control (360-to-361 substitution must change the dump); all thirteen QA mutation refs re-verified at both SHAs (dev shift list confirmed; 340's line text re-wrapped, referent/span unchanged). Verdict event posted on Issue #152 (comment id deliberately not inlined: a bare 10-digit number trips the K-07 NIP guard). Re-verification of the ruff-format fix only; rule set identical outcome to the full-branch PASS."
+}
