@@ -9,14 +9,16 @@ a broken guard rather than as history that must not move. This test drives the *
 eko127 node callables (Q-A A, gate 1 of #152: the violation functions are parameterized by
 the bound, the module constants are the defaults at their call sites; no monkeypatching —
 fact 7: from-imports bind at import time, a patch of a module attribute does not reach the
-importers) at a `SIMULATED_BOUND` different from the recorded 360 and asserts three things:
+importers) at a `SIMULATED_BOUND` different from the recorded 360 and asserts four things:
 
 - every eko127 node green at rest (the recorded baseline — today's suite, one element:
   the bound, unchanged);
 - under the simulated move the red set equals exactly the must-move classification of
   k01's docstring (Q-B A: machine-readable, agreement enforced node for node here);
 - no driven node dies with a bare `AssertionError` raised inside plant machinery rather
-  than by its own verdict — the 13-node failure mode caught in-tree.
+  than by its own verdict — the 13-node failure mode caught in-tree;
+- every collected eko127 id was actually driven in each run — the driving nodes assert
+  `driven == collected` (EKO-1-32 K-01: "not red" no longer means "never run").
 
 The paired application (K-05): a retune moves value, bound line and RAISE text together;
 this test applies the simulated bound through the pair helpers (`bound_line_of`,
@@ -203,21 +205,26 @@ def _verdict(
 
 def _drive(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, simulated: bool
-) -> tuple[set[str], list[str]]:
+) -> tuple[set[str], list[str], set[str]]:
     """Run every eko127 node, record constants at their defaults, and return
-    (red node ids, notes on any bare death or error)."""
+    (red node ids, notes on any bare death or error, ids of every node that reached a
+    verdict). The driven set is added to only after `_verdict` returns, so an id that
+    entered no verdict — a truncated loop, a silent skip — is missing from it (EKO-1-32
+    K-01: the driving nodes compare it against the collected ids)."""
     red: set[str] = set()
     deaths: list[str] = []
+    driven: set[str] = set()
     tag = "s" if simulated else "g"
     for index, (module, _, node_id) in enumerate(eko127_nodes()):
         state, note = _verdict(
             module, node_id, tmp_path / f"{tag}{index:02d}", monkeypatch, simulated
         )
+        driven.add(node_id)
         if state == "red":
             red.add(node_id)
         elif state == "bare":
             deaths.append(note)
-    return red, deaths
+    return red, deaths, driven
 
 
 def _agreement(red: set[str], entries: dict[str, str]) -> list[str]:
@@ -256,8 +263,11 @@ def test_eko130_k01_the_recorded_baseline_drives_every_eko127_node_green(
 ) -> None:
     """Contrast half of K-01: the same driving at the recorded 360 (one element: the bound)
     yields the empty red set and no bare death — today's green suite, reached through the
-    node callables rather than the runner."""
-    red, deaths = _drive(tmp_path, monkeypatch, simulated=False)
+    node callables rather than the runner. EKO-1-32 K-01: the driven ids equal the collected
+    ids, so a green baseline can no longer be an unrun one."""
+    red, deaths, driven = _drive(tmp_path, monkeypatch, simulated=False)
+    collected = {node_id for _, _, node_id in eko127_nodes()}
+    assert driven == collected, f"never driven: {sorted(collected - driven)}"
     assert red == set(), sorted(red)
     assert deaths == []
 
@@ -267,8 +277,12 @@ def test_eko130_k01_the_simulated_bound_reddens_exactly_the_must_move_nodes(
 ) -> None:
     """K-01c + K-02 enforcement in one: at the simulated bound the red set equals the
     classified must-move set, record nodes included — all k02/k03 nodes and k01's record
-    nodes — stay green with the recorded constants unchanged, and no node dies bare."""
-    red, deaths = _drive(tmp_path, monkeypatch, simulated=True)
+    nodes — stay green with the recorded constants unchanged, and no node dies bare.
+    EKO-1-32 K-01: the driven ids equal the collected ids — a silently skipped plant case
+    fails here on its missing id, not quietly."""
+    red, deaths, driven = _drive(tmp_path, monkeypatch, simulated=True)
+    collected = {node_id for _, _, node_id in eko127_nodes()}
+    assert driven == collected, f"never driven: {sorted(collected - driven)}"
     assert deaths == []
     entries = classification()
     assert _agreement(red, entries) == []
@@ -285,7 +299,7 @@ def test_eko130_k01_no_driven_eko127_node_dies_with_a_bare_assertionerror(
     the 21 k02 plant cases nor `the_verdict_ignores_the_live_base` may die with an
     AssertionError raised inside plant machinery instead of by the node's own verdict."""
     for simulated in (False, True):
-        _, deaths = _drive(tmp_path, monkeypatch, simulated)
+        _, deaths, _ = _drive(tmp_path, monkeypatch, simulated)
         assert deaths == [], deaths
 
 
@@ -379,7 +393,7 @@ def test_eko130_k02_a_flipped_classification_entry_reddens_the_agreement(
 ) -> None:
     """K-02 contrast / M-3 teeth: the agreement check is not vacuous — flipping one record
     node's entry to must-move makes it report the mismatch; flipping nothing reports none."""
-    red, deaths = _drive(tmp_path, monkeypatch, simulated=True)
+    red, deaths, _ = _drive(tmp_path, monkeypatch, simulated=True)
     assert deaths == []
     assert _agreement(red, classification()) == []
     flipped = dict(classification())
