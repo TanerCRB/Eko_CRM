@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-14",
+  "task": "EKO-1-31",
+  "phase": "code",
+  "role": "developer-backend",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Medium",
+  "agentId": "a2ae2933f0e19f4ce",
+  "tokens": 16712902,
+  "tokenSplit": {
+    "input": 5313,
+    "output": 156500,
+    "cacheWrite": 243598,
+    "cacheRead": 16307491
+  },
+  "tokensSource": "record",
+  "measured": "record",
+  "toolCalls": 118,
+  "seconds": 7073,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "READY FOR REVIEW; boundary-check: clean (allowed backend/tests/; exactly 3 paths under backend/tests/static/); mechanism __tracebackhide__+raise(path) after empirical probe showed plain raise leaves helper-frame argument block; K-01 red-before captured with both channels; test count 2262->2280 (+18, zero disappeared); full suite green per dev; supervisor re-runs gates pre-checkpoint; Windows TMP-churn race reported as env-only (root-caused, quiet-TMP pin used for local runs); assumptions A-01..A-05 for gate 2; tier: sonnet medium (no hard trigger)"
+}

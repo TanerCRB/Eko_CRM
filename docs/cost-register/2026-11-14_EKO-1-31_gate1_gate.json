@@ -1,0 +1,8 @@
+{
+  "kind": "gate",
+  "task": "EKO-1-31",
+  "gate": 1,
+  "waitingSince": "2026-11-14T17:20:00Z",
+  "decidedAt": "2026-11-14T20:45:00Z",
+  "outcome": "approved: G-1 A (family-scoped), G-2 A (users-dict echo out), G-3 A (dual carrier), identifier EKO-1-31 ratified, analyst-proposed Out-of-scope pytest-upgrade line kept; scope fingerprint 3e59204d4629e1b11eeb80f064bbcd8f53eafced accepted unchanged; answer: \"Akceptuje rekomendacje\"; label move delegated to the session; push NOT yet authorized at this gate"
+}

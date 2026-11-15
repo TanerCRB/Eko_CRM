@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-15",
+  "task": "EKO-1-31",
+  "phase": "code",
+  "role": "developer-backend",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Low",
+  "agentId": "a5d7c423e82d216c1",
+  "tokens": 303405,
+  "tokenSplit": null,
+  "tokensSource": "task-notification",
+  "measured": "record",
+  "toolCalls": 12,
+  "seconds": 303,
+  "fixRound": 1,
+  "reworkCause": "CI mypy arg-type in QA-authored test_eko131_qa_contrast.py:41 (tmp_path annotated pytest.TempPathFactory) — could have been caught by: supervisor re-running the full local gate (mypy/pytest) at step 11a on the QA checkpoint instead of only weakening/leftovers/layer; QA's own run also skipped mypy (role tools allowed it). Fixed by developer round 2 (one tier up per retry rule).",
+  "notes": "annotation-only fix (3+/1-, one file); mypy No issues found; ruff+format clean (250 files); control node 1 passed 33.66s; full suite NOT run by design (plant commit 88ddce4 on HEAD); boundary-check: clean; checkpoint 13b802e; weakening/leftovers clean origin/main...HEAD"
+}

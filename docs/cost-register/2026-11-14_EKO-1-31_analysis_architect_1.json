@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-14",
+  "task": "EKO-1-31",
+  "phase": "analysis",
+  "role": "architect",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Medium",
+  "agentId": "ab231d19bfeb9b517",
+  "tokens": 2387862,
+  "tokenSplit": {
+    "input": 3791,
+    "output": 32704,
+    "cacheWrite": 171227,
+    "cacheRead": 2180140
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 40,
+  "seconds": 631,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "FITS under both G-1 variants; no draft decision written (boundary-check: clean, allowed prefix docs/architecture/decisions/, nothing changed); corrected the Story's G-1=B claim — EKO-1-20/25/27 record tests do NOT mechanically redden under a B edit (historical-pair reads verified); class-free under A, auditor-forcing classes under B; recommends A; flags pytest-9.2.0 rendering pin + new-use foundation (failing-report subprocess capture) for QA's K-01 mutation run"
+}
