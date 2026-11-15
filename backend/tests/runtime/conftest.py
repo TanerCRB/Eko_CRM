@@ -29,7 +29,6 @@ if TYPE_CHECKING:
     from tests.runtime.lab import Lab
 
 UP_TIMEOUT_SECONDS = 900
-KEYCLOAK_IMAGE = "localhost/eko-crm/keycloak:26.8.1-eko112"
 PORT_VARIABLES = ("PROXY_HTTP_PORT", "PROXY_HTTPS_PORT", "PROXY_ADMIN_PORT")
 
 
@@ -355,13 +354,19 @@ def no_scheduler_outlives_its_test(request: pytest.FixtureRequest) -> Iterator[N
 @pytest.fixture(scope="module")
 def built_image(tmp_path_factory: pytest.TempPathFactory) -> str:
     """EKO-2-01 K-07: the custom Keycloak image built the composition's own way, by image ID;
-    shared by `test_eko201_k07_theme_image.py` and `test_eko201_qa_theme_image.py`."""
-    composition = new_composition(tmp_path_factory, "image")
-    composition.compose("build", "keycloak", timeout=1800)
-    inspected = subprocess.run(
-        ["docker", "image", "inspect", "--format", "{{.Id}}", KEYCLOAK_IMAGE],
-        capture_output=True,
-        timeout=600,
-        check=True,
-    )
-    return inspected.stdout.decode().strip()
+    shared by `test_eko201_k07_theme_image.py` and `test_eko201_qa_theme_image.py`. Through
+    `build_keycloak`, so a placed checked image is read as placed and never rebuilt (EKO-1-26)."""
+    from tests.runtime.keycloak_client import build_keycloak
+
+    return build_keycloak(new_composition(tmp_path_factory, "image"))
+
+
+@pytest.fixture(scope="module")
+def built_reference(built_image: str, tmp_path_factory: pytest.TempPathFactory) -> str:
+    """The name `built_image` runs under — the localhost anchor, or the placed checked image in a
+    release run — for fixture images built `FROM` it (BuildKit resolves no bare image ID there)."""
+    from tests.runtime.keycloak_client import image_id, keycloak_image_reference
+
+    reference = keycloak_image_reference(new_composition(tmp_path_factory, "image-name"))
+    assert image_id(reference) == built_image, "the name no longer holds the built image"
+    return reference

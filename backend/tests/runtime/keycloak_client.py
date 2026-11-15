@@ -97,10 +97,17 @@ def run_bootstrap(
 BUILT_KEYCLOAK: dict[str, str] = {}
 
 
+def keycloak_service(composition: Composition) -> dict[str, Any]:
+    """The `keycloak` service as the composition renders it, its override files included (the
+    harness's checked-images placement among them, through `Composition.base_args`)."""
+    rendered = json.loads(composition.compose("config", "--format", "json").stdout)
+    service: dict[str, Any] = rendered["services"]["keycloak"]
+    return service
+
+
 def keycloak_image_reference(composition: Composition) -> str:
     """The image the composition (its override files included) runs for `keycloak`."""
-    rendered = json.loads(composition.compose("config", "--format", "json").stdout)
-    reference: str = rendered["services"]["keycloak"]["image"]
+    reference: str = keycloak_service(composition)["image"]
     return reference
 
 
@@ -112,11 +119,16 @@ def image_id(reference: str) -> str:
 
 
 def build_keycloak(composition: Composition) -> str:
-    """Build the composition's Keycloak image from this tree and record its ID (QA-01). An
-    override that replaces the image without a build (a fixture image) builds nothing; the
-    record is then that fixture image."""
-    composition.compose("build", "keycloak", timeout=1800)
-    built = image_id(keycloak_image_reference(composition))
+    """Build the composition's Keycloak image from this tree and record its ID (QA-01).
+
+    Only a composition whose `keycloak` service has a build is built. One that runs a given image
+    without a build — the checked image a release run places (EKO-1-26 route A: built and
+    identity-verified outside the session, never built in it) or a fixture image — runs no
+    `compose build`; the record is then that image's ID."""
+    service = keycloak_service(composition)
+    if service.get("build"):
+        composition.compose("build", "keycloak", timeout=1800)
+    built = image_id(service["image"])
     BUILT_KEYCLOAK[composition.project] = built
     return built
 

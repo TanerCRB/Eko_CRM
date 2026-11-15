@@ -140,12 +140,13 @@ def test_c35_image_adds_only_the_provider_the_seed_and_the_theme(built_image: st
 
 
 def test_c35_an_extra_file_copied_into_a_fixture_image_is_named(
-    built_image: str, tmp_path: Path
+    built_reference: str, tmp_path: Path
 ) -> None:
     tag = f"localhost/eko-crm/eko201-fixture:extra-{secrets.token_hex(4)}"
     (tmp_path / "extra.txt").write_text("eko201 fixture\n", encoding="utf-8")
     (tmp_path / "Dockerfile").write_text(
-        f"FROM {IMAGE}\nCOPY extra.txt /opt/keycloak/conf/eko201-extra.txt\n", encoding="utf-8"
+        f"FROM {built_reference}\nCOPY extra.txt /opt/keycloak/conf/eko201-extra.txt\n",
+        encoding="utf-8",
     )
     docker("build", "-q", "-t", tag, str(tmp_path), timeout=900)
     try:

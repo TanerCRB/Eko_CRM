@@ -13,7 +13,6 @@ The restore half of C36 (re-applying OTP-credential removals at restore step 9) 
 (#36, G-H A); nothing here restores.
 """
 
-import os
 import secrets
 import subprocess
 from pathlib import Path
@@ -24,17 +23,18 @@ from tests.runtime.conftest import Composition
 from tests.runtime.keycloak_client import (
     RealmClient,
     boot_identity,
+    keycloak_image_reference,
     listener_open,
     marker_value,
     prepare,
     run_bootstrap,
 )
 from tests.support import eko112_fixtures as eko112
+from tests.support.bootstrap_placement import RUNNING_FAMILIES, bootstrap_placement
 from tests.support.repo import REPO_ROOT
 from tests.support.theme_checks import IMAGE_THEME_DIR, THEME_NAME
 
 pytestmark = pytest.mark.runtime
-IMAGE = "localhost/eko-crm/keycloak:26.8.1-eko112"
 EXPORT = REPO_ROOT / "identity" / "eko-realm.json"
 THEME_FILE = f"{IMAGE_THEME_DIR}/login/theme.properties"
 PROVIDER_JAR = "/opt/keycloak/providers/eko112-event-store-1.0.0.jar"
@@ -74,7 +74,7 @@ def test_c36_fresh_bootstrap_and_restart_verify_before_opening_on_the_theme_imag
 
     # The running server is the theme-bearing image.
     running = fresh.inspect("keycloak")["Image"]
-    assert running == image_id(IMAGE)
+    assert running == image_id(keycloak_image_reference(fresh))
     present = fresh.compose("exec", "-T", "keycloak", "test", "-f", THEME_FILE, check=False)
     assert present.returncode == 0, "the running Keycloak has no theme"
 
@@ -146,7 +146,7 @@ def test_c36_without_the_provider_jar_both_listeners_stay_closed(
 ) -> None:
     tag = f"localhost/eko-crm/eko201-fixture:no-provider-{secrets.token_hex(4)}"
     (tmp_path / "Dockerfile").write_text(
-        f"FROM {IMAGE}\n"
+        f"FROM {keycloak_image_reference(fresh)}\n"
         "RUN rm /opt/keycloak/providers/eko112-event-store-1.0.0.jar && "
         "/opt/keycloak/bin/kc.sh build --spi-events-store--provider=jpa\n",
         encoding="utf-8",
@@ -162,9 +162,10 @@ def test_c36_without_the_provider_jar_both_listeners_stay_closed(
     try:
         fresh.extra_files.append(override)
         prepare(fresh)
-        # The bootstrap's own compose calls read the same file list from COMPOSE_FILE.
-        files = os.pathsep.join([str(REPO_ROOT / "compose.yaml"), str(override)])
-        run_bootstrap(fresh, overrides={"COMPOSE_FILE": files}, expected=6)
+        # The bootstrap's own compose calls start Keycloak from the same fixture image through
+        # the placement it honours (EKO-1-26), which a COMPOSE_FILE could not override.
+        running = {name: fresh.inspect(name)["Config"]["Image"] for name in RUNNING_FAMILIES}
+        run_bootstrap(fresh, overrides=bootstrap_placement(running, tag), expected=6)
         assert fresh.inspect("keycloak")["Config"]["Image"] == tag
         missing = fresh.compose("exec", "-T", "keycloak", "test", "-e", PROVIDER_JAR, check=False)
         assert missing.returncode != 0, "the contrast image still has the provider"

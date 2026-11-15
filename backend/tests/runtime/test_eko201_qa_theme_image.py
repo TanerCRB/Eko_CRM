@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.runtime.test_eko201_k07_theme_image import IMAGE, docker, image_theme
+from tests.runtime.test_eko201_k07_theme_image import docker, image_theme
 from tests.support import theme_checks as tc
 
 pytestmark = pytest.mark.runtime
@@ -22,13 +22,13 @@ CHANGED = "login/resources/css/eko-crm.css"
 
 
 def test_qa_k07_c29_a_byte_changed_only_inside_the_image_is_named(
-    built_image: str, tmp_path: Path
+    built_image: str, built_reference: str, tmp_path: Path
 ) -> None:
     repository = tc.repository_theme()
     assert tc.byte_differences(repository, image_theme(built_image)) == []
     tag = f"localhost/eko-crm/eko201-fixture:theme-{secrets.token_hex(4)}"
     (tmp_path / "Dockerfile").write_text(
-        f"FROM {IMAGE}\nUSER 0\n"
+        f"FROM {built_reference}\nUSER 0\n"
         f"RUN printf '/* eko201 fixture */\\n' >> {tc.IMAGE_THEME_DIR}/{CHANGED}\nUSER 1000\n",
         encoding="utf-8",
     )
