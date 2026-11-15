@@ -481,7 +481,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   After EKO-1-27 (its Reviewer findings R-01/R-02).
   **Done 2026-11-14:** merged in [PR #165](https://github.com/TanerCRB/Eko_CRM/pull/165) as merge commit `2125962` (not squashed; the pinned pair `044e957`..`bb5f855` verified ancestors of `main` by the Guardian — reachability no longer branch-dependent); verified at `ef80aa8` (all four evaluating roles read the QA checkpoint `e91de3f`; `ef80aa8` carries only a `ruff format` fix — the Guardian re-ran on the fix diff: whole-file AST-identity with a positive control, the ten QA-cited mutation refs re-verified at both SHAs, corrected list 261, 272, 289, 323, 340, 355, 383, 399, 417, 438). Gate 1: C-1..C-5 — G-1 A (live `BOUND`/`BOUND_LINE` + `RECORDED_*` in k01, k02/k03 import the record pair), G-2 A (drop — the RAISE overclaim sentence removed, mechanism stays exactly as #138 C-3 recorded), Q-A A (parameterized violation functions, no monkeypatch — import-time from-import binding made patching unsound, Analyst fact 7), Q-B A (machine-readable classification in k01's docstring: 55 lines, 1 `move` / 54 `pinned`, agreement test-enforced); scope lock `0ea38245d4168ade1ce05463d63f6748215535c3` accepted unchanged. Mechanism: `backend/tests/static/test_eko130_retune_simulation_separates_live_from_record.py` (9 nodes; `SIMULATED_BOUND = 300` applied through bound-defaulted signatures only — Guardian verified pytest's `getfuncargnames` exclusion) + `test_eko130_qa_contrasts.py` (5 nodes; one-element-changed reversals through the real callables) + `tests/doc-checks/EKO-1-30.sh` (real 5/5, `--self-test` 6/6 incl. M-6a/b/c). Static family 2086→2102 collected (eko127 53→55: the mixed value node split into live/record siblings + a derivation-equality node; all 53 pre-existing names and rejection fragments byte-preserved), QA surface 64→69 passed, ruff/mypy/format clean at the merged head; `.github/workflows/release.yml` untouched by every branch commit. QA: EKO-1-30/M-1a (1/64), M-1b (1/9; first attempt invalidated by a parallel restore, redone sequentially — disclosed), M-2 (5/9 + 16/58, R-01's exact 13 bare plant deaths reproduced in-tree), M-3 (2/2), M-4' (1/1 + paraphrase grammar), M-5 (21/46), M-7a (1/2), M-7b (1/28) — **all killed, none survived**; patches Base `5c9690d` in the PR description. Verdicts: QA PROOF HOLDS, Guardian PASS 0/0/0/0 (×2 incl. fix re-run), Reviewer PASS 7 Low, Security Auditor PASS 0/0/0/0 (conditional: new CI-gate script; premise correction: doc-checks are task-discipline-run, not workflow-wired). The M-1 criterion-text tension (K-01's symptom sentence assumes the Q-A B/C mechanics gate 1 rejected; the criterion's own Edges clause governs — wiring-only observability) was adjudicated concordantly by developer, QA, reviewer and Guardian and confirmed by the human at gate 2 with the merge; assumptions A-01..A-06 ratified with the merge. The 7 Reviewer Lows became follow-up Issues #166 (driver-loop coverage + k01 default direction + 9th unrun mutation), #167 (`SIMULATED_BOUND ≠ live` invariant), #168 (seam polish R-04..R-07); the CI format failure exposed a local-gate gap — recorded as #169. CI note: PR checks green at the merged head (`backend unit tests and static checks` 2m44s; `changes`/`layer check` red there are branch-deletion artifacts — `Invalid symmetric difference expression bf776ef...0cffe20`, same content passed both on `ef80aa8` run 43638010649); the first `main` push run (43638645194) was cancelled 2 s after start with empty jobs (same as 3ca9195's) — infrastructure pattern, main's green rests on the PR-head runs. This gate-3 PR carries the two cost rows the merge window missed (`code_developer-backend_2`, `verification_invariant-guardian_2`).
 
-- [ ] **EKO-1-31** — Stop CI tracebacks echoing realm secret values when the k06 realm scan fails (#162).
+- [x] **EKO-1-31** — Stop CI tracebacks echoing realm secret values when the k06 realm scan fails (#162).
   *Done when:* a committed guard test drives the real k06 realm-scan machinery to a failing report over
   an in-memory realm carrying one synthetic planted secret and asserts the report names the field path
   and nowhere contains the value (reverting the reporting fix reddens the guard), proven together with a
@@ -491,8 +491,41 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   merged tip.
   **Out of scope (explicit):** the detection predicate and the raw-format scan (closed EKO-1-12/EKO-1-29
   decisions); a repo-wide traceback policy; runtime-side log scans (carried from EKO-1-29); the
-  users-dict personal-data echo (ADR-0005 lens, own task); Actions log retention.
+  users-dict personal-data echo (ADR-0005 lens, own task); Actions log retention; pytest-version changes
+  to failure-report rendering beyond the pinned 9.2.0 (analyst-proposed line approved at gate 1).
   After EKO-1-29.
+  **Done 2026-11-15:** merged in [PR #175](https://github.com/TanerCRB/Eko_CRM/pull/175) as `842138d`
+  (CI green at the head `84d845a`: backend static 2m49s, frontend/layer/process-ci pass, runtime jobs
+  skipping — paths outside their triggers). Mechanism: `assert_no_forbidden_secret_fields` reports via
+  `__tracebackhide__ = True` + explicit `raise AssertionError(path)` — QA's M1/M2 prove the two echo
+  channels (frame-argument block ⇔ frame hide; rewritten breakdown ⇔ explicit raise) are orthogonal and
+  each mechanism load-bearing; detection trio byte-unchanged. Committed guard
+  `backend/tests/static/test_eko131_reporting.py` (18 nodes: subprocess failure-report capture — a new
+  use of the proven house harness, converted from planned to executed by QA's mutation run — plus
+  fire/hold, 242-id collection snapshot at `bf776ef`, family-scope parse of addopts+ci.yml, C9 fire/hold)
+  + QA positive control `test_eko131_qa_contrast.py` (closes the vacuity vector QA found: under blanket
+  `--tb=no` the absence claim passes while nothing renders; the control reddens). QA M1..M6 all killed
+  with right-reason evidence (patches Base `e9c6453` in the PR description); K-05 CI plant-and-remove
+  cycle: plant `88ddce4` → run [43736848440](https://github.com/TanerCRB/Eko_CRM/actions/runs/43736848440)
+  static job red on `test_k06_every_export_secret_is_absent_or_an_environment_placeholder`, complete
+  2,689-line log names `clients[0].secret` and contains the plant string 0 times (collateral:
+  `test_eko112_k01` direct-access node also reddened by the plant client — recorded); removal `f083902`;
+  green `84d845a`; record `docs/evidence/EKO-1-31/ci-plant-cycle-2026-11-15.md` (carried by this gate-3
+  PR; `f083902` itself received no Actions run — anomaly disclosed there). Full suite 2296 passed at
+  `1611c7b`, static 2121 incl. the control. Gate-1 decisions A/A/A + identifier ratified; scope lock
+  `3e59204d4629e1b11eeb80f064bbcd8f53eafced` accepted unchanged and held through the PR. Gate 2 taken by
+  the human through the merge itself (2026-11-15): dev assumptions A-01..A-05 accepted with the merge;
+  K-05 accepted with the CI cycle record (provenance = the human's call per criterion text).
+  Verdicts: QA PROOF HOLDS (F-1 criteria-text coupling, F-2 channel orthogonality), Guardian PASS
+  0/0/0/0 ×2 (round 0 @ `1611c7b`; fix+merge re-run @ `6d74d42`, incoming eko127/130/132 verified
+  orthogonal), Reviewer PASS 2 Low, Security Auditor PASS 1 Low — the two evaluators' converged residual
+  (K-04 parse misses `env: PYTEST_ADDOPTS`, `--override=` equals form, `--showlocals` class — the locals
+  channel wider than S-1) became follow-up #183; CI-side pre-fix contrast left optional per the evidence
+  record. CI fix round 1: the QA checkpoint shipped an annotation defect (`tmp_path: pytest.TempPathFactory`)
+  caught only by CI's mypy — fixed at `13b802e` (annotation-only, nothing else rode in, Guardian
+  verified); process lesson: step 11a must re-run the type/lint gates on QA's files, not only
+  weakening/leftovers. Mutation row: `docs/architecture/capabilities.md` (EKO-1-31); capability row for
+  the report-shape silence raised here for the first time (QA's condition — K-05 artifacts now land).
 
 - [x] **EKO-1-32** — Pin the retune simulation's driven-node coverage and bind every k01 `bound_violations` call site to its declared constant pair (EKO-1-30 R-01/R-02 + the 9th mutation, #166).
   *Done when:* `_drive` returns the driven id set and baseline/simulated nodes assert `driven == collected` — a truncated loop or silent `continue` fails a named test (QA mutation killed, recorded); new-`test_eko127_*`-module escape resolved per gate-1 variant (glob test fails, or documented deliberate freeze); QA mutations "record call site drops the `bound` argument" and "record call site names `BOUND`" each fail a named test; the `RECORDED_RAISE = raise_for(BOUND)` rewiring is run as a mutation and killed by the wiring AST node; `RECORDED_BOUND`/`BASE`/`HEAD`, plant names and verdicts, `release.yml` bytes and the Q-A A signature-parameterization mechanics unchanged.
