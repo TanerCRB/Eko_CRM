@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-15",
+  "task": "EKO-1-32",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "qwen3.8-max",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Medium",
+  "agentId": "ad06d8f61e588fe04",
+  "tokens": 816993,
+  "tokenSplit": { "input": 3995, "output": 29414, "cacheWrite": 79234, "cacheRead": 704350 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 27,
+  "seconds": 1256,
+  "fixRound": 0,
+  "reworkCause": "none - markers verdict rc=1 on first emission (bare K-id tokens in the Undecidable prose section collide with the checker's undecidable-list reading); bounced for wording only, second emission passed. Same trap hit QA this task; candidate for a note in the evaluator prompt template.",
+  "notes": "invariant-guardian — opus (hard tier, evaluator not calibrated lower); measured qwen3.8-max. boundary-check: clean (--none, parallel evaluators verified together after both returned). PASS 0/0/0/0, undecidable none, at 3b10d0f. Semantic weakening confirm (assert counts 11->11 / 36->38), release.yml 0-line diff, overclaim grep zero byte-word, mutation Base 59cd2ed proven non-stale (diff 59cd2ed..3b10d0f = QA file + cost row only)."
+}
