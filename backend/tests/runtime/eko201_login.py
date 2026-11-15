@@ -5,23 +5,33 @@ The browser is played by two parties: requests to `<app-host>` go through the pr
 application listener with cookies passed explicitly, and requests to `<auth-host>` go through a
 `RealmClient` on the public listener, which keeps Keycloak's own cookies (the SSO cookie
 included) in its jar exactly as one browser would.
+
+`browser_login` is the real-browser counterpart for carriers that must reach the shell (the
+application requires login since EKO-2-01): a Playwright page types into Keycloak's own form.
 """
 
 import base64
 import json
+import secrets
 from dataclasses import dataclass
-from typing import Any
-from urllib.parse import quote, urlparse
+from typing import TYPE_CHECKING, Any
+from urllib.parse import quote, urlparse, urlsplit
 
 import httpx
 
 from app.core.settings import without_default_port
 from tests.runtime.conftest import Composition
 from tests.runtime.keycloak_client import RealmClient, form_path, second_factor
+from tests.support import eko112_fixtures as eko112
 from tests.support import eko201_keycloak as accounts
+from tests.support import totp
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
 
 SESSION_COOKIE = "__Host-eko_session"
 LOGIN_COOKIE = "__Host-eko_login"
+BROWSER_TIMEOUT_MS = 30_000
 
 
 def app_origin(composition: Composition) -> str:
@@ -253,3 +263,55 @@ def ensure_staff_account(
     )
     assert reset.status_code == 204, f"password set status {reset.status_code}"
     return user_id
+
+
+def browser_host_rules(composition: Composition) -> str:
+    """Chromium's resolver rules sending both public hosts to the local proxy."""
+    env = composition.env
+    return (
+        f"--host-resolver-rules=MAP {env['APP_HOST']} 127.0.0.1, MAP {env['AUTH_HOST']} 127.0.0.1"
+    )
+
+
+def provision_browser_account(composition: Composition, key: str) -> tuple[str, str]:
+    """Create (or reset) one invented staff account through the break-glass administrator and
+    return its username and a fresh synthetic password (never printed)."""
+    env = composition.env
+    master = RealmClient(composition, "master")
+    try:
+        token = master.direct_master_token(
+            eko112.ACCOUNTS["breakglass_one"], env[eko112.PASSWORD_VARIABLES["breakglass_one"]]
+        )
+        password = "synthetic-" + secrets.token_urlsafe(24)
+        ensure_staff_account(master, token, key, password)
+    finally:
+        master.close()
+    return accounts.ACCOUNTS[key], password
+
+
+def browser_login(
+    page: "Page", composition: Composition, username: str, password: str, path: str = "/"
+) -> None:
+    """Log a browser page in the way a person does, as the K-03 browser carrier does: the
+    anonymous application load is sent to Keycloak's form, the credentials are typed there, the
+    OTP credential is enrolled with a code for the secret the page shows (never logged), and the
+    login ends back on `path` of the application origin.
+
+    Expects an account with no OTP credential yet (a fresh `provision_browser_account` on the
+    caller's own composition); a code page instead of the enrolment page fails here."""
+    origin = app_origin(composition)
+    auth_host = composition.env["AUTH_HOST"]
+    page.goto(origin + path)
+    page.wait_for_url(lambda url: urlsplit(url).hostname == auth_host, timeout=BROWSER_TIMEOUT_MS)
+    page.wait_for_load_state("networkidle")
+    assert page.locator("#kc-form-login").count() == 1, "the application did not reach the form"
+    page.fill("#username", username)
+    page.fill("#password", password)
+    page.click("#kc-login")
+    page.wait_for_load_state("networkidle")
+    assert page.locator("#totpSecret").count() == 1, "no OTP enrolment demanded"
+    raw = page.locator("#totpSecret").input_value()
+    page.fill("#totp", totp.totp(totp.keycloak_key(raw), totp.time_step()))
+    page.fill("#userLabel", f"{username}-browser-{secrets.token_hex(3)}")
+    page.locator("#saveTOTPBtn").click()
+    page.wait_for_url(origin + path, timeout=BROWSER_TIMEOUT_MS)

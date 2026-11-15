@@ -11,8 +11,9 @@ from urllib.parse import urlsplit
 import pytest
 from playwright.sync_api import Page, Request, expect, sync_playwright
 
+from tests.runtime import eko201_login as app
 from tests.runtime.conftest import UP_TIMEOUT_SECONDS, Composition
-from tests.runtime.keycloak_client import run_bootstrap
+from tests.runtime.keycloak_client import build_keycloak, run_bootstrap
 from tests.support.repo import REPO_ROOT
 
 pytestmark = pytest.mark.runtime
@@ -138,6 +139,9 @@ def test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement(
     request: pytest.FixtureRequest,
     chromium_executable: Path,
 ) -> None:
+    # QA-01 (EKO-2-01): the bootstrap starts only a Keycloak image built from this tree and
+    # recorded for this composition, so it is built here first, as `prepare` does.
+    build_keycloak(fresh)
     up = fresh.compose(
         "up",
         "--build",
@@ -153,6 +157,9 @@ def test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement(
     # bootstrap, so this scenario brings its fresh composition up with the same documented
     # script instead of a parallel mechanism.
     run_bootstrap(fresh)
+    # EKO-2-01: the whole application requires login; the browser logs in on Keycloak's form
+    # before the scenario's own recording starts.
+    username, password = app.provision_browser_account(fresh, "shell")
     old_frontend = fresh.container_id("frontend")
     old_proxy = fresh.container_id("proxy")
     old_backend = fresh.container_id("backend")
@@ -164,11 +171,12 @@ def test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement(
         browser = playwright.chromium.launch(
             executable_path=str(chromium_executable),
             headless=True,
-            args=[f"--host-resolver-rules=MAP {env['APP_HOST']} 127.0.0.1"],
+            args=[app.browser_host_rules(fresh)],
         )
         try:
             context = browser.new_context(ignore_https_errors=True)
             page = context.new_page()
+            app.browser_login(page, fresh, username, password)
             requested: list[str] = []
             automatic_navigations: list[str] = []
             page_errors: list[str] = []
@@ -254,6 +262,9 @@ def test_r01_two_consecutive_lazy_chunk_failures_stop_after_one_recovery(
     request: pytest.FixtureRequest,
     chromium_executable: Path,
 ) -> None:
+    # QA-01 (EKO-2-01): the bootstrap starts only a Keycloak image built from this tree and
+    # recorded for this composition, so it is built here first, as `prepare` does.
+    build_keycloak(fresh)
     up = fresh.compose(
         "up",
         "--build",
@@ -269,6 +280,9 @@ def test_r01_two_consecutive_lazy_chunk_failures_stop_after_one_recovery(
     # bootstrap, so this scenario brings its fresh composition up with the same documented
     # script instead of a parallel mechanism.
     run_bootstrap(fresh)
+    # EKO-2-01: the whole application requires login; the browser logs in on Keycloak's form
+    # before the scenario's own recording starts.
+    username, password = app.provision_browser_account(fresh, "shell")
     old_frontend = fresh.container_id("frontend")
     old_proxy = fresh.container_id("proxy")
     old_backend = fresh.container_id("backend")
@@ -281,11 +295,12 @@ def test_r01_two_consecutive_lazy_chunk_failures_stop_after_one_recovery(
         browser = playwright.chromium.launch(
             executable_path=str(chromium_executable),
             headless=True,
-            args=[f"--host-resolver-rules=MAP {env['APP_HOST']} 127.0.0.1"],
+            args=[app.browser_host_rules(fresh)],
         )
         try:
             context = browser.new_context(ignore_https_errors=True)
             page = context.new_page()
+            app.browser_login(page, fresh, username, password)
             requested: list[str] = []
             responses: list[tuple[str, int]] = []
             automatic_navigations: list[str] = []
