@@ -1,6 +1,7 @@
 """EKO-2-01 B-02: both `FROM` lines of the custom Keycloak image name their base by version tag
-and `@sha256:` digest, as `proxy/Dockerfile` does, so a moved upstream tag cannot change what the
-same commit builds. The Keycloak base digest is the index the human accepted on 2026-11-13; the
+and `@sha256:` digest, as `proxy/Dockerfile` does, so a moved upstream tag cannot change which base
+images the same commit builds from (the build's Maven plugin pins: test_eko201_b04_plugin_pins.py).
+The Keycloak base digest is the index the human accepted on 2026-11-13; the
 Maven builder digest is the index this host built with (both recorded in the evidence)."""
 
 import re

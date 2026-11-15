@@ -1,7 +1,11 @@
 # syntax=docker/dockerfile:1
 # Both bases are pinned by version tag and index digest (EKO-2-01 B-02), as proxy/Dockerfile
-# does: a moved upstream tag cannot change what one commit builds. A base change updates both
-# the tag and the digest, and the theme review record (identity/theme-review.md) for Keycloak.
+# does: a moved upstream tag cannot change which base images one commit builds from. A base
+# change updates both the tag and the digest, and the theme review record
+# (identity/theme-review.md) for Keycloak. The Maven plugins the build runs are pinned by
+# version: the dependency plugin, called below by goal prefix, in provider/pom.xml (B-04), and
+# the lifecycle plugins by the pinned builder's default bindings. This fixes the inputs by
+# version, not a byte-identical image: artifacts are still downloaded at build time.
 FROM maven:3.9.14-eclipse-temurin-21@sha256:98819eb3745bd2007c3f1a19b59085c1fa3929aecb7dbfa431dfcf5a4f18ce3c AS provider-build
 WORKDIR /workspace
 COPY provider/pom.xml pom.xml
