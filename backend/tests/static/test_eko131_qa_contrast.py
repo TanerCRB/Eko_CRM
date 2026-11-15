@@ -19,6 +19,8 @@ for the child (blanket `--tb`, a rewrite-disabling flag reaching the child) — 
 rendering directly, not only the two config strings the K-04 parse node reads.
 """
 
+from pathlib import Path
+
 import pytest
 
 from tests.static.test_eko131_reporting import K01_PLANT, run_pytest_child
@@ -36,7 +38,7 @@ CONTROL_CHILD = (
 
 
 def test_eko131_qa_k01_positive_control_the_plant_renders_outside_the_family(
-    tmp_path: pytest.TempPathFactory,
+    tmp_path: Path,
 ) -> None:
     result = run_pytest_child(tmp_path, CONTROL_CHILD, "test_eko131_qa_control_child.py")
     output = result.stdout + result.stderr
