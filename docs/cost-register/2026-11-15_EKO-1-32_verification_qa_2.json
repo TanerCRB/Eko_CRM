@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-15",
+  "task": "EKO-1-32",
+  "phase": "verification",
+  "role": "qa",
+  "model": "qwen3.8-max",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Low",
+  "agentId": "a00148e88c73fb4ab",
+  "tokens": 4948209,
+  "tokenSplit": { "input": 120, "output": 8088, "cacheWrite": 251263, "cacheRead": 4688738 },
+  "tokensSource": "transcript (delta of cumulative record; see notes)",
+  "measured": "record",
+  "toolCalls": 20,
+  "seconds": 3393,
+  "fixRound": 0,
+  "reworkCause": "Reviewer hand-off item 1: the K-01 mechanism-removal mutation (delete driven.add) was named by the Developer and predicted in its report but absent from QA's first-pass executed table - the named-unrun pattern this whole task was chartered to retire. Could have been caught by: QA's own completeness sweep of dev 'For QA' predictions against executed labels.",
+  "notes": "addendum on the same agentId (cumulative record 30717910 minus first-emission snapshot 25769701; delta tokenSplit recomputed from the two records). M-1c driven.add removal: killed 2/2 both driving nodes, restore hash-proven (b7fbb1bf == HEAD blob), tree clean; VERIFIED unchanged; PROOF HOLDS stands, now with every named mutation run."
+}
