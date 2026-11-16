@@ -27,6 +27,14 @@ export async function apiRequest(
   } catch {
     return { kind: "unavailable" };
   }
+  // Read every body to the end, even when only the status matters: Chromium never finishes a
+  // fetch whose body is left unread, so the page would never settle.
+  let text: string | undefined;
+  try {
+    text = await response.text();
+  } catch {
+    text = undefined;
+  }
   if (response.status === 401) {
     if (onUnauthenticated === "redirect") {
       redirectToLogin();
@@ -41,7 +49,7 @@ export async function apiRequest(
   }
   let body: unknown;
   try {
-    body = await response.json();
+    body = text === undefined ? undefined : JSON.parse(text);
   } catch {
     body = undefined;
   }

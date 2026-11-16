@@ -18,6 +18,8 @@ export interface Problem {
 export type SessionRead =
   | { kind: "authenticated"; session: SessionInfo }
   | { kind: "unauthenticated" }
+  // Authenticated but holding no application role (ADR-0003 roles addendum, 2026-11-16).
+  | { kind: "noRole" }
   | { kind: "unavailable" }
   | { kind: "invalid" };
 
@@ -48,8 +50,12 @@ function isLoggedOut(body: unknown): body is LoggedOut {
 // The caller starts the login on "unauthenticated", so a superseded check cannot start a second one.
 export async function readSession(): Promise<SessionRead> {
   const response = await apiRequest("/api/auth/session", { onUnauthenticated: "report" });
+  if (response.kind === "failed") {
+    // The status alone decides; a 403 body is never read, so it cannot name a subject.
+    return response.status === 403 ? { kind: "noRole" } : { kind: "invalid" };
+  }
   if (response.kind !== "ok") {
-    return response.kind === "failed" ? { kind: "invalid" } : { kind: response.kind };
+    return { kind: response.kind };
   }
   const session = parseSessionInfo(response.body);
   return session === null ? { kind: "invalid" } : { kind: "authenticated", session };
