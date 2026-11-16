@@ -1,6 +1,9 @@
-"""EKO-2-02 K-06 legs 1 and 2 (ADR-0003-C4 as restated 2026-10-28, *Account lifecycle*): after
-this task, every API operation outside exactly {login start, login callback, health} answers 401
-without a session, and the access dependency's exemption list holds exactly those three.
+"""EKO-2-02 K-06 legs 1 to 3 (ADR-0003-C4 as restated 2026-10-28, *Account lifecycle*, and the
+ADR-0003 roles addendum of EKO-2-02): after this task, every API operation outside exactly {login
+start, login callback, health} answers 401 without a session; the access dependency's exemption
+list holds exactly those three; and the role-free and non-CRM lists equal the lists held here,
+resolve to exactly the served route objects, and fail the build when an entry is unserved, shares
+a path with the exemption list, or is role-free without being non-CRM.
 
 The walk reads the route table of the shipped `create_app()` as served, with EKO-2-02's probe
 injected by the test process, so the probe appears in the walk and a route registered after the
@@ -120,3 +123,67 @@ def test_k06_contrast_a_session_gets_authenticated_answers_while_health_stays_an
         assert browser.send(method, path).status_code == 200, (method, path)
     anonymous = browser_for(app)
     assert anonymous.send("GET", "/api/health").status_code == 200
+
+
+ROLE_FREE = frozenset({("POST", "/api/auth/logout")})
+NON_CRM = frozenset({("GET", "/api/auth/session"), ("POST", "/api/auth/logout")})
+
+
+def resolved(app: FastAPI, routes: tuple[object, ...]) -> set[tuple[str, str]]:
+    """The (method, path) operations the given route objects serve, as served."""
+    return {
+        (method, context.path or "")
+        for context in route_contexts(app)
+        if any(context.route is route for route in routes)
+        for method in getattr(context.route, "methods", None) or set()
+    }
+
+
+def test_k06_role_free_and_non_crm_lists_equal_the_held_lists(make_app: AppFactory) -> None:
+    from app import main
+
+    assert main.ROLE_FREE_OPERATIONS == ROLE_FREE
+    assert main.NON_CRM_OPERATIONS == NON_CRM
+    assert ROLE_FREE <= NON_CRM
+    assert not {path for _, path in NON_CRM} & set(main.PUBLIC_PATHS)
+    app = make_app()
+    assert len(app.state.role_free_routes) == len(ROLE_FREE)
+    assert len(app.state.non_crm_routes) == len(NON_CRM)
+    assert resolved(app, app.state.role_free_routes) == ROLE_FREE
+    assert resolved(app, app.state.non_crm_routes) == NON_CRM
+
+
+BROKEN_LISTS = {
+    "unserved-method": (ROLE_FREE, NON_CRM | {("GET", "/api/auth/logout")}),
+    "unserved-trailing-slash": (ROLE_FREE, NON_CRM | {("GET", "/api/auth/session/")}),
+    "unserved-case": (ROLE_FREE, NON_CRM | {("GET", "/api/Auth/session")}),
+    "unserved-role-free": (
+        ROLE_FREE | {("DELETE", "/api/auth/logout")},
+        NON_CRM | {("DELETE", "/api/auth/logout")},
+    ),
+    "exempt-in-non-crm": (ROLE_FREE, NON_CRM | {("GET", "/api/health")}),
+    "exempt-in-both": (
+        ROLE_FREE | {("GET", "/api/auth/login")},
+        NON_CRM | {("GET", "/api/auth/login")},
+    ),
+    "role-free-not-non-crm": (
+        ROLE_FREE | {("GET", "/api/auth/session")},
+        frozenset({("POST", "/api/auth/logout")}),
+    ),
+    "role-free-missing-from-non-crm": (ROLE_FREE, frozenset({("GET", "/api/auth/session")})),
+}
+
+
+@pytest.mark.parametrize("case", sorted(BROKEN_LISTS))
+def test_k06_building_fails_on_an_unserved_exempt_or_non_subset_list_entry(
+    make_app: AppFactory, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    from app import main
+
+    # Contrast: the lists as shipped build.
+    assert make_app().state.non_crm_routes
+    role_free, non_crm = BROKEN_LISTS[case]
+    monkeypatch.setattr(main, "ROLE_FREE_OPERATIONS", frozenset(role_free))
+    monkeypatch.setattr(main, "NON_CRM_OPERATIONS", frozenset(non_crm))
+    with pytest.raises(SystemExit):
+        make_app()

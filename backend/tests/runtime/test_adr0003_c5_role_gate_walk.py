@@ -3,8 +3,11 @@
 Walks every API operation registered on the shipped `create_app()` (the probe injected by the test
 process, gate-1 OQ-3 A) once per token role set. Each token is a real login through the local
 OIDC stub, verified by the shipped verifier; only the access token's role claims differ between
-walks. The exemption list is held here and subtracted from the walk (ADR-0003 addendum of
-2026-10-28; gate-1 OQ-1 A): the role check cannot reach those three routes.
+walks. Three lists are held here and subtracted from the walk: the session-exempt list (ADR-0003
+addendum of 2026-10-28), which the role check cannot reach; the role-free list, which a role-less
+session may still call; and the non-CRM list, the only operations an administrator-only caller may
+call (ADR-0003 roles addendum of EKO-2-02, accepted 2026-11-16). Every other operation is CRM
+class by default, including probe routes declaring only the session dependency or none.
 """
 
 from typing import Any
@@ -13,10 +16,11 @@ import pytest
 from fastapi import FastAPI
 
 from tests.runtime.eko201 import conftest as eko201
-from tests.runtime.eko201.conftest import AppFactory
+from tests.runtime.eko201.conftest import AppFactory, session_count
 from tests.support import eko202_probe as probe
 from tests.support import oidc_stub
 from tests.support.api_surface import route_contexts
+from tests.support.pg_instance import Postgres
 
 pytestmark = pytest.mark.runtime
 
@@ -31,6 +35,9 @@ browser_for = eko201.browser_for
 
 EXEMPT = frozenset({"/api/auth/login", "/api/auth/callback", "/api/health"})
 PRODUCT_PROTECTED = frozenset({("GET", "/api/auth/session"), ("POST", "/api/auth/logout")})
+LOGOUT = ("POST", "/api/auth/logout")
+ROLE_FREE = frozenset({LOGOUT})
+NON_CRM = frozenset({("GET", "/api/auth/session"), LOGOUT})
 REFUSED = {401, 403}
 ALL_THREE = ["rep", "manager", "administrator"]
 
@@ -86,10 +93,22 @@ NO_APPLICATION_ROLE = {
 
 @pytest.mark.parametrize("variant", sorted(NO_APPLICATION_ROLE))
 def test_k01_no_application_role_gets_403_on_every_non_exempt_route(
-    make_app: AppFactory, browser_for: Any, stub: oidc_stub.Stub, variant: str
+    make_app: AppFactory, browser_for: Any, stub: oidc_stub.Stub, pg: Postgres, variant: str
 ) -> None:
-    answered = walk(make_app, browser_for, stub, NO_APPLICATION_ROLE[variant])
-    assert set(protected(answered).values()) == {403}, answered
+    claims = NO_APPLICATION_ROLE[variant]
+    answered = walk(make_app, browser_for, stub, claims)
+    refused = {op: status for op, status in protected(answered).items() if op not in ROLE_FREE}
+    assert set(refused.values()) == {403}, answered
+    assert {op: answered[op] for op in ROLE_FREE} == {LOGOUT: 200}, answered
+    # Logout ends the role-less session: its row is gone.
+    app = make_app()
+    stub.access_overrides = claims
+    browser = browser_for(app)
+    browser.login()
+    before = session_count(pg)
+    assert browser.send(*LOGOUT).status_code == 200
+    assert session_count(pg) == before - 1
+    assert browser.session is None
     # The three exempted routes are served to the same role-less session.
     assert {path for _, path in exempt(answered)} == EXEMPT
     assert not REFUSED & set(exempt(answered).values()), answered
@@ -99,10 +118,12 @@ def test_k01_administrator_only_gets_403_on_crm_data_routes(
     make_app: AppFactory, browser_for: Any, stub: oidc_stub.Stub
 ) -> None:
     answered = walk(make_app, browser_for, stub, probe.role_claims(client=["administrator"]))
-    for operation in probe.OPERATIONS:
-        assert answered[operation] == 403, (operation, answered)
+    assert probe.OPERATIONS <= set(answered)
+    for operation, status in protected(answered).items():
+        if operation not in NON_CRM:
+            assert status == 403, (operation, answered)
     # Not "deny everything": the same token is authenticated on the non-CRM operations.
-    for operation in PRODUCT_PROTECTED:
+    for operation in NON_CRM:
         assert answered[operation] == 200, (operation, answered)
 
 

@@ -3,8 +3,10 @@
 K-01: every probe route and every product route declares `current_caller` itself, so a role check
 living only in `current_caller` (instead of in the application-wide dependency) would pass the
 whole role walk. A route registered after `create_app()` with no dependency of its own reaches
-only the application-wide dependency: a role-less session must get 403 there too, where a `rep`
-session gets the handler's answer (one changed element: the token's role set).
+only the application-wide dependency: a role-less session must get 403 there, and so must an
+administrator-only session, because an unmarked route is CRM class by default (fix round 1,
+R-01), where a `rep` session gets the handler's answer (one changed element: the token's role
+set).
 
 K-02: the walk injects `manager` into a `rep` session. A fallback that honours a client-sent role
 only when the token holds none passes that walk; here a role-less session names `rep` in each
@@ -54,7 +56,7 @@ def session_for(app: FastAPI, browser_for: Any, stub: oidc_stub.Stub, roles: lis
 
 @pytest.mark.parametrize(
     "roles, expected",
-    [([], 403), (["auditor"], 403), (["rep"], 200), (["administrator"], 200)],
+    [([], 403), (["auditor"], 403), (["rep"], 200), (["administrator"], 403)],
     ids=["no-role", "unknown-role", "rep", "administrator"],
 )
 def test_qa_k01_route_declaring_no_dependency_refuses_a_role_less_session(

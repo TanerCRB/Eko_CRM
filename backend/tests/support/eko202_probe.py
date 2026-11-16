@@ -4,10 +4,13 @@ The probe is registered by the test process onto the application the shipped `cr
 built (gate-1 OQ-3 A, impact map section 2(a)): never in `backend/app/`, never exempted, never
 behind a settings flag. It stands in for the CRM routes that arrive from EKO-3-01 on: one
 customers-reading operation (GET, carrying a `role` query field) and one customers-changing
-operation (POST, carrying a `role` body field), both declaring the product's CRM-data dependency,
-and one operation declaring the product's manager dependency. Each handler hands the caller
-identity it received to `Recorder.receive`, the stand-in for a `services` entry point, so a test
-reads what crossed inward instead of an echo in a response.
+operation (POST, carrying a `role` body field), both declaring the product's CRM-data dependency;
+one customers-reading operation declaring only the session dependency (`current_caller`, the
+product's own pattern) and one declaring no dependency of its own, so the application-wide
+default refusal is what keeps them closed (fix round 1, R-01); and one operation declaring the
+product's manager dependency. Each handler that receives a caller identity hands it to
+`Recorder.receive`, the stand-in for a `services` entry point, so a test reads what crossed inward
+instead of an echo in a response.
 """
 
 from dataclasses import dataclass, field
@@ -16,14 +19,18 @@ from typing import Annotated, Any
 from fastapi import Depends, FastAPI, Query
 from pydantic import BaseModel, ConfigDict
 
-from app.auth.gate import crm_data_caller, manager_caller
+from app.auth.gate import crm_data_caller, current_caller, manager_caller
 from app.domain.caller import Caller
 from tests.support.oidc_stub import CLIENT_ID
 
 PREFIX = "/api/eko202-probe"
 CUSTOMERS = f"{PREFIX}/customers"
 TEAM = f"{PREFIX}/team"
-CRM_DATA_OPERATIONS = frozenset({("GET", CUSTOMERS), ("POST", CUSTOMERS)})
+SESSION_ONLY = f"{PREFIX}/customers-session-only"
+UNDECLARED = f"{PREFIX}/customers-undeclared"
+# CRM class only because no list marks them otherwise: neither declares a CRM dependency.
+DEFAULT_CRM_OPERATIONS = frozenset({("GET", SESSION_ONLY), ("GET", UNDECLARED)})
+CRM_DATA_OPERATIONS = frozenset({("GET", CUSTOMERS), ("POST", CUSTOMERS)}) | DEFAULT_CRM_OPERATIONS
 MANAGER_OPERATIONS = frozenset({("GET", TEAM)})
 OPERATIONS = CRM_DATA_OPERATIONS | MANAGER_OPERATIONS
 
@@ -64,6 +71,15 @@ def install_probe(app: FastAPI) -> Recorder:
     ) -> Reached:
         recorder.receive(caller)
         return Reached(operation="change-customers")
+
+    @app.get(SESSION_ONLY)
+    def read_customers_session_only(caller: Annotated[Caller, Depends(current_caller)]) -> Reached:
+        recorder.receive(caller)
+        return Reached(operation="read-customers-session-only")
+
+    @app.get(UNDECLARED)
+    def read_customers_undeclared() -> Reached:
+        return Reached(operation="read-customers-undeclared")
 
     @app.get(TEAM)
     def read_team(caller: Annotated[Caller, Depends(manager_caller)]) -> Reached:

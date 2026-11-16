@@ -41,6 +41,11 @@ logger = logging.getLogger(__name__)
 # The access dependency's exemption list (ADR-0003 addendum of 2026-10-28): exactly these three.
 # Adding a path here is a change to ADR-0003, recorded as an addendum.
 PUBLIC_PATHS = frozenset({"/api/auth/login", "/api/auth/callback", "/api/health"})
+# The ADR-0003 roles addendum of EKO-2-02 (accepted 2026-11-16): operations a caller with no
+# application role may still call, and operations that read or change no CRM data. Every other
+# operation, one registered later included, is CRM class. Adding an entry is a gate-1 decision.
+ROLE_FREE_OPERATIONS = frozenset({("POST", "/api/auth/logout")})
+NON_CRM_OPERATIONS = frozenset({("GET", "/api/auth/session"), ("POST", "/api/auth/logout")})
 
 STANDARD_METHODS = frozenset(
     {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT"}
@@ -201,6 +206,32 @@ def _public_routes(app: FastAPI) -> tuple[object, ...]:
     return tuple(c.route for c in found)
 
 
+def _listed_routes(app: FastAPI, operations: frozenset[tuple[str, str]]) -> tuple[object, ...]:
+    """The served route objects of `operations`; building fails unless each (method, path) is
+    served, and unless every method a resolved route object serves is listed, since the gate
+    matches the object."""
+    found: dict[int, object] = {}
+    served: set[tuple[str, str]] = set()
+    for context in routing.iter_route_contexts(app.routes):
+        methods = {(m, context.path or "") for m in getattr(context.route, "methods", None) or ()}
+        if methods & operations:
+            if not methods <= operations:
+                raise RuntimeError("a listed route serves a method that is not listed")
+            found[id(context.route)] = context.route
+            served |= methods
+    if served != operations:
+        raise RuntimeError("a listed operation is not served")
+    return tuple(found.values())
+
+
+def _check_lists() -> None:
+    listed = ROLE_FREE_OPERATIONS | NON_CRM_OPERATIONS
+    if any(path in PUBLIC_PATHS for _, path in listed):
+        raise RuntimeError("a listed operation is served without a session")
+    if not ROLE_FREE_OPERATIONS <= NON_CRM_OPERATIONS:
+        raise RuntimeError("a role-free operation is not in the non-CRM list")
+
+
 def create_app() -> FastAPI:
     # Uvicorn's worker processes are fresh interpreters that apply only `log_config`; this is the
     # one place a serving process gets the hooks (ADR-0005 amendment at verification, R-01).
@@ -240,6 +271,9 @@ def create_app() -> FastAPI:
         app.include_router(health_router, prefix="/api")
         app.include_router(auth_router, prefix="/api")
         auth.public_routes = _public_routes(app)
+        _check_lists()
+        app.state.role_free_routes = _listed_routes(app, ROLE_FREE_OPERATIONS)
+        app.state.non_crm_routes = _listed_routes(app, NON_CRM_OPERATIONS)
         app.add_exception_handler(Unauthenticated, _unauthenticated)
         app.add_exception_handler(OriginRefused, _origin_refused)
         app.add_exception_handler(RoleRefused, _role_refused)
