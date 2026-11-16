@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-13",
+  "task": "EKO-1-26",
+  "phase": "verification",
+  "role": "security-auditor",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Medium",
+  "agentId": "adc7c9cfb722f2c10",
+  "tokens": 791711,
+  "tokenSplit": { "input": 3825, "output": 22121, "cacheWrite": 82265, "cacheRead": 683500 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 33,
+  "seconds": 941,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "boundary-check: clean (read-only wave); PASS first emission, U-01 (GHCR package access/visibility at first push — human op); net guard effect assessed strictly stronger; report .task/handoff/14-security-auditor-1.md"
+}

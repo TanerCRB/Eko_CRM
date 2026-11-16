@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-10",
+  "task": "EKO-1-12",
+  "phase": "analysis",
+  "role": "architect",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "High",
+  "agentId": "a4d2d9a2cd3c23861",
+  "tokens": 2977758,
+  "tokenSplit": { "input": 4157, "output": 57365, "cacheWrite": 140463, "cacheRead": 2775773 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 55,
+  "seconds": 1238,
+  "fixRound": 3,
+  "reworkCause": "ARP-MAC boot-identity primitive chosen in fix round 1 (R-05/S-03 answer) proved timing-racy: false-closes a verified gate under CI/restart load; the earlier role able to catch: the design review itself - an ARP-table read with a complete-flag dependency cannot be deterministic across container netns restarts",
+  "notes": "NEEDS A DEVIATION, 4 human decisions; per-boot UUID token via a dedicated named volume replaces the ARP-observed MAC; drafted ADR-0004 addendum 2026-11-10 (append-only +114/-0, sole write); flagged a C29 numbering collision (two accepted controls print ADR-0004-C29) and added C33; recommends timeout 75->110 to ride in the same PR; handoff 4-architect-bootidentity.md"
+}

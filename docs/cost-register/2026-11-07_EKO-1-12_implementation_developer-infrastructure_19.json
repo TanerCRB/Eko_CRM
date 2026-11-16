@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-07",
+  "task": "EKO-1-12",
+  "phase": "implementation",
+  "role": "developer-infrastructure",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Low",
+  "agentId": "ad773b8364259826d",
+  "tokens": 542116,
+  "tokenSplit": { "input": 3065, "output": 26185, "cacheWrite": 48891, "cacheRead": 463975 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 19,
+  "seconds": 503,
+  "fixRound": 0,
+  "reworkCause": "step 10c leftovers findings (2 debug-output lines in scripts/keycloak-bootstrap.py) from inv-18's checkpoint; the earlier role able to catch: nobody — the checker runs mechanically after the developer, by design",
+  "notes": "boundary-check: clean (snapshot worktree 9e875d1, allowed scripts/); same-line leftovers-allow markers (proven parser line 120, probe B showed above-line inert); line 595 reflowed to notice=/print (message byte-identical) because no same-line marker fits under 100 chars otherwise — driver chose minimal reflow over lint-limit break and over a .leftovers-allow glob; checkpoint 47d0389; leftovers/weakening/layer clean on it"
+}

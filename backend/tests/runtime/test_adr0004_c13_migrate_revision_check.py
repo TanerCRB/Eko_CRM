@@ -1,6 +1,6 @@
 """K-03 / ADR-0004-C13(b)-(d): migrate's descent check, before Alembic resolves any revision.
 
-The previous release is the shipped image (head 0002), the next release variant N adds `t_next`,
+The previous release is the shipped image (head 0003), the next release variant N adds `t_next`,
 and the siblings X and Y add `t_sibling_b` and `t_sibling_a` (C-4). `t_next` is absent from the
 shipped image, so accepting it proves the lineage record, not Alembic's graph.
 """
@@ -35,12 +35,12 @@ def test_adr0004_c13_migrate_revision_check_precondition_t_is_absent_from_the_sh
 def test_adr0004_c13_migrate_revision_check_b_previous_release_on_a_descendant(lab: Lab) -> None:
     lab.at_variant_head("next")
     assert lab.versions() == ["t_next"]
-    assert lab.lineage() == {"0001", "0002", "t_next"}
+    assert lab.lineage() == {"0001", "0002", "0003", "t_next"}
     before = lab.comparison_dump()
     code, logs = lab.run_migrate()
     assert code == 0, logs
     assert lab.comparison_dump() == before
-    assert lab.lineage() == {"0001", "0002", "t_next"}
+    assert lab.lineage() == {"0001", "0002", "0003", "t_next"}
     lab.composition.compose("up", "-d", "--no-deps", "--force-recreate", "backend")
     lab.wait_for_health("200", 90)
     assert json.loads(health_body(lab)) == {"status": "ok"}
@@ -109,7 +109,7 @@ def test_adr0004_c13_migrate_revision_check_ancestor_is_upgraded_with_its_lineag
     code, logs = lab.run_migrate()
     assert code == 0, logs
     assert lab.versions() == [SHIPPED_HEAD]
-    assert lab.lineage() == {"0001", "0002"}
+    assert lab.lineage() == {"0001", "0002", "0003"}
     # The contrast of (d): the comparison sees a change when there is one.
     assert lab.comparison_dump() != before
 

@@ -1,5 +1,5 @@
-"""K-07 static half: the real tree is exactly {0001, 0002}; nothing adds a revision location, so
-the test-only revisions under backend/tests/ are reachable only through a variant image."""
+"""K-07 static half: the real tree is exactly {0001, 0002, 0003}; nothing adds a revision location,
+so the test-only revisions under backend/tests/ are reachable only through a variant image."""
 
 from typing import Any
 
@@ -17,11 +17,12 @@ def real_tree_files() -> list[str]:
     return sorted(p.name for p in VERSIONS.iterdir() if p.is_file() and p.suffix == ".py")
 
 
-def test_adr0002_c2_real_tree_holds_exactly_the_two_revision_files() -> None:
+def test_adr0002_c2_real_tree_holds_exactly_the_three_revision_files() -> None:
     files = real_tree_files()
-    assert len(files) == 2
+    assert len(files) == 3
     assert files[0].startswith("0001_")
     assert files[1].startswith("0002_")
+    assert files[2].startswith("0003_")
     assert not set(files) & {p.name for p in TEST_REVISIONS.glob("*.py")}
 
 

@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-11",
+  "task": "EKO-1-12",
+  "phase": "code",
+  "role": "developer-infrastructure",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "ad4abcc20aaea7bd3",
+  "tokens": 17645301,
+  "tokenSplit": { "input": 4312, "output": 111855, "cacheWrite": 426919, "cacheRead": 17102215 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 132,
+  "seconds": 7570,
+  "fixRound": 3,
+  "reworkCause": "ubuntu-only red of the admin-window test on PR #135 CI (restart-bind race); the earlier role able to catch: QA2/inv-24 wrote sibling carriers with settle after qa2-3 - the admin test was not swept into the pattern then",
+  "notes": "boundary-check: clean (verify against T30 allowed paths); hardened ONE of the family (inv-31 found the rest, different causes); ci.yml 110->140 kept; its formal report never crossed the handback channel (placeholder burn) - claims verified from disk at checkpoint e936aff; token total inflated by failed delivery cycles"
+}

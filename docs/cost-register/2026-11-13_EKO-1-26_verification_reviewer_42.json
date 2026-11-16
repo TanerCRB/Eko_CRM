@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-13",
+  "task": "EKO-1-26",
+  "phase": "verification",
+  "role": "reviewer",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Medium",
+  "agentId": "a12bd702564aca07f",
+  "tokens": 3902638,
+  "tokenSplit": { "input": 3959, "output": 80957, "cacheWrite": 326975, "cacheRead": 3490747 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 51,
+  "seconds": 2023,
+  "fixRound": 0,
+  "reworkCause": "two format re-emissions (verdict word PASS WITH RESERVATIONS outside the reviewer's PASS/STOP vocabulary; textual undecidable items) — the parser grammar was pasted but the role's vocabulary line was not; the content verdict never changed",
+  "notes": "boundary-check: clean (read-only wave); PASS with notes R-01/R-02 (both Low); report .task/handoff/13-reviewer-1.md"
+}

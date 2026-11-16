@@ -9,24 +9,29 @@
   statement-line parser of `test_adr0004_c15_backup_set_contents.py`, edited under the human's S-1
   decision on Issue #54; its diff is checked to be that parser and nothing else.
 
-Base: $CHANGESET_BASE, else origin/main (as `test_k07_changeset.py`). Once merged, base and head
-are equal and every comparison holds trivially. The contrasts therefore run on planted inputs,
-never on the live base.
+The route/OpenAPI and protected-test claims are about EKO-1-13's own change set and are judged on
+PR #81's parents (EKO_1_13_BASE, EKO_1_13_HEAD), read through Git objects only (EKO-1-23, #110):
+never `$CHANGESET_BASE`, `origin/main` or the working tree. What every branch must meet (health
+body, no fixture route, a non-empty route read) is judged on the live head. The ADR addenda check
+reads the live base, as `test_k07_changeset.py` does. The contrasts run on planted inputs.
 """
 
 import json
 import subprocess
 import sys
-import tarfile
-from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from tests.static.test_k07_changeset import adr_files_at_base, at_base, in_worktree, merge_base
+from tests.static.test_k07_changeset import adr_files_at_base, at_base, in_worktree
 from tests.support import repo_checks as rc
+from tests.support.fixed_pair import archive_into
 from tests.support.repo import REPO_ROOT, git
+
+# PR #81 (EKO-1-13): cc73e13's parents; its merge base is the first parent.
+EKO_1_13_BASE = "1bfaa5aa57cb854739d230e24b42655d66d1270f"
+EKO_1_13_HEAD = "947ff40efac06b13d6df48b6650024503f2e7308"
 
 SURFACE = """
 import json, os, sys
@@ -82,16 +87,16 @@ def surface(backend_dir: Path) -> Surface:
     return loaded
 
 
-def base_backend(target: Path) -> Path:
-    archive = subprocess.run(
-        ["git", "archive", "--format=tar", merge_base(), "backend/app", "backend/migrations"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        check=True,
-    ).stdout
-    with tarfile.open(fileobj=BytesIO(archive)) as tar:
-        tar.extractall(target, filter="data")
-    return target / "backend"
+def surface_at(commit: str, target: Path) -> Surface:
+    """The surface of `create_app()` as `commit` holds it; a missing commit raises."""
+    archive_into(commit, target, "backend/app", "backend/migrations")
+    return surface(target / "backend")
+
+
+def pair_surfaces(
+    root: Path, base: str = EKO_1_13_BASE, head: str = EKO_1_13_HEAD
+) -> tuple[Surface, Surface]:
+    return surface_at(base, root / "base"), surface_at(head, root / "head")
 
 
 def surface_problems(base: Surface, head: Surface) -> list[str]:
@@ -107,20 +112,28 @@ def surface_problems(base: Surface, head: Surface) -> list[str]:
 
 
 @pytest.fixture(scope="module")
-def surfaces(tmp_path_factory: pytest.TempPathFactory) -> tuple[Surface, ...]:
-    base = surface(base_backend(tmp_path_factory.mktemp("base")))
-    return base, surface(REPO_ROOT / "backend")
+def surfaces(tmp_path_factory: pytest.TempPathFactory) -> tuple[Surface, Surface]:
+    return pair_surfaces(tmp_path_factory.mktemp("pair"))
+
+
+@pytest.fixture(scope="module")
+def live_surface() -> Surface:
+    return surface(REPO_ROOT / "backend")
 
 
 def test_adr0005_eko113_changeset_route_table_openapi_and_health_body(
-    surfaces: tuple[Surface, Surface],
+    surfaces: tuple[Surface, Surface], live_surface: Surface
 ) -> None:
     base, head = surfaces
     assert head["routes"], "no route read: the comparison would compare nothing"
     assert surface_problems(base, head) == []
+    # The standing rules (ADR-0003-C23, ADR-0005: no fixture route ships) hold for the live head.
+    assert live_surface["routes"], "no live route read: the live rules would check nothing"
+    assert surface_problems(live_surface, live_surface) == []
 
 
 def test_adr0005_eko113_changeset_adr_files_only_gain_addenda() -> None:
+    """Live invariant: accepted ADR text changes only by appended dated addenda, on every branch."""
     problems = []
     for path in adr_files_at_base():
         base, head = at_base(path), in_worktree(path)
@@ -129,8 +142,8 @@ def test_adr0005_eko113_changeset_adr_files_only_gain_addenda() -> None:
     assert problems == []
 
 
-def changed_lines(path: str) -> list[str]:
-    diff = git("diff", "-U0", merge_base(), "--", path)
+def changed_lines(path: str, base: str, head: str) -> list[str]:
+    diff = git("diff", "-U0", f"{base}^{{commit}}", f"{head}^{{commit}}", "--", path)
     return [
         line[1:].strip()
         for line in diff.splitlines()
@@ -155,10 +168,17 @@ def protected_problems(changed: list[str], edits: dict[str, list[str]]) -> list[
     return problems
 
 
+def eko_1_13_protected_problems(base: str = EKO_1_13_BASE, head: str = EKO_1_13_HEAD) -> list[str]:
+    """`protected_problems` for what changed from `base` to `head`; a missing commit raises."""
+    out = git(
+        "diff", "--name-only", f"{base}^{{commit}}", f"{head}^{{commit}}", "--", "backend/tests"
+    )
+    edits = {path: changed_lines(path, base, head) for path in ALLOWED_EDITS}
+    return protected_problems(out.split(), edits)
+
+
 def test_adr0005_eko113_changeset_refusal_backup_and_c28_tests_unchanged() -> None:
-    out = git("diff", "--name-only", merge_base(), "--", "backend/tests")
-    edits = {path: changed_lines(path) for path in ALLOWED_EDITS}
-    assert protected_problems(out.split(), edits) == []
+    assert eko_1_13_protected_problems() == []
 
 
 # Planted contrasts ---------------------------------------------------------------------------

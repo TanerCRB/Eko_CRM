@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-14",
+  "task": "EKO-1-30",
+  "phase": "verification",
+  "role": "qa",
+  "model": "qwen3.8-max",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "High",
+  "agentId": "ad3a7332a0646344f",
+  "tokens": 19361246,
+  "tokenSplit": { "input": 5290, "output": 121924, "cacheWrite": 902378, "cacheRead": 18331654 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 138,
+  "seconds": 12362,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "PROOF HOLDS on 5c9690d; 8 mutations all killed (M-2 killed twice over - dev's proposed target list under-promised); D-01/D-02 process self-disclosures; boundary-check: clean (verify with test-dir allow prefixes after call); QA checkpoint e91de3f (2 paths). Delivery trail: interim note consumed the single SubagentHandback channel so the first full report never arrived; a fragment-rebuilt transcription was marked reconstruction-pending in the journal and superseded by the verbatim resend (.task/handoff/11-qa-1.md); markers.sh then bounced the Undecidable wording (criterion ids inside a 'none' sentence) - corrected tail requested from the role, verdict and block unchanged. Totals cover the whole agent run incl. the resend (startedAt 14:19Z, endedAt 17:45Z)."
+}

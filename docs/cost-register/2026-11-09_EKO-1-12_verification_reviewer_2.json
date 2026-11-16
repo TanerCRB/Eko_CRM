@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-09",
+  "task": "EKO-1-12",
+  "phase": "verification",
+  "role": "reviewer",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "a3a4cec7668a76c9a",
+  "tokens": 2377434,
+  "tokenSplit": { "input": 3605, "output": 45843, "cacheWrite": 126335, "cacheRead": 2201651 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 42,
+  "seconds": 1271,
+  "fixRound": 1,
+  "reworkCause": null,
+  "notes": "PASS at d84f3e32; R-01/03/04/05/06/07/08 RESOLVED with evidence, R-02 superseded-to-human (escalation text verified complete); new R-21 Low (public-gate failure tail records 'listeners closed' while admin stays live + restart ||true swallow) and R-22 Low (image re-inspection placeholder - same object as guardian G-21); seven round-1 paper-weak statics survive the fix unchanged - QA conversion template identified; author-claims: 9 rows backed, 2 minor misstatements named; headings renumbered in handoff copy (driver-prompt style), verdicts unchanged"
+}

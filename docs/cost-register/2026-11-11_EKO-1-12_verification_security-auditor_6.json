@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-11",
+  "task": "EKO-1-12",
+  "phase": "verification",
+  "role": "security-auditor",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "acd5095dbe6956688",
+  "tokens": 620340,
+  "tokenSplit": {
+    "input": 3013,
+    "output": 24198,
+    "cacheWrite": 54047,
+    "cacheRead": 539082
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 27,
+  "seconds": 785,
+  "fixRound": 3,
+  "reworkCause": null,
+  "notes": "delta threat-pass: PASS, 0 findings; Config.Image one-offs same-tier/no-pull, fail-closed at 3 sites; closed-selection not injectable; diagnostics value-free; standing --pull-never hardening note on one-offs"
+}

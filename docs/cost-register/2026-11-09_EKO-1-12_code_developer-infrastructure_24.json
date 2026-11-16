@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-09",
+  "task": "EKO-1-12",
+  "phase": "code",
+  "role": "developer-infrastructure",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "a59828bdd2b912fe1",
+  "tokens": 4321112,
+  {"input":4088,"output":54838,"cacheWrite":442723,"cacheRead":3819463}
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 70,
+  "seconds": 4032,
+  "fixRound": 2,
+  "reworkCause": "round 2 caused by guardian G-21 (rebuilt-image inspection gap, disclosed by inv-21/22 as a citation to a non-existent re-inspection - earlier role able to catch: the Developer's own evidence-writing self-check; QA round 2 noted the digest-churn class as F-05 low) + G-22 scan prefix + reviewer R-21 (failure-tail wording, introduced by the round-1 rm-on-fail mechanism itself)",
+  "notes": "boundary-check: clean (snapshot 83555e1, allowed scripts/ backend/tests/ docs/evidence/); all 4 objects closed with battery (static 1427, K-02 untouched 5/1102s, contrast3 3/862s, new R-21 contrast 1/611s, doc-check 4/4, ruff/mypy, links);  checkpoint 39b7758"
+}

@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-09",
+  "task": "EKO-1-12",
+  "phase": "verification",
+  "role": "security-auditor",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "a7e58bb6f15aba5b6",
+  "tokens": 1754597,
+  "tokenSplit": { "input": 3724, "output": 37966, "cacheWrite": 101439, "cacheRead": 1611468 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 45,
+  "seconds": 866,
+  "fixRound": 1,
+  "reworkCause": null,
+  "notes": "PASS WITH RESERVATIONS at d84f3e32, 0 findings; S-01 CLOSED (incl. admin-event leg by structure+scans), S-02 CLOSED both levels, S-03 CLOSED with author-named residual (live proxy across recreation) routed to the human S-03 acceptance, S-04 CLOSED at probed path w/ abort-on-miss, U-01 CLOSED (record exists now), U-02 escalated-moot-by-config; boot identity assessed as drift detector not credential (host-tier attacker gains nothing new); evidence records MAC/secret-free by grep; verdict event posted"
+}

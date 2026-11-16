@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-15",
+  "task": "EKO-1-32",
+  "phase": "verification",
+  "role": "reviewer",
+  "model": "qwen3.8-max",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Medium",
+  "agentId": "ae47f9a6f50cf611f",
+  "tokens": 1279562,
+  "tokenSplit": { "input": 4035, "output": 58056, "cacheWrite": 103702, "cacheRead": 1113769 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 30,
+  "seconds": 2053,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "reviewer — opus (hard tier, evaluator not calibrated lower); measured qwen3.8-max. boundary-check: clean. PASS, 5 Low (R-01 mirror match hardcodes live 360 - retune-day false red; R-02 pytest.skip in driven surface => CI-green skips re-open K-01's hole; R-03 scan binds literal callee name - alias walks past; R-04 no pin to pytest's real collected surface (dup slug / class / subdir glob miss); R-05 driven.add before recording - continue window). Hand-off to QA executed as addendum M-1c (driven.add removal - named-unrun mutation retired). Also corrected two report statements: dev's 'A-form scan misses b=BOUND' is WRONG (allow-list catches it; real miss is callee alias); QA's M-5 'kill count 1' is 'scan alone' with mirror counted elsewhere."
+}

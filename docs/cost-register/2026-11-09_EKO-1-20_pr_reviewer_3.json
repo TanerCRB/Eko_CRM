@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-09",
+  "role": "reviewer",
+  "task": "EKO-1-20",
+  "phase": "pr",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "complexity": "Low",
+  "tokens": 908063,
+  "tokenSplit": {
+    "input": 42,
+    "output": 19230,
+    "cacheWrite": 64818,
+    "cacheRead": 823973
+  },
+  "tokensSource": "transcript",
+  "toolCalls": 22,
+  "seconds": 361,
+  "measured": "record",
+  "fixRound": 0,
+  "reworkCause": "",
+  "notes": "reviewer — opus (hard, evaluator). Review of 0a53a6c..83e85a9 (CI timeout retune, QA allowance). PASS, 0 findings; 75-min margin projected at ~61 min worst case."
+}

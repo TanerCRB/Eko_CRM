@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-12",
+  "task": "EKO-1-29",
+  "phase": "code",
+  "role": "developer-backend",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "High",
+  "agentId": "a1e328f03d7992f00",
+  "tokens": 218632,
+  "tokenSplit": null,
+  "tokensSource": "task-notification",
+  "measured": "record",
+  "toolCalls": 102,
+  "seconds": 6052,
+  "fixRound": 1,
+  "reworkCause": "reviewer STOP round-0: R-01 mid-line pass (dev-1 line-start anchor), R-02 path-blind self-reference hold, R-03 quadratic DIFF regression measured (8.6s@10k vs base 0.2ms), G-01 base-fired quote shapes narrowed, R-04 splitlines; guardian/auditor named the same gaps at lower severity - dev-1 ran no tree census and no timing probe before claiming superset",
+  "notes": "boundary-check: clean (t4, guard file + evidence); fix round 1: 5-family _ASSIGNMENT_PREFIX with lookbehinds and env/-e/slot-2 contexts, comma-rule self-ref hold (PASSWORD=password fires again, 14 kwargs hold), linear membership prefilter + lazy DIFF + {0,64} bound (32KB +-lines <=421ms, 10k 8108->0.00ms), unbalanced/empty/quote-at-EOL fire shapes + DIFF_HEAD alternative, split-on-\\n; census-first (45 files, 0 new fires, 0 lost fires); kill-proofs M1 25 red, M2 6, M3 behaviour-inert-by-design (timing is the proof), M4a 10 (harness string bug found by running, corrected and re-run), M4b 2, M5 5; static 1983, guard 192, ruff/mypy clean, links clean; assumptions B-01..B-06 incl. B-03 residuals (bare cmd TOKEN=x, ; then, >64 prefix) and B-02 corrected superset wording; evidence dev-2 section appended; security-flag on the kill-proof harness audited by driver before it ran (green baseline byte-identical, benign)"
+}

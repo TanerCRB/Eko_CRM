@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-13",
+  "task": "EKO-1-26",
+  "phase": "code",
+  "role": "developer-infrastructure",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Medium",
+  "agentId": "a5c681948c8fca839",
+  "tokens": 12885308,
+  "tokenSplit": { "input": 306, "output": 38148, "cacheWrite": 1046117, "cacheRead": 11800737 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 57,
+  "seconds": 11994,
+  "fixRound": 2,
+  "reworkCause": "QA re-verification F-3 (MEDIUM): placement dir outlived the restored bare ERR trap (line 584) and the explicit exits; the round-1 fix left the third trap window asserted nowhere — QA's M10b mutation survived the developer's own carriers; earlier catcher: the Developer's self-check could have enumerated all trap/exit paths against the claim in its own comment",
+  "notes": "delta of cumulative record vs row 38; boundary-check clean (scripts/ backend/tests/); checkpoint 56aec0a; full static 1802/0 standalone serial; drive-by wraps of QA file disclosed; report .task/handoff/10-developer-fix-2.md"
+}

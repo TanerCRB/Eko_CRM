@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from tests.static.test_eko115_k07_unchanged_on_both_bases import BASES, base, head
+from tests.static.test_eko115_k07_unchanged_on_both_bases import BASES, base, claim_head, head
 from tests.support import release_workflow as rw
 
 Workflow = dict[Any, Any]
@@ -75,5 +75,5 @@ def test_eko115_k07_qa_a_change_inside_an_allowed_step_fails_on_both_bases(
 
 @pytest.mark.parametrize("which", BASES)
 def test_eko115_k07_qa_contrast_the_login_token_as_allowed_passes_on_both_bases(which: str) -> None:
-    same = _login_token("backend", "${{ github.token }}")(head())
+    same = _login_token("backend", "${{ github.token }}")(claim_head(which))
     assert rw.ci_unchanged_violations(base(which), same) == []

@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-12",
+  "task": "EKO-1-28",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "a7ed25935979cfb41",
+  "tokens": 55948,
+  "tokenSplit": null,
+  "tokensSource": "task-notification",
+  "measured": "record",
+  "toolCalls": 27,
+  "seconds": 717,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "PASS 0/0/0/0, undecidable K-04 (CI listings await PR - gate-2 precondition noted); pure addition re-verified by grep; guards byte-identical; self-test 13/13 executed; independent re-hash ea9a8a16 proves mutation matrix ran on reviewed version; fmt:skip pair adjudicated against precedent; shellcheck not wired - named skip"
+}

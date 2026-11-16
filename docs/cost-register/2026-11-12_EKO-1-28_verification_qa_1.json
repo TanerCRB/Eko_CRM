@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-12",
+  "task": "EKO-1-28",
+  "phase": "verification",
+  "role": "qa",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "High",
+  "agentId": "a4ba23ab279254114",
+  "tokens": 11289582,
+  "tokenSplit": null,
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 69,
+  "seconds": 7998,
+  "fixRound": 0,
+  "reworkCause": "host fork/memory exhaustion killed the first full session (watchdog stall) and invalidated Q-4 run (exit 125 0xC0000142); resumed cycle delivered the report",
+  "notes": "PROOF HOLDS, undecidable K-04 (await CI); 4/7 mutations independently KILLED (Q-1 clause, Q-2 exit-2, Q-3 both unset+empty phases one run, Q-6 reach/healthy), each revert sha-witnessed; Q-4/Q-5/Q-7 NOT RUN (host pressure; Q-5 ORDER and Q-7 stub-fallthrough are the reviewer's thin spots left unproven by any committed runtime red - offline restart-count cases only) - follow-up QA cycle recommended on a quiet host; qa-1.md deliberately not written (disclosed); K-02(ii) guards byte-identical not re-run per driver; tree at rest == checkpoint"
+}

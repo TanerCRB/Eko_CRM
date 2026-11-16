@@ -17,7 +17,9 @@ import pytest
 from tests.support.repo import REPO_ROOT, bash
 
 SCRIPT = REPO_ROOT / "scripts" / "release-images.sh"
-NAMES = ("backend", "frontend", "proxy", "backup")
+# EKO-1-26 route A: the custom Keycloak image is the fifth project image — checked, pushed and
+# digested like the four before it; postgres stays the only image digested from a runtime pull.
+NAMES = ("backend", "frontend", "proxy", "backup", "keycloak")
 REGISTRY = "ghcr.io/tanercrb/eko-crm"
 TAG = "v1.2.0"
 # The stand-in directory first on PATH; Git Bash on Windows needs it as /c/..., not C:/...
@@ -72,6 +74,8 @@ def run(
         env[f"{name.upper()}_ID"] = IDS[name]
         env[f"STUB_ID_{name.upper()}"] = ids[name]
         env[f"STUB_DIGEST_{name.upper()}"] = DIGESTS[name]
+    # The pulled third party (EKO-1-26: postgres alone — keycloak's digest comes from the push).
+    env["STUB_DIGEST_POSTGRES"] = sha("registry-postgres")
     result = subprocess.run(
         [bash(), "-c", WITH_STAND_IN, SCRIPT.as_posix(), *args],
         capture_output=True,
@@ -121,3 +125,34 @@ def test_eko115_k03_qa_failed_third_push_ends_the_step_without_all_digests(
     code, out, _ = run(tmp_path, "push", TAG, fail_push=failing)
     assert code != 0
     assert [line.split("=")[0] for line in out.splitlines()] == ["backend", "frontend"]
+
+
+def test_eko126_qa_k02_keycloak_rebuilt_under_the_same_name_is_caught(
+    tmp_path: Path,
+) -> None:
+    """EKO-1-26 K-02 identity half (QA contrast): the snapshot guard cannot see a rebuild into
+    an existing loaded name (`session_images` reports names that first appear during the
+    session; capabilities.md:30 admits the blind spot), so the placed custom Keycloak image's
+    identity rests on the recorded-ID comparison. A same-name rebuild must fail `check-identity`
+    and must stop `push` before it tags or pushes anything — the fifth image is in that loop
+    exactly like the four before it."""
+    rebuilt = {**IDS, "keycloak": sha("id-keycloak-rebuilt")}
+    code, _, calls = run(tmp_path, "check-identity", ids=rebuilt)
+    assert code == 1, calls
+    assert [c for c in calls if c.startswith("push") or c.startswith("tag")] == []
+    push_code, push_out, push_calls = run(tmp_path, "push", TAG, ids=rebuilt)
+    assert push_code == 1 and push_out == ""
+    assert [c for c in push_calls if c.startswith("push") or c.startswith("tag")] == []
+
+
+def test_eko126_k03_qa_keycloak_is_a_pushed_image_not_a_pulled_one(tmp_path: Path) -> None:
+    """EKO-1-26 K-03: the release demands no registry digest for what it does not publish. The
+    custom keycloak image is now pushed (`push` prints its registry digest, in the five-image
+    order), so `pulled-digests` — the runtime tests' pulled references — names postgres only."""
+    pushed_code, pushed_out, _ = run(tmp_path, "push", TAG)
+    assert pushed_code == 0 and "keycloak" in pushed_out.splitlines()[-1], pushed_out
+    pulled_code, pulled_out, pulled_calls = run(tmp_path, "pulled-digests")
+    assert pulled_code == 0, pulled_out
+    assert pulled_out.splitlines() == [f"postgres={sha('registry-postgres')}"], pulled_out
+    # No keycloak reference is inspected as a pull: it is not a compose third-party digest source.
+    assert [c for c in pulled_calls if "keycloak" in c] == [], pulled_calls

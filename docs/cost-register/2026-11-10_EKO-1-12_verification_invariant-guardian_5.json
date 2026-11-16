@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-10",
+  "task": "EKO-1-12",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "aafc8781cca1df546",
+  "tokens": 1632017,
+  "tokenSplit": { "input": 3651, "output": 24081, "cacheWrite": 75995, "cacheRead": 1528290 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 51,
+  "seconds": 2318,
+  "fixRound": 3,
+  "reworkCause": null,
+  "notes": "re-verification of the boot-identity correction at 25966f9 (#126/PR #135): PASS, 0 findings; G-21/G-22 confirmed resolved on merged main; 131+102 statics, doc-check 4/4, trio sweeps executed; A-04 module-scope deviation and cold-ordering window named for human acceptance"
+}

@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-09",
+  "role": "invariant-guardian",
+  "task": "EKO-1-20",
+  "phase": "pr",
+  "model": "claude-opus-5-5",
+  "invocation": "registered",
+  "complexity": "Low",
+  "tokens": 570159,
+  "tokenSplit": {
+    "input": 34,
+    "output": 12760,
+    "cacheWrite": 52475,
+    "cacheRead": 504890
+  },
+  "tokensSource": "transcript",
+  "toolCalls": 17,
+  "seconds": 249,
+  "measured": "record",
+  "fixRound": 0,
+  "reworkCause": "",
+  "notes": "invariant-guardian — opus (hard, evaluator). Incremental audit of 0a53a6c..83e85a9 (CI timeout retune, QA allowance). PASS. Report sent back once for markers format (notes naming K-03/K-07 inside the Undecidable section); record includes the resend."
+}

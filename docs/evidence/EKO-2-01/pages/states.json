@@ -1,0 +1,11 @@
+[
+  "lockout",
+  "login",
+  "login-error",
+  "mfa-code",
+  "mfa-code-error",
+  "mfa-enrolment",
+  "required-password",
+  "reset",
+  "reset-sent"
+]

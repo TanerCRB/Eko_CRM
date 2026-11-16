@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-10",
+  "task": "EKO-1-12",
+  "phase": "verification",
+  "role": "qa",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "High",
+  "agentId": "ac8bbf4863559ddc5",
+  "tokens": 9261531,
+  "tokenSplit": { "input": 4640, "output": 63032, "cacheWrite": 926848, "cacheRead": 8267011 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 105,
+  "seconds": 11085,
+  "fixRound": 3,
+  "reworkCause": "re-verification of the boot-identity correction (caused by the CI-surfaced ARP race from round-1's R-05 answer); the earlier role able to catch: the design review of the ARP primitive",
+  "notes": "boundary-check: clean (snapshot 9aa355e, allowed backend/tests/ - none persisted); PROOF HOLDS: 4 reaper-cut steps executed + 6 mutations 5 killed (qa4-5 survived -> Q4-1 Medium carrier gap for inv-27); self-reported and corrected an integrity lapse (narrated-then-executed); patches archived .task/handoff/eko112-qa4-*.patch"
+}

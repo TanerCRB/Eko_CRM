@@ -1,4 +1,4 @@
-"""Runtime harness: the composition started by the documented command, from no volumes.
+"""Runtime harness: the composition started by the documented bring-up, from no volumes.
 
 Each composition gets its own project name, a fresh synthetic environment file outside the
 repository and free host ports, and is removed with its volumes afterwards.
@@ -74,6 +74,8 @@ def parse_instant(value: str) -> datetime:
 
 # EKO-1-15 K-02 (ADR-0004-C31): in a release run the runtime tests run the images built once and
 # checked, loaded under the names EKO_CHECKED_IMAGES gives, and never rebuild them.
+# EKO-1-26 K-01 and K-02 (route A): the custom Keycloak image joins the placed family — it too
+# is built and identity-verified outside the session, so the session never builds it in session.
 CHECKED_SERVICES = {
     "proxy": "proxy",
     "frontend": "frontend",
@@ -81,8 +83,9 @@ CHECKED_SERVICES = {
     "backend": "backend",
     "migrate": "backend",
     "worker": "backend",
+    "keycloak": "keycloak",
 }
-BUILT_SERVICES = ("proxy", "frontend", "backup", "backend")
+BUILT_SERVICES = ("proxy", "frontend", "backup", "backend", "keycloak")
 
 
 @functools.cache
@@ -101,10 +104,13 @@ def checked_images_override() -> Path | None:
         if service in BUILT_SERVICES:
             lines.append("    build: !reset null")
         if service == "backup":
-            # The manifest names the backend image the composition runs, as the anchor does.
+            # The manifest names the images the composition actually runs, as the anchors do.
+            # EKO-1-26 K-02 (C-4 edge): keycloak's manifest name mirrors the placed checked image
+            # exactly like backend's, so the release-mode manifest never names a non-running image.
             lines += [
                 "    environment:",
                 f"      BACKUP_MANIFEST_BACKEND_IMAGE: {images['backend']}",
+                f"      BACKUP_MANIFEST_KEYCLOAK_IMAGE: {images['keycloak']}",
             ]
     override = Path(tempfile.mkdtemp(prefix="eko-checked-")) / "checked-images.yaml"
     override.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -228,17 +234,43 @@ class Started:
 
 @pytest.fixture(scope="session")
 def running(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Started]:
-    """The development profile, started by the documented command from no volumes."""
+    """The development profile, brought up the accepted two-step way from no volumes.
+
+    EKO-1-12 (ADR-0004 addendum of 2026-11-02): `compose up` alone leaves both proxy listeners
+    closed — each opens only after its own live brute-force precondition — so the session
+    bring-up runs `prepare` and then `scripts/keycloak-bootstrap.sh`, exactly like
+    `keycloak_running`. `prepare` must stay the first step: it keeps Keycloak out of the up,
+    so the server's first start of an empty database happens inside the bootstrap's own
+    override recreate, where the temporary administrator is the one the script answers.
+    A contrast that needs an un-bootstrapped composition must use `fresh` or its own project,
+    never this fixture. The two final assertions are the live precondition this whole session
+    depends on: if bootstrap ever returns success on a composition whose listeners are closed,
+    the fixture fails here instead of handing out the closed sockets behind 100+ connection
+    errors.
+    """
+    from tests.runtime.keycloak_client import listener_open, prepare, run_bootstrap
+
     composition = new_composition(tmp_path_factory, "dev")
     try:
-        up = composition.compose(
-            "up", "--build", "--wait", "--wait-timeout", str(UP_TIMEOUT_SECONDS),
-            check=False, timeout=UP_TIMEOUT_SECONDS + 300,
-        )  # fmt: skip
-        if up.returncode != 0:
-            logs = composition.compose("logs", "--tail", "40", check=False).stdout
-            raise AssertionError(f"up exited {up.returncode}\n{up.stderr[-3000:]}\n{logs[-6000:]}")
-        yield Started(composition, up)
+        prepare(composition)
+        result = run_bootstrap(composition)
+        assert listener_open(composition, "admin"), "admin listener closed after bootstrap"
+        assert listener_open(composition, "auth"), "public listener closed after bootstrap"
+        yield Started(composition, result)
+    finally:
+        composition.down()
+
+
+@pytest.fixture(scope="session")
+def keycloak_running(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Started]:
+    """EKO-1-12: the development profile after the live, ordered Keycloak bootstrap."""
+    from tests.runtime.keycloak_client import prepare, run_bootstrap
+
+    composition = new_composition(tmp_path_factory, "keycloak")
+    try:
+        prepare(composition)
+        result = run_bootstrap(composition)
+        yield Started(composition, result)
     finally:
         composition.down()
 
@@ -317,3 +349,24 @@ def no_scheduler_outlives_its_test(request: pytest.FixtureRequest) -> Iterator[N
         backup_lab: BackupLab = request.getfixturevalue("backup_lab")
         backup_lab.stop_scheduler()
         assert not backup_lab.scheduler_running(), "the backup scheduler is still running"
+
+
+@pytest.fixture(scope="module")
+def built_image(tmp_path_factory: pytest.TempPathFactory) -> str:
+    """EKO-2-01 K-07: the custom Keycloak image built the composition's own way, by image ID;
+    shared by `test_eko201_k07_theme_image.py` and `test_eko201_qa_theme_image.py`. Through
+    `build_keycloak`, so a placed checked image is read as placed and never rebuilt (EKO-1-26)."""
+    from tests.runtime.keycloak_client import build_keycloak
+
+    return build_keycloak(new_composition(tmp_path_factory, "image"))
+
+
+@pytest.fixture(scope="module")
+def built_reference(built_image: str, tmp_path_factory: pytest.TempPathFactory) -> str:
+    """The name `built_image` runs under — the localhost anchor, or the placed checked image in a
+    release run — for fixture images built `FROM` it (BuildKit resolves no bare image ID there)."""
+    from tests.runtime.keycloak_client import image_id, keycloak_image_reference
+
+    reference = keycloak_image_reference(new_composition(tmp_path_factory, "image-name"))
+    assert image_id(reference) == built_image, "the name no longer holds the built image"
+    return reference

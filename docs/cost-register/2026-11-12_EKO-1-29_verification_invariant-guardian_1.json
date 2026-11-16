@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-12",
+  "task": "EKO-1-29",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "ac3d97273c7254841",
+  "tokens": 83411,
+  "tokenSplit": null,
+  "tokensSource": "task-notification",
+  "measured": "record",
+  "toolCalls": 40,
+  "seconds": 2935,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "PASS 0/0/0/1; G-01 Low: A-06 superset claim false (unbalanced-quote +KEY=opening shapes and +API_KEY=API_KEY self-ref narrowed vs base); D-1/A-05 adjudicated correct against C9 boundary; suite 1918 re-run matched dev count; boundary t3 clean; register untouched as required"
+}

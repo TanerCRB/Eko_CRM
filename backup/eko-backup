@@ -201,6 +201,13 @@ stream_object() {
 # before curl's 300 s stall check would break the upload and blame the destination.
 readonly DUMP_LOCK_WAIT=--lock-wait-timeout=180000
 
+# The control session's lock waits in the snapshot transaction end at the same bound, with
+# SQLSTATE 55P03 (ADR-0004 addendum 2026-11-08). Transaction-local and set only after the export:
+# a lock timeout in force earlier would also bound the advisory-lock wait, which has no limit.
+bound_control_lock_waits() {
+  ctl "SET LOCAL lock_timeout = '180s'"
+}
+
 dump_application() {
   PGAPPNAME=eko-backup-dump-application pg_dump --no-password -h "$DB_HOST" -U "$DB_USER" \
     -d "$APP_DB" --format=custom --compress=none --snapshot="$SNAPSHOT" "$DUMP_LOCK_WAIT"
@@ -258,6 +265,7 @@ run_now() {
   SET_NAME="eko-$compact-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
   [[ "$SET_NAME" =~ ^eko-[0-9]{8}T[0-9]{6}\.[0-9]{6}Z-[0-9a-f]{16}$ ]] || fail dump-application
 
+  bound_control_lock_waits || ctl_fail dump-application
   ctl "SELECT coalesce(string_agg(version_num, ',' ORDER BY version_num COLLATE \"C\"), '') FROM alembic_version" \
     || ctl_fail dump-application
   local revision="${CTL_TEXT%$'\n'}"

@@ -1,0 +1,88 @@
+# The admin-only entry point: the same admin listener as `Caddyfile`, with no application site.
+# The proxy selects this file while only the admin gate is open (ADR-0004 bootstrap window), so
+# it carries the same field restriction on every line Caddy writes (ADR-0005 addendum 2026-11-02,
+# C4; reviewer R-01): during the window a console login ends in GET /admin/master/console/?code=…
+# and the authorization code and the operator address must not reach any log. Every directive the
+# full configuration's admin site sets is set here too — `tests/static/
+# test_eko112_k04_caddy_admin_log_parity.py` fails on any drift between the two files.
+{
+	# No Caddy admin API: the routing cannot be changed at run time from inside the network.
+	admin off
+	# Caddy's own redirect targets its internal port 443 and drops the published one.
+	auto_https disable_redirects
+	# One field restriction on every line Caddy writes (ADR-0005 addendum 2026-11-02, C4): no
+	# header, cookie, remote address or port, protocol, TLS detail or query string. Requests for
+	# an unmapped host and every error line go through this default logger; the site access logs
+	# below use the same restriction (docs/operations/log-format.md).
+	log default {
+		output stderr
+		format filter {
+			wrap json {
+				time_format rfc3339_nano
+			}
+			fields {
+				request>remote_ip delete
+				request>remote_port delete
+				request>proto delete
+				request>headers delete
+				request>tls delete
+				request>uri regexp "\?.*$" ""
+				resp_headers delete
+				bytes_read delete
+				user_id delete
+				err_id delete
+				err_trace delete
+			}
+		}
+	}
+}
+
+# Every site's access log: exactly one line per request, under the default logger's restriction,
+# which is kept identical (a site with its own log is left out of the default logger's).
+(access_log) {
+	log {
+		output stderr
+		format filter {
+			wrap json {
+				time_format rfc3339_nano
+			}
+			fields {
+				request>remote_ip delete
+				request>remote_port delete
+				request>proto delete
+				request>headers delete
+				request>tls delete
+				request>uri regexp "\?.*$" ""
+				resp_headers delete
+				bytes_read delete
+				user_id delete
+				err_id delete
+				err_trace delete
+			}
+		}
+	}
+}
+
+(no_api_description) {
+	@api_description path_regexp api_description (?i)(^|/)(openapi[^/]*|docs|redoc)(/|$)
+	respond @api_description 404
+}
+
+(no_account_console) {
+	@account_console path_regexp account_console (?i)^/realms/[^/]+/account(/|$)
+	respond @account_console 403
+}
+
+# Admin listener: published only on the company-network address, and refusing any other source.
+# Each site is one `route`, so its rules run in the order written (same shape as Caddyfile).
+https://{$AUTH_ADMIN_HOST}:8443 {
+	import access_log
+	tls internal
+	route {
+		import no_api_description
+		import no_account_console
+		@outside_company_network not remote_ip {$COMPANY_NETWORK_CIDRS}
+		respond @outside_company_network 403
+		reverse_proxy keycloak:8080
+	}
+}

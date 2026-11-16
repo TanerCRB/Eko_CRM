@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-11",
+  "task": "EKO-1-12",
+  "phase": "code",
+  "role": "developer-infrastructure",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "a512672cb304ec29f",
+  "tokens": 20834587,
+  "tokenSplit": { "input": 12444, "output": 307404, "cacheWrite": 1053499, "cacheRead": 19461240 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 82,
+  "seconds": 6171,
+  "fixRound": 3,
+  "reworkCause": "human-approved option A (CI pre-build step) collides with the ci.yml freeze carriers (EKO-1-15 K-07 closed allowed-diff list, EKO-1-19 K-03 byte-identical, EKO-1-20 retune matrix) - 10 static reds; the collision is a property of the approved option, first established here; no earlier role owned the option design",
+  "notes": "boundary-check: verify flagged only the driver-created stray --help file (mis-invoked snapshot --help, deleted by driver) - compensated: tracked tree pristine at 592fc8f; STOPPED with nothing shipped; proved release_mode_ci.py ACCEPTS the step (empirical), rejects are the freeze masks outside the allow-list; full rebuild-policy analysis (two in-session --build callers remain, name-diff K-04 semantics); image-reference match verified via compose config --images + dummy project; enabling change proposed (extend closed list with plants, EKO-1-15 F-1 precedent); full static baseline killed at 55% under EKO-1-25 session contention (no failures observed; CI static job at this head backs pristine)"
+}

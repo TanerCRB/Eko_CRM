@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-10",
+  "task": "EKO-1-12",
+  "phase": "verification",
+  "role": "reviewer",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "aeff40db145254437",
+  "tokens": 2186766,
+  "tokenSplit": {"input":3476,"output":43290,"cacheWrite":103047,"cacheRead":2036953},
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 49,
+  "seconds": 1611,
+  "fixRound": 3,
+  "reworkCause": null,
+  "notes": "re-verification of the boot-identity correction at 25966f9 (#126/PR #135); PASS (R-01 residual-record derivation Low; R-02 k02 settle parity Low; inv-29 handoff-file absence noted - cost row stood in)"
+}

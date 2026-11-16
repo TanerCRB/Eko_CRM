@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-14",
+  "task": "EKO-1-31",
+  "phase": "analysis",
+  "role": "analyst",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "Medium",
+  "agentId": "a70b2f454b6e0ac52",
+  "tokens": 470890,
+  "tokenSplit": {
+    "input": 3947,
+    "output": 34033,
+    "cacheWrite": 78236,
+    "cacheRead": 354674
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 25,
+  "seconds": 689,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "READY FOR GATE 1; 6 criteria K-01..K-06 (merged DoD items 1+5 into K-01's mutation row); K-05 Judged by Human (CI-log provenance); flagged new-use foundation: no committed test captures a failing pytest report via subprocess today (precedents are --collect-only); proposed one extra Out-of-scope line (pytest-upgrade rendering); boundary: registered read-only role, nothing written (report + cost row written by supervisor)"
+}

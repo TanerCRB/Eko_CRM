@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-14",
+  "task": "EKO-1-30",
+  "phase": "verification",
+  "role": "reviewer",
+  "model": "qwen3.8-max",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "High",
+  "agentId": "a9b4f9d6dfb9acf43",
+  "tokens": 1087618,
+  "tokenSplit": { "input": 3981, "output": 68936, "cacheWrite": 140756, "cacheRead": 873945 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 24,
+  "seconds": 2804,
+  "fixRound": 0,
+  "reworkCause": "restatement re-run caused by scripts/markers.sh exit 1 (Undecidable section wording carried a criterion id); the finding was format-only, verdict/findings unchanged; nobody earlier could have caught it - the parser rule (any K-<n> token in the Undecidable section counts as an item) is exactly what the bounce exists to teach; candidate to fold into the role definition's report-format section",
+  "notes": "boundary-check: n/a (registered read-only role). Model trail: opus requested (hard tier, evaluator), measured qwen3.8-max. PASS, 7 Lows (R-01 driver-loop coverage unguarded, R-02 k01 record-node default/live-name shape, R-03 SIMULATED_BOUND=300 plausible-retune collision, R-04 raises-node classification, R-05 grep polarity, R-06 doc-check skip-path, R-07 drive-count cost); paper trace only (no execution - disclosed); adjudicated the M-1 discrepancy: dev+QA+reviewer concur, wiring-kill honest, gate 2 to confirm on record; named a 9th cheap unrun mutation (RECORDED_RAISE=raise_for(BOUND)). Totals include the restatement resume (endedAt 18:41Z)."
+}

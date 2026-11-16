@@ -42,9 +42,10 @@ def actions_pinned(workflow: Workflow) -> list[str]:
 
 
 RECORD_TOKEN = "RELEASE_RECORD_TOKEN"
-# The closed list of ci.yml jobs that may read the release record (EKO-1-15 C-3, C-7, C-8);
+# The closed list of ci.yml jobs that may read the release record (EKO-1-15 C-3, C-7, C-8;
+# runtime-checked: EKO-1-19 G-6 A, the release-mode runtime job);
 # K-07's check on ci.yml uses the same list.
-RECORD_JOBS = ("backend", "runtime")
+RECORD_JOBS = ("backend", "runtime", "runtime-checked")
 
 
 def reads_release_record(job: dict[str, Any]) -> bool:
@@ -143,3 +144,39 @@ def no_secrets(workflow: Workflow, secret_names: set[str]) -> list[str]:
             if key in secret_names or "secrets." in str(value):
                 problems.append(f"{where}: env {key} carries a secret")
     return problems
+
+
+# Retuning an existing job's time bound (EKO-1-20, #76) ------------------------------------------
+# The checks that compare existing jobs to their base do not report a job whose only difference
+# is the integer value of its own `timeout-minutes`, or the one comment line directly above that
+# key. Adding the key to a job, removing it, or setting it to anything but an integer is still a
+# changed job: both sides are masked alike, so a key present on one side only stays a difference.
+
+TIMEOUT_KEY = "timeout-minutes"
+TIMEOUT_MASK = "<retuned>"
+TIMEOUT_LINE = re.compile(r"    timeout-minutes: \d+")
+JOB_COMMENT = re.compile(r"    #.*")
+
+
+def _integer(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def timeout_masked(job: Any) -> Any:
+    """The job with an integer `timeout-minutes` replaced by one mask, for comparison only."""
+    if not isinstance(job, dict) or not _integer(job.get(TIMEOUT_KEY)):
+        return job
+    return {**job, TIMEOUT_KEY: TIMEOUT_MASK}
+
+
+def timeout_lines_masked(block: str) -> str:
+    """A job's lines in the file with its `timeout-minutes` line masked and the one comment line
+    directly above it dropped, for comparison only."""
+    lines: list[str] = []
+    for line in block.split("\n"):
+        if TIMEOUT_LINE.fullmatch(line):
+            if lines and JOB_COMMENT.fullmatch(lines[-1]):
+                lines.pop()
+            line = f"    {TIMEOUT_KEY}: {TIMEOUT_MASK}"
+        lines.append(line)
+    return "\n".join(lines)

@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-07",
+  "task": "EKO-1-12",
+  "phase": "implementation",
+  "role": "developer-infrastructure",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "a1fe563217501e728",
+  "tokens": 9915360,
+  "tokenSplit": { "input": 4633, "output": 90437, "cacheWrite": 883899, "cacheRead": 8936391 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 106,
+  "seconds": 15898,
+  "fixRound": 0,
+  "reworkCause": "103 legacy runtime failures found only when the driving session ran the FULL runtime series on the merged checkpoint — inv-18 ran only its own suites; earlier role able to catch: the Developer's own step-9 self-check should have run `-m runtime` in full after changing the shared dev-profile proxy",
+  "notes": "boundary-check: clean (snapshot b90324a, allowed backend/tests/); full series 386 passed/1 deselected in 1:16:38; running fixture now prepare+run_bootstrap + listener_open precondition asserts; foreign-CIDR contrast kept un-bootstrapped via marker touch (named exception); weakening dry-run clean; two pre-existing defects reported (K-05 standalone cold-state — routed to QA/gate 2; ADR-0004 append-only placement after merge — driving session's merge repair)"
+}

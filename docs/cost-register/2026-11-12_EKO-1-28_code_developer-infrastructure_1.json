@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-12",
+  "task": "EKO-1-28",
+  "phase": "code",
+  "role": "developer-infrastructure",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "High",
+  "agentId": "a3a3fdcc7c34821c1",
+  "tokens": 45633494,
+  "tokenSplit": { "input": 13383, "output": 407646, "cacheWrite": 3471256, "cacheRead": 41741209 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 142,
+  "seconds": 19095,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "boundary-check: clean (t2, bootstrap+runtime+evidence); weakening/leftovers clean on 3b93d1e..dc52fdc; pure addition 133/0 (mid-task rework v1 folded-condition 120/2 abandoned when driver demanded zero-deletion resting tree, full matrix re-executed on v2); security flag from classifier (poisoned-baseline risk) handled: baseline actually pre-mutation per agent's digest evidence, never used anyway; reverts by hunk re-edit + sha-identity (resting ea9a8a16...), 0 MUTATION markers, record line present :521; runtime matrix 1:18:59 session green incl. pre-existing guards untouched; mutations (a)(b)(c) each red with named reasons (b's exit-2-by-guard noted); --self-test 13/13; unit 1978; K-04 CI half deferred to PR (honestly named); assumptions A-01 activation literal, A-02 no-real-restart-under-hook; gate-3 proposals + QA mutation list written in report; checkpoint dc52fdc"
+}

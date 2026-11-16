@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-11",
+  "task": "EKO-1-12",
+  "phase": "verification",
+  "role": "invariant-guardian",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Medium",
+  "agentId": "acb3ebba74b14b210",
+  "tokens": 860347,
+  "tokenSplit": {
+    "input": 3185,
+    "output": 22593,
+    "cacheWrite": 73932,
+    "cacheRead": 760637
+  },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 33,
+  "seconds": 1174,
+  "fixRound": 3,
+  "reworkCause": null,
+  "notes": "delta audit of CI-family hardening (PR #135, #126): PASS, 0 findings; six fixed-rule proofs executed (carriers 126 + changeset 48); exit-code contract intact, 403 power increased, no suppressions"
+}

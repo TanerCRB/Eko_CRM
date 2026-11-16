@@ -1,0 +1,103 @@
+{
+  "adminPermissionsClient": {
+    "clientId": "admin-permissions",
+    "authorizationSettings": {
+      "policies": [
+        {
+          "id": "0af865dc-4854-47cb-a1fd-106311e3cc37",
+          "name": "eko112-application-administrator",
+          "type": "role",
+          "logic": "POSITIVE",
+          "decisionStrategy": "UNANIMOUS",
+          "config": {
+            "roles": "[{\"id\":\"0e053001-2a7b-4f5c-83d2-383d222e56b3\",\"required\":false}]"
+          }
+        },
+        {
+          "id": "36774e2c-56bd-4a85-af82-63772697ea3c",
+          "name": "eko112-map-administrator",
+          "type": "scope",
+          "logic": "POSITIVE",
+          "decisionStrategy": "UNANIMOUS",
+          "resourceType": "Roles",
+          "resourcesData": [
+            {
+              "name": "0e053001-2a7b-4f5c-83d2-383d222e56b3",
+              "displayName": "administrator"
+            }
+          ],
+          "scopesData": [
+            {
+              "id": "8ecdff6f-2004-470e-b404-961f6e18a4d0",
+              "name": "map-role"
+            }
+          ],
+          "policies": [
+            "0af865dc-4854-47cb-a1fd-106311e3cc37"
+          ]
+        },
+        {
+          "id": "0d7c4d91-a1f0-4d2d-8073-3de6e377fd80",
+          "name": "eko112-map-manager",
+          "type": "scope",
+          "logic": "POSITIVE",
+          "decisionStrategy": "UNANIMOUS",
+          "resourceType": "Roles",
+          "resourcesData": [
+            {
+              "name": "dcd1016b-1009-4a5e-8c68-1306d646b2fb",
+              "displayName": "manager"
+            }
+          ],
+          "scopesData": [
+            {
+              "id": "8ecdff6f-2004-470e-b404-961f6e18a4d0",
+              "name": "map-role"
+            }
+          ],
+          "policies": [
+            "0af865dc-4854-47cb-a1fd-106311e3cc37"
+          ]
+        },
+        {
+          "id": "4bbe53cc-69ef-424a-b472-551b9ac5b65f",
+          "name": "eko112-map-rep",
+          "type": "scope",
+          "logic": "POSITIVE",
+          "decisionStrategy": "UNANIMOUS",
+          "resourceType": "Roles",
+          "resourcesData": [
+            {
+              "name": "30dee7c2-432e-460c-940a-1300a2976b1f",
+              "displayName": "rep"
+            }
+          ],
+          "scopesData": [
+            {
+              "id": "8ecdff6f-2004-470e-b404-961f6e18a4d0",
+              "name": "map-role"
+            }
+          ],
+          "policies": [
+            "0af865dc-4854-47cb-a1fd-106311e3cc37"
+          ]
+        }
+      ]
+    }
+  },
+  "applicationRoles": [
+    {
+      "id": "0e053001-2a7b-4f5c-83d2-383d222e56b3",
+      "name": "administrator",
+      "composite": true
+    },
+    {
+      "id": "dcd1016b-1009-4a5e-8c68-1306d646b2fb",
+      "name": "manager"
+    },
+    {
+      "id": "30dee7c2-432e-460c-940a-1300a2976b1f",
+      "name": "rep"
+    }
+  ]
+}

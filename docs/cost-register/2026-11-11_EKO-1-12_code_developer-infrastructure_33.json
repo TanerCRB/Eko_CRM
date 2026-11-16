@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-11",
+  "task": "EKO-1-12",
+  "phase": "code",
+  "role": "developer-infrastructure",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "High",
+  "agentId": "a0775289507f02122",
+  "tokens": 64704467,
+  "tokenSplit": { "input": 14862, "output": 428734, "cacheWrite": 1028521, "cacheRead": 63232350 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 202,
+  "seconds": 9389,
+  "fixRound": 3,
+  "reworkCause": "human-approved A1 (freeze-list enabling change) after inv-32 STOP; total spans the mid-run API-502 crash and SendMessage resume (no rework on resume, edits were on disk)",
+  "notes": "boundary-check: clean (t33, ci.yml+backend/tests); weakening/leftovers clean; 1601 static passed (==collect), ruff format/check clean, mypy clean, unit 176; ci.yml +6 (approved step between Install and K-04 snapshot), freeze tolerance = exact-dict drop-if-present (release_workflow), byte-line-window mask (workflow_checks), k03 masked_block both sides + plant, release_mode_ci ordering rule prebuild<snapshot + plant, new both-bases plant file (30 items, 11 freeze plants x2 bases + 4 text plants x2 bases), k07 docstring note; 3 file-level mutation demos (A mutated step -> 25 red, B second copy -> 3 red, C moved-after-snapshot -> 3 red) each reverted and byte-verified; deviations for ratification: job-gated drop (narrower than login precedent), comment pinned byte-wise only, corrected mid-session baseline reading (green claim rests on post-revert run only)"
+}

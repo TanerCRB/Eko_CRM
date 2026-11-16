@@ -18,6 +18,7 @@ from typing import Any
 
 from alembic import context
 from alembic.runtime.migration import MigrationContext, MigrationInfo
+from alembic.script.revision import MultipleHeads
 from alembic.util import CommandError
 from sqlalchemy import create_engine, pool, text
 
@@ -51,8 +52,15 @@ def destination() -> object:
         return context.get_revision_argument()
     except KeyError:
         return NoDestination
-    except CommandError:
-        # An identifier the code's tree cannot resolve.
+    except CommandError as error:
+        # Alembic raises CommandError for an unresolvable identifier and for a branched tree
+        # alike; a tree the code's own read confirms branched refuses naming every head
+        # (EKO-1-24), anything else keeps the exact text below.
+        if isinstance(error.__cause__, MultipleHeads):
+            try:
+                code_tree()
+            except RevisionRefused as refused:
+                raise SystemExit(f"migrate refused: {refused}") from None
         raise SystemExit("migrate refused: unknown destination revision") from None
 
 

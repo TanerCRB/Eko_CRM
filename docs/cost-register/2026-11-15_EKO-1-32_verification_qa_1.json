@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-15",
+  "task": "EKO-1-32",
+  "phase": "verification",
+  "role": "qa",
+  "model": "qwen3.8-max",
+  "invocation": "registered",
+  "roles": "1c81f3eb0904c500c9443cc3b27b7d615e49bf07",
+  "complexity": "High",
+  "agentId": "a00148e88c73fb4ab",
+  "tokens": 25769701,
+  "tokenSplit": { "input": 5119, "output": 165516, "cacheWrite": 582475, "cacheRead": 25016591 },
+  "tokensSource": "transcript",
+  "measured": "record",
+  "toolCalls": 159,
+  "seconds": 10534,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "qa — opus (hard tier, evaluator not calibrated lower); measured qwen3.8-max. boundary-check clean (backend/tests/ allowed; production files byte-restored, hash-object==HEAD blob). PROOF HOLDS, M-1..M-8 + M-7a-repro ALL KILLED, none survived; ninth mutation (M-6) retired. 5 contrast nodes added (test_eko132_qa_contrasts.py); static 2105->2110, full static run green 2110/2290s; eight EKO-1-30 labels reproducible (2 re-run on disk, 6 cited through in-tree teeth). markers verdict rc=1 once (K-07 token in Undecidable prose vs block none) -> bounced for FORMAT ONLY, second emission passes; no result changed. Restore-method note: git show redirect hit CRLF/LF eol noise under autocrlf; switched to git restore --source=HEAD (still HEAD-via-git). Dev kill-count predictions under by 2 labels (M-4 7 not 4, M-8 5 not 2) — recording notes not defects."
+}

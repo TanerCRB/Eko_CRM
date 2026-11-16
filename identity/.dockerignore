@@ -1,0 +1,4 @@
+# Secrets never enter the custom image build context (ADR-0004-C9).
+.env
+.env*
+**/.env*

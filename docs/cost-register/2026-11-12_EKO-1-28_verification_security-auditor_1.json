@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-12",
+  "task": "EKO-1-28",
+  "phase": "verification",
+  "role": "security-auditor",
+  "model": "qwen3.8-flash",
+  "invocation": "registered",
+  "roles": "6d19fc223115fff27ff3d7d61b8f5f1ac326c412",
+  "complexity": "Low",
+  "agentId": "ada9c9a8f88161411",
+  "tokens": 41723,
+  "tokenSplit": null,
+  "tokensSource": "task-notification",
+  "measured": "record",
+  "toolCalls": 19,
+  "seconds": 723,
+  "fixRound": 0,
+  "reworkCause": null,
+  "notes": "PASS 0/0/0/0; knob analysis: armed direction fail-closed only (conservative false alarm, never masks real failure); compose() leak bounded by errexit and loud under mutation; env cannot reach service containers (4-file grep); evidence synthetic; recurring-pattern note (documentation-only test knobs) recorded as standing, no repo-wide guard exists"
+}

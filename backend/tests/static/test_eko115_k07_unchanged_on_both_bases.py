@@ -5,6 +5,9 @@ against either.
 Neither base is read from the live branch (`CHANGESET_BASE`): the pre-merge base is the `ci.yml`
 of 14e9576 (the base this change was built on), kept as a fixture; the merged base is the head's
 own `ci.yml`, which is what the base holds once this change is merged.
+
+Where a check holds the pre-merge base against the head it is the claim about this change, judged
+on its own head (EKO_1_15_HEAD, `claim_head`), not on the live worktree (EKO-1-23, #110).
 """
 
 from pathlib import Path
@@ -13,9 +16,10 @@ from typing import Any
 import pytest
 import yaml
 
-from tests.static.test_eko115_k07_unchanged import FAILING, _job
+from tests.static.test_eko115_k07_unchanged import CI, EKO_1_15_HEAD, FAILING, _job
 from tests.static.test_k07_changeset import in_worktree
 from tests.support import release_workflow as rw
+from tests.support.fixed_pair import file_at
 
 Workflow = dict[Any, Any]
 PRE_MERGE = Path(__file__).parent / "fixtures" / "ci_before_eko115.yml"
@@ -35,6 +39,16 @@ def base(which: str) -> Workflow:
     return flow
 
 
+def claim_head(which: str) -> Workflow:
+    """EKO-1-15's own head against the pre-merge base; the live head against the merged one."""
+    if which == "merged":
+        return head()
+    text = file_at(EKO_1_15_HEAD, CI)
+    assert text is not None
+    flow: Workflow = yaml.safe_load(text)
+    return flow
+
+
 BASES = ("pre-merge", "merged")
 
 
@@ -46,7 +60,7 @@ def test_eko115_k07_pre_merge_fixture_is_the_base_before_this_change() -> None:
 
 @pytest.mark.parametrize("which", BASES)
 def test_eko115_k07_ci_unchanged_holds_on_both_bases(which: str) -> None:
-    assert rw.ci_unchanged_violations(base(which), head()) == []
+    assert rw.ci_unchanged_violations(base(which), claim_head(which)) == []
 
 
 @pytest.mark.parametrize("which", BASES)
@@ -57,7 +71,9 @@ def test_eko115_k07_ci_check_fails_on_a_plant_on_both_bases(which: str, case_id:
 
 @pytest.mark.parametrize("which", BASES)
 def test_eko115_k07_contrast_packages_read_on_a_record_job_on_both_bases(which: str) -> None:
-    planted = _job("backend", "permissions", {"contents": "read", "packages": "read"})(head())
+    planted = _job("backend", "permissions", {"contents": "read", "packages": "read"})(
+        claim_head(which)
+    )
     assert rw.ci_unchanged_violations(base(which), planted) == []
 
 
