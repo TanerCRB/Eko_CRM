@@ -15,6 +15,6 @@
   "toolCalls": 9,
   "seconds": 3500,
   "fixRound": 0,
-  "reworkCause": "Weakening check at step 10b: a new `# noqa: T201` on the K-05 elapsed-time print; the human sent it back. The Developer's self-check could have caught it (the role's hard stop on new suppressions).",
+  "reworkCause": "Weakening check at step 10b: a new lint suppression (rule T201) on the K-05 elapsed-time print; the human sent it back. The Developer's self-check could have caught it (the role's hard stop on new suppressions).",
   "notes": "developer-backend — opus (hard: authorization/session); resumed same agent. Delta against the cumulative cost-capture record after row _2 (24518688 tokens, 138 calls, 8573 s; seconds include the agent waiting idle between resumes). boundary-check: clean. Print+noqa replaced by record_property and values in assertion messages; K-05 live 6 passed, flips 240.5/240.6/240.7 s, window 310.4 s."
 }
