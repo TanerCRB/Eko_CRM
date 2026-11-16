@@ -31,13 +31,19 @@ pytestmark = pytest.mark.runtime
 # Both intervals stay inside the 5-second read timeouts a login meets: the backend's on the exchange
 # (`CALL_TIMEOUT_SECONDS`, app/auth/oidc.py) and the test client's on the callback (httpx's
 # default, `processes.login`). A slower login ends as a timeout, not at the expiry check.
-# K-01: longer than any life a 1-second token has left (at most 1 s).
+# K-01: longer than any life a 1-second token has left (at most 1 s), so a refusal is at least 1 s
+# past `exp`; 3 s are left to the 5-s timeouts for the backend's own work in the callback.
 REPRODUCTION_INTERVAL = 2.0
-CONTRAST_LIFESPAN = 4
-# K-02: the largest plausible interval on a shared runner. No CI timing of a login was observed
-# (the backend's log goes to DEVNULL); 3.5 s is the 5-s timeout above less 1.5 s left for the
-# backend's own work in the callback, including a fresh process's key-set fetch.
-LARGEST_INTERVAL = 3.5
+# 6 s leaves at least 5.05 s at minting (minted at x.95), so at least 3 s after the interval: the
+# contrast's margin to `exp` is no thinner than its margin to the timeouts.
+CONTRAST_LIFESPAN = 6
+# K-02: the same interval that refuses the login at the pre-fix tree. No CI timing of a login was
+# observed (the backend's log goes to DEVNULL); the only known runner figure is that the failing
+# logins on main took longer than a 1-second token's 0-1 s of life. 2 s is twice that window on top
+# of the runner's own latency, and leaves 3 s to the 5-s timeouts for that latency. A longer hold
+# (3.5 s was used before) proves nothing more: the pre-fix harness is refused for any hold above
+# 1 s and the fixed one for none below the timeouts, but it left the runner only 1.5 s.
+LARGEST_INTERVAL = REPRODUCTION_INTERVAL
 # Fraction of a second at which the token is minted: just after a whole second (about 1 s left on
 # a 1-second token after truncation) and just before one (close to 0 s left).
 AFTER_BOUNDARY = 0.02
@@ -107,7 +113,7 @@ def code_exchanges(stub: oidc_stub.Stub) -> list[oidc_stub.TokenCall]:
     "at_fraction", [AFTER_BOUNDARY, BEFORE_BOUNDARY], ids=["after-boundary", "before-boundary"]
 )
 @pytest.mark.parametrize(
-    "lifespan", [1, CONTRAST_LIFESPAN], ids=["one-second-token", "contrast-four-seconds"]
+    "lifespan", [1, CONTRAST_LIFESPAN], ids=["one-second-token", "contrast-six-seconds"]
 )
 def test_eko133_k01_short_lived_login_is_refused_by_expiry_at_the_pre_fix_harness(
     pg: Postgres,
