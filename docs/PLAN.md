@@ -534,12 +534,45 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Done 2026-11-15:** merged in [PR #177](https://github.com/TanerCRB/Eko_CRM/pull/177) as merge commit `9eaf75e`; verified at `3b10d0f` (QA checkpoint; mutation Base `59cd2ed` developer checkpoint — Guardian proved the two differ only by the QA contrast file + cost rows, every patch applies to both). Gate 1: K-01..K-07 all test-judged, G-1 A (`bound` required) + G-2 A (glob==MODULES) chosen by the human, fast lane approved (risk classes empty, no API surface, no unproven foundation — Architect skipped, record on #166); scope lock `bc3bdbef09941dc2cd98d317a85ee14d0489da2a` accepted unchanged, amended at gate 2 for A-01..A-04. Mechanism: `test_eko127_k01_*` (required `bound` + docstring), `test_eko130_retune_simulation_*` (`_drive` returns the driven set; both driving nodes assert `driven == collected`), new `test_eko132_coverage_bound_pair.py` (glob / requiredness / call-site scan) + `test_eko132_qa_contrasts.py` (5 mirrors). Static family 2102→2110 (2105 dev, 2110 QA), full static green in CI 2m31s; `release.yml` 0-line diff, `RECORDED_BOUND`/`BASE`/`HEAD` and all plant names/verdicts byte-preserved. QA: EKO-1-32/M-1 (2), M-1c (2 — mechanism removal; added after the Reviewer's hand-off so no named mutation stayed paper), M-2 (2), M-3 (1), M-4 (7), M-4b (2), M-5 (scan + mirror; the 9/9-green sim leg demonstrated R-02's value-blindness), M-6 (**the ninth mutation retired**, 3), M-7 (9 + doc-check anchor rc=1), M-8 (5), M-7a-repro (1/2, exact EKO-1-30 signature) — **all killed, none survived**; the eight EKO-1-30 labels reproducible on the post-task tree (2 re-run on disk, 6 cited through in-tree teeth). Verdicts: QA PROOF HOLDS, Guardian PASS 0/0/0/0, Reviewer PASS 5 Low, Security Auditor skipped (no trigger — skip row in the register). Gate 2: A-01..A-04 accepted with the merge by the human (amendments inside the criteria markers; A-03's red-side test owed — recorded as #181, merged without it by the human's decision). The 5 Reviewer Lows became follow-up Issues #178 (R-02/R-04/R-05 driven-surface fidelity), #179 (R-03 callee-alias scan), #180 (R-01 mirror literal vs retune day), #181 (A-03 contrast test); #167/#168 remain scheduled siblings. Mutation patches: [PR #177](https://github.com/TanerCRB/Eko_CRM/pull/177) description (inline hunks, Base `59cd2ed`). No recorded exceptions; no capability claim beyond the row below.
 ## EKO-2 — Access
 
-- [ ] **EKO-2-01** — Require login for the whole application.
+- [x] **EKO-2-01** — Require login for the whole application.
   *Done when:* a test proves every API operation except login answers 401 without a valid session
   (contrast: the same call with a valid session succeeds); the frontend sends an unauthenticated
   user to login; a user with no Google account linked can log in.
   **Out of scope (explicit):** user administration screens — the administrator uses the identity
   server's console.
+  **Done 2026-11-16:** merged in [PR #176](https://github.com/TanerCRB/Eko_CRM/pull/176) as `7772141` by the
+  human on 2026-11-16; code verified at `a522c07` (QA PROOF HOLDS at `1f074dc`, the last QA checkpoint,
+  test-code-only fix round 3 after it; Invariant Guardian PASS at `a522c07`; Reviewer PASS at `41a0e3f`;
+  Security Auditor PASS at `6cce13a` after PASS WITH RESERVATIONS at the earlier checkpoints; the Reviewer
+  and the Auditor were not re-run in later rounds by the human's decisions, as the PR description states).
+  Mechanism: every API operation except login start, login callback and health requires a server-side
+  session established through the company Keycloak realm (app-wide access dependency with exactly three
+  exemptions; OIDC login, callback, session, refresh and logout; sessions and login transactions in
+  migration `0003_sessions_and_login_transactions`; one cross-process refresh per session under a
+  session-level advisory lock; a 0.5-second pool checkout bound), the SPA session gate and logout, the
+  gate-1 realm policy (30-minute idle / 10-hour absolute session, MFA for every staff account,
+  12-character passwords, 15-minute lock after 5 failures) and one restricted Polish login theme in the
+  custom Keycloak image. Three fix rounds; round 3 (test code only: the API-compatibility step built the
+  application without the four authentication settings, and the EKO-1-07 browser carriers were not
+  adapted to the login) went beyond the two-round limit with the human's approval. CI, stated plainly: at
+  the head `1b735c2` eight of nine checks were green; "runtime tests on the composition" was red, 1
+  failed / 592 passed — `test_k06_frontend_replacement.py::test_r01_two_consecutive_lazy_chunk_failures_stop_after_one_recovery`
+  failed in `browser_login` with `net::ERR_NETWORK_CHANGED`, judged environmental by the driving session
+  (the same test was green in the release-mode runtime job at the same SHA); the human merged without a
+  rerun. Gate 2 taken by the human through the merge itself. The UNDECIDABLE items K-07 (human judgement
+  of the Polish wording and look of the Keycloak pages, captured in `docs/evidence/EKO-2-01/pages/`),
+  U-01 (is there a per-address rate limit in front of the application host) and U-03 (provenance of the
+  two pinned images) were carried in the PR description as pending decisions; the description records no
+  human decision on them, so they remain open for the human. Five SURVIVED mutations (M-24, M-102, M-103,
+  M-116, M-117; QA explains each as equivalent or redundant) were listed for the human in the PR
+  description under the `schema` risk class and sit in the mutation table; the PR was merged with them.
+  Recorded exceptions B-03 (one anonymous caller can fill the open login-transaction cap; blocks again
+  2026-12-15; follow-up #170) and `weakening-1`..`weakening-5` (blocks again 2027-05-15; owner and date
+  were proposals in the PR description) are entered in `docs/architecture/exception-register.md`.
+  Follow-ups named in the PR description: #161 (G-01, the hand-written frontend auth types are not
+  checked against the OpenAPI document), #170 (per-address limit on login starts and a Polish page for a
+  refused login start; blocks go-live of the application host to the internet), #171 (tie U-02 to the
+  pinned base image).
 
 - [ ] **EKO-2-02** — Carry roles and account state into every request.
   *Done when:* tests prove a deactivated account cannot log in and its data stays; the backend
