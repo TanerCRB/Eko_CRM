@@ -349,3 +349,24 @@ def no_scheduler_outlives_its_test(request: pytest.FixtureRequest) -> Iterator[N
         backup_lab: BackupLab = request.getfixturevalue("backup_lab")
         backup_lab.stop_scheduler()
         assert not backup_lab.scheduler_running(), "the backup scheduler is still running"
+
+
+@pytest.fixture(scope="module")
+def built_image(tmp_path_factory: pytest.TempPathFactory) -> str:
+    """EKO-2-01 K-07: the custom Keycloak image built the composition's own way, by image ID;
+    shared by `test_eko201_k07_theme_image.py` and `test_eko201_qa_theme_image.py`. Through
+    `build_keycloak`, so a placed checked image is read as placed and never rebuilt (EKO-1-26)."""
+    from tests.runtime.keycloak_client import build_keycloak
+
+    return build_keycloak(new_composition(tmp_path_factory, "image"))
+
+
+@pytest.fixture(scope="module")
+def built_reference(built_image: str, tmp_path_factory: pytest.TempPathFactory) -> str:
+    """The name `built_image` runs under — the localhost anchor, or the placed checked image in a
+    release run — for fixture images built `FROM` it (BuildKit resolves no bare image ID there)."""
+    from tests.runtime.keycloak_client import image_id, keycloak_image_reference
+
+    reference = keycloak_image_reference(new_composition(tmp_path_factory, "image-name"))
+    assert image_id(reference) == built_image, "the name no longer holds the built image"
+    return reference

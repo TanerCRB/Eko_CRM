@@ -1500,3 +1500,39 @@ behaviorally — a locked-out account loses access within the accepted bounds (K
 2026-11-30). Any later image, provider or realm-export change that makes such a type emittable
 re-opens this addendum: *Retention*'s lists must be re-derived from the then-reachable set and the
 exception re-assessed at that task's gate 2.
+
+### 2026-11-12 — The staff OTP credential in PD-S1, logs, events and backups
+
+**Status:** Accepted 2026-11-12 (repeated gate 1 of EKO-2-01, Issue #21; accepted by the human in the driving session with every recommended option — G-A A, G-B A, G-C A, G-D A, G-E A, G-F outside EKO-2-01 — recorded on the Issue).
+
+**Condition.** This addendum is drafted for gate 1 of EKO-2-01 (Issue #21). It takes effect only if
+the human accepts ADR-0003's and ADR-0004's addenda of 2026-11-12.
+
+**What it changes.** ADR-0003's addendum of 2026-11-12 makes each staff account's one-time-password
+credential (its shared secret, with the algorithm metadata and label Keycloak keeps with it) a
+Keycloak-held staff credential. From acceptance:
+
+- **PD-S1 Staff account** also holds the OTP credential. Its holder is Keycloak's database only, and
+  so also every backup set. *Where personal data is held* is unchanged: no application path holds
+  it, and `identity/**` holds none.
+- **What may appear in logs.** The never-list item "passwords, temporary passwords included, and
+  credential values" includes the OTP secret and every one-time code a user types. The same holds
+  for the material that stored events, admin-event representations and their off-server copy may
+  not carry (*Keycloak events off the server*).
+- **Retention.** The OTP credential has no retention of its own. It lives as long as the account's
+  credential in Keycloak and, inside backup sets, as long as its set. No backup set is shortened.
+  The stored authentication event types of *Retention*, and the reachable-set addendum of
+  2026-11-11, are unchanged. This addendum adds no MFA-enrolment or MFA-removal event type to the
+  application-realm stored set. An administrator's removal remains an admin event, already stored
+  and kept for 90 days.
+
+Every other rule and control of this decision is unchanged.
+
+**New control.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0005-C20 | In the off-server copy of Keycloak events (EKO-1-09), no event or admin-event representation contains an OTP secret or a one-time code; a fixture copy with the planted secret value fails. The local half is ADR-0003-C32. |
+
+**Why.** G-3 A adds a credential that PD-S1, the never-list and the off-server rules do not name.
+Naming it closes the gap without changing any holder, retention or stored event type.

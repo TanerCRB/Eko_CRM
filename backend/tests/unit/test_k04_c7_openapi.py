@@ -33,7 +33,15 @@ def test_k04_c23_openapi_and_docs_are_not_served_under_the_api_prefix(client: Te
         assert client.get(path).status_code == 404, path
 
 
-def test_k04_c23_health_is_the_only_route_under_the_api_prefix(client: TestClient) -> None:
+def test_k04_c23_api_prefix_holds_exactly_health_and_the_four_auth_routes(
+    client: TestClient,
+) -> None:
     paths = client.get("/openapi.json").json()["paths"]
-    assert sorted(paths) == ["/api/health"]
+    assert sorted(paths) == [
+        "/api/auth/callback",
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/auth/session",
+        "/api/health",
+    ]
     assert sorted(paths["/api/health"]) == ["get", "head"]

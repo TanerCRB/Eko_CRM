@@ -24,4 +24,17 @@
       <scope>provided</scope>
     </dependency>
   </dependencies>
+  <build>
+    <plugins>
+      <!-- identity/Dockerfile calls this plugin by its goal prefix (dependency:go-offline,
+           dependency:build-classpath). This line fixes its version (EKO-2-01 B-04), so neither
+           a builder change nor a remote repository chooses it. 3.7.0 is the version the Maven
+           3.9.14 super POM already gave it: the pin changes no plugin that runs. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.7.0</version>
+      </plugin>
+    </plugins>
+  </build>
 </project>

@@ -29,9 +29,11 @@ from tests.runtime.keycloak_client import (
     FORM_ACTION,
     RealmClient,
     assert_absent,
+    callback_uri,
     decode_sid,
     keycloak_logs,
     matching_value_paths,
+    second_factor,
 )
 from tests.support import eko112_fixtures as fixtures
 
@@ -340,7 +342,7 @@ def begin_pkce_auth(client: RealmClient) -> tuple[str, str]:
     query = httpx.QueryParams(
         {
             "client_id": "eko-backend",
-            "redirect_uri": "https://eko112.invalid/callback",
+            "redirect_uri": callback_uri(client.composition),
             "response_type": "code",
             "scope": "openid",
             "state": "eko112-coverage",
@@ -386,9 +388,13 @@ def reset_action_link(started: Started, public: RealmClient, address: str) -> st
     return html.unescape(candidates[-1]).rstrip("\\").rstrip('"').rstrip("'")
 
 
-def drive_reset_form(public: RealmClient, link: str, password: str, confirm: str) -> httpx.Response:
+def drive_reset_form(
+    public: RealmClient, link: str, password: str, confirm: str, username: str
+) -> httpx.Response:
     parsed = urlparse(link)
     page = public.request("GET", parsed.path + "?" + parsed.query)
+    # EKO-2-01 (G-3 A): the reset flow asks an enrolled account for its one-time code first.
+    page = second_factor(public, username, page)
     form = reach_password_form(public, page)
     return submit_form(public, form.text, {"password-new": password, "password-confirm": confirm})
 
@@ -535,6 +541,8 @@ def test_k04_every_required_event_type_is_stored(keycloak_running: Started) -> N
             login_form_action(login_page),
             data={"username": fixtures.ACCOUNTS["managed"], "password": temporary_password},
         )
+        # EKO-2-01 (G-3 A): the OTP enrolment required action comes before the password one.
+        submitted = second_factor(public, fixtures.ACCOUNTS["managed"], submitted)
         form_page = reach_password_form(public, submitted)
         posted = submit_form(
             public,
@@ -579,7 +587,9 @@ def test_k04_every_required_event_type_is_stored(keycloak_running: Started) -> N
         assert refused.status_code == 400, f"invalid refresh status {refused.status_code}"
 
         link = reset_action_link(keycloak_running, public, fixtures.ADDRESSES["managed"])
-        bad_form = drive_reset_form(public, link, reset_password, mismatched_confirm)
+        bad_form = drive_reset_form(
+            public, link, reset_password, mismatched_confirm, fixtures.ACCOUNTS["managed"]
+        )
         assert bad_form.status_code in (200, 302), f"reset mismatch status {bad_form.status_code}"
         # A password-reset completion runs the update action; the confirm mismatch stores
         # UPDATE_PASSWORD_ERROR here rather than in a second update flow.
@@ -587,7 +597,9 @@ def test_k04_every_required_event_type_is_stored(keycloak_running: Started) -> N
             "the reset-form confirm mismatch did not store UPDATE_PASSWORD_ERROR"
         )
         link = reset_action_link(keycloak_running, public, fixtures.ADDRESSES["managed"])
-        good_form = drive_reset_form(public, link, reset_password, reset_password)
+        good_form = drive_reset_form(
+            public, link, reset_password, reset_password, fixtures.ACCOUNTS["managed"]
+        )
         assert good_form.status_code in (200, 302), f"reset status {good_form.status_code}"
         # RESET_PASSWORD_ERROR: replay the now-consumed action token. Keycloak rejects the used
         # token (HTTP 400) and records the failed reset. The stored event is the assertion, not
@@ -608,7 +620,7 @@ def test_k04_every_required_event_type_is_stored(keycloak_running: Started) -> N
             True,
         )
         # Brute-force lockout proven by BEHAVIOR, not by an event: past the realm's
-        # failureFactor (30), even the CORRECT password is refused with the same "invalid
+        # failureFactor (5, EKO-2-01), even the CORRECT password is refused with the same "invalid
         # username or password" page (the accepted wait-based lockout emits no
         # USER_DISABLED_BY_BRUTE_FORCE event; see the note above). The final correct-password
         # refusal is the security assertion.

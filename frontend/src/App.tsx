@@ -1,10 +1,14 @@
-import { lazy, Suspense, useEffect, useState, type MouseEvent } from "react";
+import { lazy, Suspense, useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { AppShell } from "./components/AppShell";
 import { messages } from "./i18n/pl";
 
 const Customers = lazy(() => import("./features/Klienci"));
 
-export function App() {
+interface AppProps {
+  account?: ReactNode;
+}
+
+export function App({ account }: AppProps = {}) {
   const [path, setPath] = useState(() => window.location.pathname);
   const dashboardActive = path !== "/klienci";
 
@@ -37,6 +41,7 @@ export function App() {
       section={dashboardActive ? messages.dashboard : messages.customers}
       navigationItems={[{ href: "/", label: messages.dashboard, current: dashboardActive }]}
       onNavigate={navigate}
+      account={account}
     >
       {dashboardActive ? (
         <>

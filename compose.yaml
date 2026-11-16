@@ -83,6 +83,19 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
       APP_DB_POOL_SIZE: "5"
       APP_DB_MAX_OVERFLOW: "5"
+      # Authentication (EKO-2-01, ADR-0003 *Browser flow*): only this service gets these; worker
+      # and migrate never do. The origin is the one the proxy serves the SPA and API on, and the
+      # base of the callback the realm export registers. The issuer is exactly what Keycloak
+      # writes into `iss`: its public hostname (KC_HOSTNAME below) plus the realm path, for
+      # browser and back-channel token calls alike. The back channel stays inside the network.
+      # The two secrets are required with no default (`?`: an unset one stops Compose naming
+      # it); an empty one is refused by the backend's own settings before it serves, and the
+      # keycloak service's `:?` already refuses an empty OIDC_CLIENT_SECRET project-wide.
+      APP_ORIGIN: https://${APP_HOST:?APP_HOST is required}:${PROXY_HTTPS_PORT:?PROXY_HTTPS_PORT is required}
+      APP_OIDC_ISSUER: https://${AUTH_HOST:?AUTH_HOST is required}:${PROXY_HTTPS_PORT:?PROXY_HTTPS_PORT is required}/realms/eko
+      APP_OIDC_INTERNAL_URL: http://keycloak:8080/realms/eko
+      APP_OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET?OIDC_CLIENT_SECRET is required}
+      APP_SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY?SESSION_ENCRYPTION_KEY is required}
       WEB_CONCURRENCY: "2"
     healthcheck:
       test:

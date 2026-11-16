@@ -55,7 +55,7 @@ def test_adr0004_c26_advisory_lock_shared(lab: Lab) -> None:
             run.remove()
     assert code == 0, logs
     assert lab.versions() == ["t_next"]
-    assert lab.lineage() == {"0001", "0002", "t_next"}
+    assert lab.lineage() == {"0001", "0002", "0003", "t_next"}
     assert lab.comparison_dump() != before
 
 

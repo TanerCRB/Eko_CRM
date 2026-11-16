@@ -171,5 +171,5 @@ def test_eko124_k03_edge_plain_unknown_identifier_keeps_the_head_line(engines: l
     with pytest.raises(SystemExit) as stopped:
         command.upgrade(alembic_config(), "zzz")
     message = str(stopped.value.code)
-    assert message == "migrate refused: it upgrades only to the code's head (0002)"
+    assert message == "migrate refused: it upgrades only to the code's head (0003)"
     assert engines == []

@@ -13,15 +13,17 @@ from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
 from app.main import create_app
+from tests.support.synthetic_auth import SYNTHETIC_AUTH_SETTINGS
 
 Document = dict[str, Any]
 
 # Synthetic values only (ADR-0005): building the application reads its settings, and connects
-# to nothing.
+# to nothing. The command line never loads conftest, so the authentication settings are here too.
 SYNTHETIC_SETTINGS = (
     ("APP_DB_PASSWORD", "synthetic-openapi-only"),
     ("APP_DB_POOL_SIZE", "1"),
     ("APP_DB_MAX_OVERFLOW", "0"),
+    *SYNTHETIC_AUTH_SETTINGS.items(),
 )
 
 

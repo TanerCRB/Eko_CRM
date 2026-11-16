@@ -797,3 +797,231 @@ That is architectural direction only: no concrete provider or custom image has b
   all required audit and privacy boundaries. Runtime proof remains mandatory.
 - **B — Reject this addendum.** The official-image rule and EKO-1-12 STOP remain unchanged; no
   custom provider or image is authorized.
+
+### 2026-11-02 — Session, logout, account-security, identity-page and refresh-lock policies
+
+**Status:** Accepted 2026-11-02 (gate 1 of EKO-2-01, Issue #21, G-1 A through G-5 A).
+
+**What it adds.** *Forward references* assigns EKO-2-01 the session and idle timeouts other than
+the five-minute deactivation/role bound, logout, and the language, branding and wording of
+Keycloak's pages. EKO-2-01 also receives the password policy, MFA and brute-force thresholds.
+ADR-0005 makes the realm's SSO session maximum the retention bound for abandoned application
+sessions and gives login transactions a one-hour bound. Issue #21's comment of 2026-10-23 adds a
+case *How a request is verified* does not resolve: a refresh holder that dies must not strand its
+session behind the per-session lock until logout. This addendum records the human's choices of
+G-1 A, G-2 A, G-3 A, G-4 A and G-5 A from Issue #21.
+
+From approval of this addendum:
+
+- **Session limits (G-1 A).** The application session and the realm's SSO session have an idle
+  limit of **30 minutes** and an absolute maximum of **10 hours**. The realm export records 1800
+  seconds idle and 36000 seconds maximum. An accepted authenticated request is activity and extends
+  only the idle deadline; it never extends the absolute maximum. A session works immediately before
+  each deadline and is refused at and after it. ADR-0005-C8 therefore requires deletion of an
+  abandoned application session and its encrypted tokens no later than 10 hours after creation;
+  abandoned login transactions retain their separate one-hour bound. The access-token rules that
+  enforce deactivation and role removal within five minutes are unchanged.
+- **Logout (G-2 A).** Logout is an authenticated operation that deletes the application session and
+  ends the Keycloak SSO session. Replaying the old application cookie receives 401, and a return to
+  login cannot silently reauthenticate from the SSO session that logout ended. Ending the SSO
+  session also ends its shared single-sign-on state for other clients; application-only logout is
+  not sufficient.
+- **Account security (G-3 A).** The realm requires MFA for every staff account, a password of at
+  least **12 characters**, and a **15-minute** lock after **5** failed login attempts. The realm
+  export records these selected values and the MFA requirement for existing and new staff accounts.
+  Brute-force protection stays on, as *Network exposure* requires. The no-self-registration,
+  temporary-password and reset rules are unchanged. Export assertions prove the selected
+  configuration; they do not by themselves prove every runtime Keycloak behavior.
+- **Keycloak pages (G-4 A).** Login, password-reset, required-action, lockout/error and MFA pages
+  use **Polish wording**, the **Eko_CRM** name and restrained Eko_CRM branding. Default English
+  replacements and pages that omit the application name do not meet the policy. Automated checks
+  cover language, naming and customized-versus-default state; a human judges linguistic adequacy,
+  wording in each state and visual acceptability. This is not a full accessibility, responsive-design
+  or visual audit.
+- **Refresh-lock release on holder death (G-5 A).** Renewal remains serialised per session across
+  every backend process, with the five-second Keycloak call timeout and five-second waiter bound
+  unchanged. The lock is a **session-level PostgreSQL advisory lock**, under a key distinct from
+  the migration/backup advisory lock of ADR-0004. It is not a committed lease row and has no lease
+  margin.
+  - The holder takes the lock only after the transaction that reads the session and refresh token
+    has ended. It keeps one database session checked out while the Keycloak call is in flight, but
+    holds **no database transaction** across that call. Normal completion explicitly releases the
+    lock and returns the connection; ending the holder's database session, including when its
+    process dies, releases the lock automatically.
+  - A waiter never blocks in a session-level advisory-lock wait and never pins a pooled connection
+    while sleeping. It uses non-blocking lock probes in short database interactions, returns each
+    connection between probes, and answers 503 when its existing five-second bound expires. It does
+    not refresh itself. Thus one active refresh pins one holder connection; waiting requests pin
+    none between probes.
+  - Refreshed tokens become visible to waiters only after their storage transaction commits. A
+    waiter never adopts incomplete token state. Death before Keycloak answers releases the lock and
+    permits a later refresh of the same session. Death after Keycloak answered but before token
+    storage completed retains the already accepted rotation consequence of *Unreachable*: the old
+    refresh token may have been replaced, so a later refusal may delete the session and require
+    login; it must not leave the lock held until logout.
+  - ADR-0002's addendum of 2026-11-02 bounds every pool checkout in this path at 0.5 seconds. The
+    holder-death test runs against real PostgreSQL and the running backend processes, kills the
+    actual holder while its Keycloak call is in flight, and distinguishes lock release from merely
+    observing that the killed request ended. It does not claim a detection bound for a network
+    partition in which PostgreSQL has not yet detected the dead peer.
+
+**New controls.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0003-C24 | With a controlled clock, an application session works immediately before its 30-minute idle and 10-hour absolute limits and is refused at and after each; activity extends only the idle deadline. The realm export records SSO idle and maximum values of 1800 and 36000 seconds, and ADR-0005-C8 finds no abandoned session or encrypted tokens older than 10 hours and no login transaction older than 1 hour. |
+| ADR-0003-C25 | Against running Keycloak, logout deletes the application session and ends the Keycloak SSO session; replaying the old application cookie gets 401, and login cannot silently reauthenticate from the ended SSO session. A contrast before logout accepts the same cookie and SSO session. Removing either session's termination as an independent mutation fails its assertion. |
+| ADR-0003-C26 | The realm export declares MFA for all staff, a 12-character password minimum and a 15-minute lock after 5 failures. Assertions compare the selected values, and independently changing the password length, failure count, lock duration or removing the MFA requirement fails the corresponding assertion. These are configuration proofs, not a claim of complete runtime security behavior. |
+| ADR-0003-C27 | Automated captures of every applicable login, password-reset, required-action, lockout/error and MFA page find Polish wording and the Eko_CRM name and reject default-English replacements or omitted naming; a human reviews linguistic adequacy, state wording and restrained visual branding, including Polish diacritics, long messages and a narrow mobile viewport. Human-only judgments are reported UNDECIDABLE until that review occurs. |
+| ADR-0003-C28 | Against real PostgreSQL and the running backend processes, killing the actual refresh holder before its Keycloak answer releases its session-level advisory lock; a later refresh with Keycloak healthy succeeds, the same session remains usable, and repeated requests do not receive 503 solely because the holder died. Death before sending, while hanging, and after an answer but before token storage commits never exposes incomplete token state and never leaves the lock held until logout; the last case keeps the accepted refresh-rotation consequence. A contrast with release disabled prevents a new refresh, and removing holder-end release as a mutation fails the test through continued lock exclusion. Waiters hold no pooled connection between non-blocking probes and no lock transaction crosses the Keycloak call. |
+
+Every other rule and control of this decision is unchanged. In particular, exactly three public
+routes remain login start, login callback and status-only health; logout is not added to that list.
+ADR-0005's retention and logging rules and ADR-0004's secret and exposure rules are unchanged.
+
+**Options considered.**
+
+| Question | Option | Cost | Closes off |
+|---|---|---|---|
+| Session limits (G-1) | **A. 30-minute idle, 10-hour maximum** (chosen) | Reauthentication after inactivity and after 10 hours. | Eight uninterrupted idle hours. |
+| | B. 8-hour idle and maximum | Fewer interruptions but longer exposure on an unattended device. | A short idle bound within a workday. |
+| Logout (G-2) | **A. End application and Keycloak SSO sessions** (chosen) | Ends shared SSO state for other clients too. | Silent reauthentication from the old SSO session. |
+| | B. End only the application session | Other-client SSO survives, but returning to login can silently recreate an application session. | Logout that necessarily requires fresh credentials. |
+| Account security (G-3) | **A. MFA for all staff; 12 characters; 15-minute lock after 5 failures** (chosen) | Enrolment and login friction; recovery must include MFA state. | Password-only staff access. |
+| | B. Same password/lockout, no MFA | Simpler pilot but internet-facing login depends on the password alone. | A second factor for every staff account. |
+| Keycloak pages (G-4) | **A. Polish wording, Eko_CRM naming and restrained branding** (chosen) | Custom page content and human language/visual review for each applicable state. | Unmodified default page maintenance alone. |
+| | B. Default English wording and styling | Less work but a visible language and product-identity break for Polish staff. | A Polish Eko_CRM identity-server experience. |
+| Refresh-lock release (G-5) | **A. Session-level advisory lock released when its holder ends; non-blocking waiter probes** (chosen) | One database session per active refresh remains checked out across the external call; PostgreSQL must observe the holder ending. Network-partition detection is not bounded here. | A committed lease that can strand a session until its expiry. |
+| | B. Committed lease expiring no later than five seconds plus an approved margin | Requires a numeric margin, lease ownership/expiry handling and possible 503s until expiry; a dead holder must not later commit stale token state. | Immediate release when the holder process ends. |
+
+**Why.** These choices settle the duties this decision expressly forwards to EKO-2-01 and the
+holder-death duty forwarded by the human on 2026-10-23. The session-level lock uses PostgreSQL's
+release-on-session-end behavior instead of adding lease expiry, while non-blocking probes prevent
+waiters from consuming the pool that C18 needs. No earlier accepted rule or control is restated by
+this addendum. The human approved G-1 A through G-5 A at gate 1 of EKO-2-01 on 2026-11-02
+(Issue #21).
+
+### 2026-11-12 — One login theme in the custom image; the OTP secret as a Keycloak-held staff credential
+
+**Status:** Accepted 2026-11-12 (repeated gate 1 of EKO-2-01, Issue #21; accepted by the human in the driving session with every recommended option — G-A A, G-B A, G-C A, G-D A, G-E A, G-F outside EKO-2-01 — recorded on the Issue).
+
+**Condition.** This addendum is drafted for gate 1 of EKO-2-01 (Issue #21). On 2026-11-12, in the
+driving session, the human chose to deliver G-4 A ("restrained Eko_CRM branding") through a custom
+login theme baked into the existing custom image. That is the Architect's delta check, Q-1 = B.
+The choice in conversation does not accept this text. The addendum takes effect only if the human
+accepts it together with the ADR-0004 addendum of the same date and the ADR-0005 addendum of the
+same date.
+
+**What it changes.**
+
+The addendum of 2026-11-06 permits exactly one addition to the official Keycloak 26.8.1 image: the
+event-store provider. *Identity server product* otherwise still names the official image. On
+acceptance, the custom image may additionally carry **one login theme**, and nothing else is added
+by this addendum. This is a declared deviation from *Identity server product*. Every boundary of the
+2026-11-06 addendum stays unchanged.
+
+- **What the theme may contain.** One theme directory, of type `login` only. It may contain only
+  these files:
+  - its `theme.properties`;
+  - FreeMarker templates (`*.ftl`);
+  - one Polish message file;
+  - CSS files;
+  - PNG images.
+
+  It extends one parent theme shipped in the same official image. The theme adds no Java class, JAR,
+  provider, JavaScript file, `scripts` entry in `theme.properties`, inline `<script>` element,
+  HTML event-handler attribute, SVG, font file or other executable or active content.
+- **No remote resources.** No theme file references another origin, whether by an absolute or
+  protocol-relative URL, a CSS `@import`/`url()` pointing outside the theme's own resources, or a
+  web font. Every page the theme renders loads only Keycloak's own resources from `<auth-host>`.
+- **Templates are server-side code in effect, so they are restricted.** An overridden template:
+  - uses none of FreeMarker's `?new`, `?api`, `?eval`, `?interpret` or `?no_esc`;
+  - leaves Keycloak's escaping of every user- or request-derived value in place.
+
+  A message key is overridden in preference to a template. A template is overridden only when the
+  required Polish wording, the Eko_CRM name or the branding cannot be achieved through messages and
+  CSS alone.
+- **Polish only.** The theme declares Polish as its only locale and carries only a Polish message
+  file. The application realm is localized with Polish as its only supported and default locale. No
+  language selector is offered.
+- **Selection.** The theme is selected in the versioned realm export under `identity/`: the
+  application realm's `loginTheme` names it, and the realm's display name is "Eko_CRM". The account,
+  admin and e-mail themes of the application realm, and every theme of the master realm, stay at the
+  defaults of the image. A theme selected only in a console, or selected server-wide by a server
+  option, is a defect under *Identity server product* ("a realm setting changed only in a console
+  is a defect").
+- **Upgrade review duty.** The theme overrides templates of its parent, and the parent changes with
+  Keycloak releases without notice. Every change of the base image version (patch releases
+  included), and every change to the theme, requires a review before deployment:
+  - Compare each overridden template and each overridden message key with the parent's version in
+    the new image.
+  - Record the outcome, naming the Keycloak version it was reviewed against, in a versioned review
+    record under `identity/`, outside the directory copied into the image.
+
+  An image whose base version differs from the last reviewed version is not released. The existing
+  major-version addendum rule and the provider re-verification duty of the 2026-11-06 addendum are
+  unchanged and run in addition.
+- **The OTP secret is a staff credential held by Keycloak.** G-3 A requires MFA for every staff
+  account. Each enrolled account therefore has a one-time-password credential: its shared secret,
+  and the algorithm metadata and label Keycloak keeps with it. Keycloak's database holds it; nothing
+  else does.
+  - It joins the password hash under *Staff personal data* (Keycloak row) and PD-S1 of ADR-0005.
+  - Under *Identity server product* it is never in the realm export.
+  - The application never receives, stores or logs it, and neither does any token the application
+    holds.
+  - No stored event, admin-event representation or container log contains the secret or a one-time
+    code.
+  - ADR-0003-C17's rule that "no stored representation holds a password value" applies to it
+    equally.
+- **MFA is enforced by the realm, not by the backend.** The backend verifies tokens exactly as *How
+  a request is verified* states. This addendum adds no authentication-method claim check, and no
+  claim, to the application's tokens. K-02's claim set is unchanged.
+- **Recovery of a lost authenticator.** Only an administrator recovers a lost authenticator: they
+  remove the account's OTP credential in Keycloak's console, which is a stored admin event, and the
+  user enrols a new one at their next login on Keycloak's pages. The removal follows the hand-over
+  rule of *Password reset*:
+  - it is done only right before the user logs in;
+  - the user's identity has been confirmed in person, or in a call the administrator makes to a
+    phone number the company already holds for that person, never to an incoming caller.
+
+  An account whose OTP credential was removed and has not been re-enrolled 7 days after the removal
+  is disabled by the administrator, as for an unused temporary password.
+
+Every other rule and control of this decision is unchanged. In particular:
+- the closed public-route list;
+- the custom-image provider boundary of 2026-11-06;
+- the no-identity-provider rule;
+- the account-console exposure rule.
+
+**New controls.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0003-C29 | A static check reads the repository's theme directory and the same directory inside the built custom image. It confirms all of the following, and a one-violation fixture of each kind fails naming the file: both hold the same files byte for byte; every file is one of `theme.properties`, `*.ftl`, the single Polish message file, `*.css` or `*.png`; `theme.properties` declares type `login`, one parent shipped in the image and Polish as its only locale, and no `scripts`; no file contains `<script`, an HTML `on…=` event attribute, an absolute or protocol-relative URL, a remote `@import`/`url()`, or one of `?new`, `?api`, `?eval`, `?interpret`, `?no_esc`. The fixtures are an added `.js` file, an SVG, an inline script, a remote font URL and `?no_esc` in a template. The unmodified theme passes the same check. |
+| ADR-0003-C30 | The realm export's application realm names the theme in `loginTheme`, has internationalization enabled with Polish as the only supported locale and the default locale, has display name "Eko_CRM", and sets no account, admin or e-mail theme; the master realm sets no theme. Against the running composition, the login page served through the public listener comes from the theme and declares Polish as its language. Contrast: with `loginTheme` removed as the only change, the same request returns the parent's page and the check fails. |
+| ADR-0003-C31 | The Keycloak version of the custom image's base (`identity/Dockerfile`) equals the version named by the latest entry of the theme's review record, and that entry lists every overridden template and message key present in the theme. Changing only the base version, or adding only an overridden template without a matching entry, fails the check. |
+| ADR-0003-C32 | Against a running Keycloak, a synthetic account enrols an OTP credential, and a privileged read confirms that the credential exists. Then an account holding only `administrator` removes it, and the account's next login requires a new enrolment. Throughout, the realm export, every stored application- and master-realm event and admin-event representation, the Keycloak and backend container logs, and the application database contain neither the OTP secret nor any one-time code used. The removal is a stored admin event naming the acting account, the affected account and the time. Planting the secret value into a copy of any inspected source fails the check, which proves the scan reads that source. |
+
+**Options considered.**
+
+| Option | Cost | Closes off |
+|---|---|---|
+| **A. One restricted login theme in the custom image, selected by the realm export** (the human's direction of 2026-11-12, pending acceptance) | Template maintenance on every Keycloak release; a review record; an image change that re-triggers provider verification; templates are reviewed as server-side code. | Unmodified default pages; branding through bind-mounted or volume-held files. |
+| B. Built-in Polish messages, `localizationTexts` and display name only, with no theme files | Text-only branding; no logo or colours. | Visual Eko_CRM branding on Keycloak's pages. |
+| C. A theme carried in a provider JAR | The same review duty, plus a second JAR in the provider directory and the unsandboxed-provider supply-chain boundary for non-code content. | Keeping theme content outside `providers/`. |
+
+**Why.** G-4 A was accepted with restrained branding, and the human requires visual branding that
+messages alone cannot provide. The 2026-11-06 addendum admits only the provider, so a theme in the
+same image needs its own declared deviation. The restrictions keep the addition to passive content
+served from Keycloak's own origin. They also make the parent-template drift that each Keycloak
+release can introduce a recorded review instead of a silent breakage. G-3 A creates a new
+Keycloak-held credential that the staff-data inventory and the event/log rules do not name. Recording
+it here prevents an implementation from treating it as anything other than a credential.
+
+**Options requiring a human choice.**
+
+- **A — Accept this addendum with the ADR-0004 and ADR-0005 addenda of 2026-11-12.** This permits
+  the theme under the boundaries and controls above and records the OTP credential and its recovery
+  rule.
+- **B — Reject it.** The official-image rule outside the provider remains. G-4's branding is then
+  delivered as option B above (text only), or G-4 returns to the human.

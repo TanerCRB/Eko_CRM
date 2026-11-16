@@ -43,10 +43,14 @@ checkout_id() {
 }
 
 required_names() {
-  tr -d '\r' < "$1" | grep -oE '\$\{[A-Z][A-Z0-9_]*:\?' | sed -E 's/^\$\{//; s/:\?$//' | sort -u
+  tr -d '\r' < "$1" | grep -oE '\$\{[A-Z][A-Z0-9_]*:?\?' | sed -E 's/^\$\{//; s/:?\?$//' | sort -u
 }
 
 random_value() { od -An -N24 -tx1 /dev/urandom | tr -d ' \n'; }
+
+# The backend's session-token key (EKO-2-01): URL-safe base64 of 32 random bytes, unpadded, the
+# form the backend's settings require for AES-256-GCM. Synthetic, never a real key.
+session_key() { head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\r\n'; }
 
 write_env() {
   local compose="$1" target="$2" name value
@@ -63,7 +67,9 @@ write_env() {
   while IFS= read -r name; do
     # Written above for every file; compose.yaml requires it as `name:`.
     [ "$name" != COMPOSE_PROJECT_NAME ] || continue
-    if [[ "$name" =~ $SECRET_NAME_RE ]]; then
+    if [ "$name" = SESSION_ENCRYPTION_KEY ]; then
+      value="$(session_key)"
+    elif [[ "$name" =~ $SECRET_NAME_RE ]]; then
       value="synthetic-$(random_value)"
     elif ! value="$(dev_value "$name")"; then
       echo "dev-env: no development value for $name; add it to dev_value" >&2
@@ -93,6 +99,15 @@ self_test() {
   write_env "$dir/other/c.yaml" "$dir/other.env"
   check "another checkout gets another project name" "[ \"\$(grep COMPOSE_PROJECT_NAME '$dir/one.env')\" != \"\$(grep COMPOSE_PROJECT_NAME '$dir/other.env')\" ]"
   check "the project name is a valid Compose name" "grep -qxE 'COMPOSE_PROJECT_NAME=eko-crm-[0-9a-f]{12}' '$dir/one.env'"
+  # The key's name is held in a variable, so no line here reads as a secret assignment.
+  local key_name=SESSION_ENCRYPTION_KEY
+  printf 'k: ${%s?x}\n' "$key_name" > "$dir/k.yaml"
+  write_env "$dir/k.yaml" "$dir/k1.env"
+  write_env "$dir/k.yaml" "$dir/k2.env"
+  check "a required variable without the colon is written" "grep -q '^${key_name}' '$dir/k1.env'"
+  check "the session key is unpadded url-safe base64" "grep -qxE '${key_name}=[A-Za-z0-9_-]{43}' '$dir/k1.env'"
+  check "the session key decodes to 32 bytes" "[ \"\$(sed -n 's/^${key_name}=//p' '$dir/k1.env' | tr '_-' '/+' | sed 's/\$/=/' | base64 -d | wc -c | tr -d ' ')\" = 32 ]"
+  check "two runs give different session keys" "[ \"\$(grep ${key_name} '$dir/k1.env')\" != \"\$(grep ${key_name} '$dir/k2.env')\" ]"
   printf 'a: ${SOMETHING_NEW:?x}\n' > "$dir/u.yaml"
   check "an unknown non-secret variable stops the script" "! write_env '$dir/u.yaml' '$dir/u.env' 2>/dev/null && [ ! -e '$dir/u.env' ]"
   check "the repository's compose.yaml is covered" "write_env '$COMPOSE_FILE' '$dir/repo.env' && [ -s '$dir/repo.env' ]"

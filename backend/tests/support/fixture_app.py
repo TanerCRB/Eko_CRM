@@ -182,7 +182,20 @@ def add_fixture_routes(app: FastAPI) -> FastAPI:
         return Response("cached", headers={"Cache-Control": "public, max-age=600"})
 
     app.add_middleware(RaisingMiddleware)
+    bypass_access(app)
     return app
+
+
+def _no_access_check() -> None:
+    return None
+
+
+def bypass_access(app: FastAPI) -> None:
+    """The fixture app only: its routes carry the error-handling claims, not authentication
+    (EKO-2-01, human decision H6-2 A on #21). `create_app()` itself sets no override."""
+    from app.auth.gate import authenticate
+
+    app.dependency_overrides[authenticate] = _no_access_check
 
 
 @contextmanager

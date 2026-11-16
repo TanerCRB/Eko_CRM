@@ -8,15 +8,28 @@ import os
 import re
 import secrets
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import httpx
 
+from app.core.settings import without_default_port
 from tests.runtime.conftest import Composition, Started
+from tests.support import totp
 
 FORM_ACTION = re.compile(r'<form[^>]+action="([^"]+)"', re.IGNORECASE)
+INPUT = re.compile(r"<input\b[^>]*>", re.IGNORECASE)
+# EKO-2-01 (G-3 A): every application-realm account must enrol an OTP credential at its first
+# login and give a one-time code at every later one. The raw secret Keycloak issued at an
+# enrolment this session drove is kept here, in memory only, keyed by composition, realm and
+# username, so a later login of the same account can answer with a code; the time steps
+# already answered are kept too, because Keycloak refuses a code that was used before.
+OTP_SECRETS: dict[tuple[str, str, str], str] = {}
+OTP_USED_STEPS: dict[tuple[str, str, str], set[int]] = {}
+# Every code this session typed, per account, so a secret scan can look for each one.
+OTP_TYPED_CODES: dict[tuple[str, str, str], list[str]] = {}
 
 
 class TypedUsernameStop(AssertionError):
@@ -74,10 +87,65 @@ def run_bootstrap(
         f"bootstrap exited {result.returncode}, expected {expected}\n"
         f"{result.stdout[-2000:]}\n{result.stderr[-2000:]}\n{logs}"
     )
+    assert_running_keycloak_is_the_built_one(composition)
     return result
 
 
+# QA-01: the Keycloak image each composition's carriers must run, by image ID, as built from
+# the tree under test by `prepare`. The tag is shared across worktrees, so whatever it held
+# before is never trusted; `run_bootstrap` checks the running server against this record.
+BUILT_KEYCLOAK: dict[str, str] = {}
+
+
+def keycloak_service(composition: Composition) -> dict[str, Any]:
+    """The `keycloak` service as the composition renders it, its override files included (the
+    harness's checked-images placement among them, through `Composition.base_args`)."""
+    rendered = json.loads(composition.compose("config", "--format", "json").stdout)
+    service: dict[str, Any] = rendered["services"]["keycloak"]
+    return service
+
+
+def keycloak_image_reference(composition: Composition) -> str:
+    """The image the composition (its override files included) runs for `keycloak`."""
+    reference: str = keycloak_service(composition)["image"]
+    return reference
+
+
+def image_id(reference: str) -> str:
+    return subprocess.run(
+        ["docker", "image", "inspect", "--format", "{{.Id}}", reference],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()  # fmt: skip
+
+
+def build_keycloak(composition: Composition) -> str:
+    """Build the composition's Keycloak image from this tree and record its ID (QA-01).
+
+    Only a composition whose `keycloak` service has a build is built. One that runs a given image
+    without a build — the checked image a release run places (EKO-1-26 route A: built and
+    identity-verified outside the session, never built in it) or a fixture image — runs no
+    `compose build`; the record is then that image's ID."""
+    service = keycloak_service(composition)
+    if service.get("build"):
+        composition.compose("build", "keycloak", timeout=1800)
+    built = image_id(service["image"])
+    BUILT_KEYCLOAK[composition.project] = built
+    return built
+
+
+def assert_running_keycloak_is_the_built_one(composition: Composition) -> None:
+    """QA-01 self-check: the Keycloak the bootstrap started is the image `prepare` built from
+    this tree, never another worktree's build left behind the shared tag."""
+    built = BUILT_KEYCLOAK.get(composition.project)
+    assert built is not None, "the composition's Keycloak image was not built by prepare"
+    if not composition.compose("ps", "-a", "-q", "keycloak").stdout.split():
+        return
+    running = composition.inspect("keycloak")["Image"]
+    assert running == built, "the running Keycloak is not the image built from this tree"
+
+
 def prepare(composition: Composition) -> None:
+    build_keycloak(composition)
     composition.compose(
         "up",
         "--build",
@@ -94,6 +162,106 @@ def prepare(composition: Composition) -> None:
         "mailcatcher",
         timeout=900,
     )
+
+
+def callback_uri(composition: Composition) -> str:
+    """The application's own login callback, the one redirect URI the realm export registers
+    for `eko-backend` (`${APP_ORIGIN}/api/auth/callback`, APP_ORIGIN as compose.yaml wires it)."""
+    env = composition.env
+    origin = f"https://{env['APP_HOST']}:{env['PROXY_HTTPS_PORT']}"
+    # As the backend sends it (F-1 A): a default port dropped.
+    return f"{without_default_port(origin)}/api/auth/callback"
+
+
+def hidden_inputs(document: str) -> dict[str, str]:
+    """The hidden inputs of a Keycloak form, by name."""
+    found: dict[str, str] = {}
+    for tag in INPUT.findall(document):
+        if not re.search(r'type="hidden"', tag, re.IGNORECASE):
+            continue
+        name = re.search(r'name="([^"]+)"', tag)
+        value = re.search(r'value="([^"]*)"', tag)
+        if name is not None:
+            found[name.group(1)] = html.unescape(value.group(1)) if value else ""
+    return found
+
+
+def is_enrolment_page(document: str) -> bool:
+    return 'name="totpSecret"' in document and 'name="totp"' in document
+
+
+def is_code_page(document: str) -> bool:
+    return 'name="otp"' in document
+
+
+def enrolment_secret(document: str) -> str:
+    """The raw OTP secret on Keycloak's enrolment form (never printed or logged)."""
+    secret = hidden_inputs(document).get("totpSecret", "")
+    assert secret, "the enrolment form carries no secret"
+    return secret
+
+
+def form_path(document: str) -> str:
+    match = FORM_ACTION.search(document)
+    assert match is not None, "form not found"
+    parsed = urlparse(html.unescape(match.group(1)))
+    return parsed.path + ("?" + parsed.query if parsed.query else "")
+
+
+def fresh_code(key: tuple[str, str, str]) -> str:
+    """A code for the current step, or a neighbouring one Keycloak's default look-around window
+    accepts, that this session has not answered yet; otherwise wait for the next period."""
+    used = OTP_USED_STEPS.setdefault(key, set())
+    while True:
+        now = totp.time_step()
+        for step in (now, now + 1, now - 1):
+            if step not in used:
+                used.add(step)
+                code = totp.totp(totp.keycloak_key(OTP_SECRETS[key]), step)
+                OTP_TYPED_CODES.setdefault(key, []).append(code)
+                return code
+        time.sleep(totp.PERIOD_SECONDS - time.time() % totp.PERIOD_SECONDS + 0.5)
+
+
+def second_factor(client: "RealmClient", username: str, response: httpx.Response) -> httpx.Response:
+    """Drive the one-time-code part of a login after its password step, and return the first
+    response that is neither an in-flow redirect nor an MFA page: the code redirect, or another
+    page (an error page, a required password action) for the caller to judge.
+
+    An enrolment page is answered with a code for the secret it issues (that secret replaces
+    any earlier one for the account); a code page with a fresh code for the secret this session
+    holds. A code page for an account whose secret this session never saw is returned as it is.
+    Each enrolment gets its own device label: Keycloak refuses a second OTP credential under a
+    label the account already has, and the realm's password-reset flow (Keycloak's default
+    "Reset - Conditional OTP" step) makes an enrolled account enrol again.
+    """
+    key = (client.composition.project, client.realm, username)
+    for _ in range(8):
+        if response.status_code in (302, 303):
+            location = urlparse(response.headers.get("location", ""))
+            if "code" in parse_qs(location.query) or "/login-actions/" not in location.path:
+                return response
+            response = client.request(
+                "GET", location.path + ("?" + location.query if location.query else "")
+            )
+            continue
+        if response.status_code != 200:
+            return response
+        document = response.text
+        if is_enrolment_page(document):
+            OTP_SECRETS[key] = enrolment_secret(document)
+            OTP_USED_STEPS[key] = set()
+            fields = {
+                **hidden_inputs(document),
+                "totp": fresh_code(key),
+                "userLabel": f"{username}-device-{secrets.token_hex(3)}",
+            }
+        elif is_code_page(document) and key in OTP_SECRETS:
+            fields = {**hidden_inputs(document), "otp": fresh_code(key)}
+        else:
+            return response
+        response = client.request("POST", form_path(document), data=fields)
+    return response
 
 
 def listener_open(composition: Composition, listener: str) -> bool:
@@ -170,7 +338,7 @@ class RealmClient:
         client_id: str = "admin-cli",
         client_secret: str | None = None,
     ) -> dict[str, Any]:
-        redirect_uri = "https://eko112.invalid/callback"
+        redirect_uri = callback_uri(self.composition)
         verifier = secrets.token_urlsafe(64)
         challenge = (
             base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
@@ -195,6 +363,7 @@ class RealmClient:
         parsed = urlparse(action)
         path = parsed.path + ("?" + parsed.query if parsed.query else "")
         submitted = self.request("POST", path, data={"username": username, "password": password})
+        submitted = second_factor(self, username, submitted)
         assert submitted.status_code in (302, 303), (
             f"login submission status {submitted.status_code}"
         )

@@ -14,21 +14,33 @@ import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response, routing
+from fastapi import Depends, FastAPI, Request, Response, routing
 from fastapi.exception_handlers import (
     http_exception_handler,
     request_validation_exception_handler,
 )
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.api.auth import router as auth_router
 from app.api.health import router as health_router
+from app.auth.crypto import Sealer
+from app.auth.gate import OriginRefused, authenticate
+from app.auth.oidc import OidcClient, http_client
+from app.auth.sessions import Authenticator, Unauthenticated, Unavailable
+from app.core.clock import SystemClock
 from app.core.logs import RequestLine, correlation_id, install_interpreter_hooks
-from app.core.settings import Settings, load_settings
+from app.core.settings import AuthSettings, Settings, load_settings
 from app.data.database import Database
+from app.data.sessions import SessionStore, StorageUnavailable
 
 logger = logging.getLogger(__name__)
+
+# The access dependency's exemption list (ADR-0003 addendum of 2026-10-28): exactly these three.
+# Adding a path here is a change to ADR-0003, recorded as an addendum.
+PUBLIC_PATHS = frozenset({"/api/auth/login", "/api/auth/callback", "/api/health"})
 
 STANDARD_METHODS = frozenset(
     {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT"}
@@ -161,17 +173,51 @@ def install_request_handling(app: FastAPI) -> None:
     app.build_middleware_stack = build  # type: ignore[method-assign]
 
 
+def _problem(status: int, detail: str) -> JSONResponse:
+    return JSONResponse({"detail": detail}, status_code=status)
+
+
+async def _unauthenticated(request: Request, exc: Exception) -> Response:
+    return _problem(401, "not authenticated")
+
+
+async def _origin_refused(request: Request, exc: Exception) -> Response:
+    return _problem(403, "origin refused")
+
+
+async def _unavailable(request: Request, exc: Exception) -> Response:
+    return _problem(503, "temporarily unavailable")
+
+
+def _public_routes(app: FastAPI) -> tuple[object, ...]:
+    """The served route objects of `PUBLIC_PATHS`; building fails unless each path is found."""
+    found = [c for c in routing.iter_route_contexts(app.routes) if c.path in PUBLIC_PATHS]
+    if {c.path for c in found} != PUBLIC_PATHS:
+        raise RuntimeError("a public route is not served")
+    return tuple(c.route for c in found)
+
+
 def create_app() -> FastAPI:
     # Uvicorn's worker processes are fresh interpreters that apply only `log_config`; this is the
     # one place a serving process gets the hooks (ADR-0005 amendment at verification, R-01).
     install_interpreter_hooks()
     try:
         settings = load_settings(Settings)
+        auth_settings = load_settings(AuthSettings)
         database = Database.from_settings(settings)
+        http = http_client()
+        auth = Authenticator(
+            origin=auth_settings.app_origin,
+            store=SessionStore(database),
+            oidc=OidcClient(auth_settings, http),
+            sealer=Sealer(auth_settings.session_key()),
+            clock=SystemClock(),
+        )
 
         @asynccontextmanager
         async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             yield
+            http.close()
             database.dispose()
 
         # The OpenAPI document and docs stay outside /api/: proxy forwards only /api/ to backend,
@@ -182,9 +228,18 @@ def create_app() -> FastAPI:
             docs_url="/docs",
             redoc_url="/redoc",
             lifespan=lifespan,
+            # Every route, one registered later included, passes the access dependency.
+            dependencies=[Depends(authenticate)],
         )
         app.state.database = database
+        app.state.auth = auth
         app.include_router(health_router, prefix="/api")
+        app.include_router(auth_router, prefix="/api")
+        auth.public_routes = _public_routes(app)
+        app.add_exception_handler(Unauthenticated, _unauthenticated)
+        app.add_exception_handler(OriginRefused, _origin_refused)
+        app.add_exception_handler(Unavailable, _unavailable)
+        app.add_exception_handler(StorageUnavailable, _unavailable)
         install_request_handling(app)
         return app
     except Exception:
