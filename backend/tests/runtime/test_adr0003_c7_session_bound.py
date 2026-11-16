@@ -14,12 +14,12 @@ accounts with live sessions, changed at the same moment t0 and polled together:
 - control: a `rep`+`manager` account nothing happens to keeps every answer 200 past 300 s.
 
 Elapsed time is measured on the test host's monotonic clock from just before the first
-administrator change is sent, and printed per run; backend and Keycloak share that host's clock
-(ADR-0004 *Clocks*).
+administrator change is sent, and recorded per run as test properties; backend and Keycloak
+share that host's clock (ADR-0004 *Clocks*).
 """
 
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 
 import pytest
@@ -38,6 +38,7 @@ POLL_SECONDS = 2.0
 SESSION = ("GET", "/api/auth/session")
 CUSTOMERS = ("GET", probe.CUSTOMERS)
 TEAM = ("GET", probe.TEAM)
+RecordProperty = Callable[[str, object], None]
 
 
 @dataclass
@@ -124,13 +125,6 @@ def window(keycloak_running: Started) -> Iterator[Window]:
                     account.seen.append((time.monotonic() - t0, operation, status))
         elapsed = time.monotonic() - t0
         after_window = records(pg)
-        flips = {
-            "disable-401": accounts["disable"].first(SESSION, 401),
-            "removal-403": accounts["removal"].first(TEAM, 403),
-            "last-role-403": accounts["last-role"].first(TEAM, 403),
-            "window": elapsed,
-        }
-        print(f"EKO-2-02 K-05 elapsed seconds: {flips}")  # noqa: T201  # leftovers-allow: the measured bound, recorded per test host (K-05 edge)
 
         # Reactivation and role restoration, then a new login of each changed account.
         realm.set_enabled(accounts["disable"].user_id, True)
@@ -143,44 +137,50 @@ def window(keycloak_running: Started) -> Iterator[Window]:
 
 
 def test_k05_a_disabled_account_s_session_is_refused_401_within_300_seconds(
-    window: Window,
+    window: Window, record_property: RecordProperty
 ) -> None:
     account = window.accounts["disable"]
     refused_at = account.first(SESSION, 401)
+    record_property("k05_disable_401_s", refused_at)
     assert refused_at is not None, account.statuses(SESSION)
-    assert refused_at <= BOUND_SECONDS, refused_at
+    assert refused_at <= BOUND_SECONDS, f"401 after {refused_at} s, bound {BOUND_SECONDS} s"
     # Never a 403 on the way: the loss is authentication, not a role.
     assert 403 not in account.statuses(SESSION) | account.statuses(CUSTOMERS)
 
 
 def test_k05_b_a_removed_role_is_refused_403_within_300_seconds_while_rep_keeps_working(
-    window: Window,
+    window: Window, record_property: RecordProperty
 ) -> None:
     account = window.accounts["removal"]
     refused_at = account.first(TEAM, 403)
+    record_property("k05_removal_403_s", refused_at)
     assert refused_at is not None, account.statuses(TEAM)
-    assert refused_at <= BOUND_SECONDS, refused_at
+    assert refused_at <= BOUND_SECONDS, f"403 after {refused_at} s, bound {BOUND_SECONDS} s"
     assert account.statuses(CUSTOMERS) == {200}
     # Once refused, the manager operation stays refused for the rest of the window.
     after = {s for t, op, s in account.seen if op == TEAM and t >= refused_at}
     assert after == {403}
 
 
-def test_k05_removing_the_last_role_answers_403_not_401(window: Window) -> None:
+def test_k05_removing_the_last_role_answers_403_not_401(
+    window: Window, record_property: RecordProperty
+) -> None:
     account = window.accounts["last-role"]
     refused_at = account.first(TEAM, 403)
+    record_property("k05_last_role_403_s", refused_at)
     assert refused_at is not None, account.statuses(TEAM)
-    assert refused_at <= BOUND_SECONDS, refused_at
+    assert refused_at <= BOUND_SECONDS, f"403 after {refused_at} s, bound {BOUND_SECONDS} s"
     assert 401 not in account.statuses(TEAM) | account.statuses(SESSION)
     # With no role left, every non-exempt route refuses it, the session view included.
     assert account.first(SESSION, 403) is not None
 
 
 def test_k05_contrast_an_unchanged_account_keeps_every_answer_past_300_seconds(
-    window: Window,
+    window: Window, record_property: RecordProperty
 ) -> None:
     account = window.accounts["control"]
-    assert window.elapsed > BOUND_SECONDS + 1
+    record_property("k05_window_s", window.elapsed)
+    assert window.elapsed > BOUND_SECONDS + 1, f"window {window.elapsed} s"
     assert max(t for t, _, _ in account.seen) > BOUND_SECONDS + 1
     assert account.statuses(TEAM) == account.statuses(CUSTOMERS) == {200}
 
