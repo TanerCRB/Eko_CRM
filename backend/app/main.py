@@ -27,7 +27,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
 from app.auth.crypto import Sealer
-from app.auth.gate import OriginRefused, authenticate
+from app.auth.gate import OriginRefused, RoleRefused, authenticate
 from app.auth.oidc import OidcClient, http_client
 from app.auth.sessions import Authenticator, Unauthenticated, Unavailable
 from app.core.clock import SystemClock
@@ -185,6 +185,10 @@ async def _origin_refused(request: Request, exc: Exception) -> Response:
     return _problem(403, "origin refused")
 
 
+async def _role_refused(request: Request, exc: Exception) -> Response:
+    return _problem(403, "not permitted")
+
+
 async def _unavailable(request: Request, exc: Exception) -> Response:
     return _problem(503, "temporarily unavailable")
 
@@ -238,6 +242,7 @@ def create_app() -> FastAPI:
         auth.public_routes = _public_routes(app)
         app.add_exception_handler(Unauthenticated, _unauthenticated)
         app.add_exception_handler(OriginRefused, _origin_refused)
+        app.add_exception_handler(RoleRefused, _role_refused)
         app.add_exception_handler(Unavailable, _unavailable)
         app.add_exception_handler(StorageUnavailable, _unavailable)
         install_request_handling(app)

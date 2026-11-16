@@ -21,6 +21,7 @@ import jwt
 
 from app.core.clock import Clock
 from app.core.settings import AuthSettings
+from app.domain.caller import Role
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,20 @@ class VerifiedAccess:
     subject: str
     name: str | None
     expires_at: datetime
+    roles: frozenset[Role]
+
+
+def client_roles(claims: dict[str, Any], client_id: str) -> frozenset[Role]:
+    """The application's roles named in this client's role claim, `resource_access.<client>.roles`
+    (ADR-0003 *Roles*). Realm roles, other clients' roles and unknown names are ignored; a name
+    matches only exactly, and a claim of any other shape grants nothing."""
+    resource = claims.get("resource_access")
+    entry = resource.get(client_id) if isinstance(resource, dict) else None
+    listed = entry.get("roles") if isinstance(entry, dict) else None
+    if not isinstance(listed, list):
+        return frozenset()
+    names = {role.value for role in Role}
+    return frozenset(Role(name) for name in listed if isinstance(name, str) and name in names)
 
 
 def http_client() -> httpx.Client:
@@ -305,6 +320,7 @@ class OidcClient:
             subject=claims["sub"],
             name=name if isinstance(name, str) else None,
             expires_at=datetime.fromtimestamp(claims["exp"], UTC),
+            roles=client_roles(claims, self.client_id),
         )
 
     def verify_id(self, token: str | None, clock: Clock) -> dict[str, Any]:
