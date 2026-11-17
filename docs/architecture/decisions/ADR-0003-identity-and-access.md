@@ -1025,3 +1025,63 @@ it here prevents an implementation from treating it as anything other than a cre
   rule.
 - **B — Reject it.** The official-image rule outside the provider remains. G-4's branding is then
   delivered as option B above (text only), or G-4 returns to the human.
+
+### 2026-11-16 — Logout without an application role; CRM-data refusal by default
+
+**Status:** Accepted 2026-11-16 (gate 1 of EKO-2-02, Issue #22).
+
+**What it changes.** *Roles* denies every API operation to an authenticated account with none of
+the three roles, logout included. Such a session therefore cannot be ended by its user. It lives
+until the idle limit and gains any role granted in that window at its next refresh. *Roles*
+also denies an administrator-only account every operation on customers, visits, notes, actions
+or dashboards, but does not say where that is enforced. From this date:
+
+- **Logout needs no application role.** `POST /api/auth/logout` is the only API operation an
+  authenticated account with none of `rep`, `manager`, `administrator` may call. It still
+  requires a session resolved and verified as *How a request is verified* says, the `Origin`
+  rule of *Browser flow* and the termination rules of the addendum of 2026-11-02. Every other
+  operation outside the three session-exempt routes answers 403 to such an account, the session
+  read included. Adding an operation to this role-free list is a change to this decision,
+  recorded as an addendum.
+- **CRM-data refusal is the default.** The application-wide access dependency refuses (403)
+  every operation outside the session-exempt routes to a caller holding neither `rep` nor
+  `manager`, unless the operation is marked non-CRM. A non-CRM operation reads or changes none
+  of customers, visits, notes, actions or dashboards and returns no data derived from them.
+  An operation without the mark is CRM-data class, whether it is added later, injected by a
+  test, or declares no dependency of its own. At this date the non-CRM operations are
+  `GET /api/auth/session` and `POST /api/auth/logout`.
+- **Who marks, and how.** An operation is marked non-CRM only by the human at gate 1 of the task
+  that adds or changes it, on the Architect's impact map, which names the operation and why it
+  is non-CRM. The role-free list and the non-CRM list are each one closed constant of (method,
+  path) entries in `backend/app/main.py`, beside the session-exempt list. Building the
+  application fails when an entry is not served, when an entry's path is session-exempt, or when
+  the role-free entry is not also non-CRM. The dependency matches the served route object by
+  identity. No route attribute, setting, environment value or request input adds to either list.
+- **Three classes, disjoint.** The session-exempt list holds exactly the three routes of the
+  addendum of 2026-10-28, and neither logout nor any non-CRM operation joins it. The role-free
+  list holds exactly logout. The non-CRM list holds the operations marked as above.
+- **ADR-0003-C5 reads:** A test walking every API operation other than the start of a login,
+  the login callback and the health route (this exemption list is held in the test explicitly)
+  makes these checks:
+  - with a verified token holding none of `rep`, `manager`, `administrator` (including one
+    holding realm roles with those names), every operation answers 403 except logout, which ends
+    the session;
+  - with only `administrator`, every operation outside the non-CRM list held in the test answers
+    403, including an operation planted by the test that declares no dependency of its own;
+  - with `manager` and `administrator`, every operation answers as with `manager` alone;
+  - the role-free list and the non-CRM list in the application equal the lists held in the test,
+    and neither shares a path with the session-exempt list.
+
+Every other rule and control of this decision is unchanged. In particular, the session-exempt
+list holds exactly three routes, ADR-0003-C4 and C23 are unchanged, and logout is not served
+without a session.
+
+**Why.** A session that its user cannot end, and that silently gains a role granted later, is a
+security effect, not a usability gap (EKO-2-02 Security Auditor finding B-01). Ending a session
+grants no data, so it is the one operation exempted from the no-role refusal. An exclusion that
+each route must remember fails open on the first route that forgets it (EKO-2-02 Reviewer
+finding R-01). Making refusal the default means the next CRM route is refused, not served.
+Restating ADR-0003-C5 and the *Roles* no-role bullet is a declared deviation. It follows the
+precedent of this decision's addendum of 2026-10-28 on ADR-0003-C4. It supersedes gate-1
+decision OQ-1 A of EKO-2-02 (2026-11-06), whose exemption reading it keeps as text. Approved by
+the human at gate 1 of EKO-2-02 on 2026-11-16 (Issue #22).
