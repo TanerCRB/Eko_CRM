@@ -28,7 +28,7 @@ from tests.runtime.eko201.conftest import (
     refused_at_callback,
     session_count,
 )
-from tests.runtime.eko201.processes import Backend, backend, backends, login
+from tests.runtime.eko201.processes import Backend, backend, backends, expired_login
 from tests.support import oidc_stub
 from tests.support.pg_instance import Postgres
 
@@ -187,11 +187,7 @@ def test_qa_k06_retention_counts_from_creation_even_for_a_session_used_before_ab
 
 
 def _expired(stub: oidc_stub.Stub, target: Backend) -> str:
-    stub.access_lifespan_seconds = 1
-    session = login(target)
-    stub.access_lifespan_seconds = 240
-    time.sleep(1.3)
-    return session
+    return expired_login(stub, target)
 
 
 def _quiet(target: Backend, session: str) -> None:

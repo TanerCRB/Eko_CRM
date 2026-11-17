@@ -69,5 +69,16 @@
       { "name": "severity:medium", "color": "d93f0b", "description": "API contract, missing evidence, a defect under concurrency or retry" },
       { "name": "severity:low", "color": "fbca04", "description": "Documentation drift, language, convention with no functional effect" }
     ]
+  },
+
+  "priority": {
+    "$comment": "Order of work on open Issues, independent of severity. One priority label per open Issue; 1 is taken first.",
+    "labels": [
+      { "name": "priority:1", "color": "b60205", "description": "Most urgent: blocks work (red main, the task in flight) or a hard deadline" },
+      { "name": "priority:2", "color": "d93f0b", "description": "Urgent: security, wrong data, process gap that hits every next task" },
+      { "name": "priority:3", "color": "fbca04", "description": "Current backlog of the active area (access, auth, schema)" },
+      { "name": "priority:4", "color": "0e8a16", "description": "Before go-live or the area's next task; meta-QA, release and register upkeep" },
+      { "name": "priority:5", "color": "c5def5", "description": "Least urgent: low findings, other agent tools" }
+    ]
   }
 }

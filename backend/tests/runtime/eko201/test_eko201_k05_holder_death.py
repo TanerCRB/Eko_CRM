@@ -14,7 +14,7 @@ import httpx
 import pytest
 
 from tests.runtime.eko201.conftest import session_count
-from tests.runtime.eko201.processes import backend, login
+from tests.runtime.eko201.processes import Backend, backend, expired_login, login
 from tests.support import oidc_stub
 from tests.support.pg_instance import Postgres
 
@@ -50,12 +50,8 @@ def wait_until(condition: object, seconds: float = 15) -> None:
         time.sleep(0.05)
 
 
-def _expired(stub: oidc_stub.Stub, target: object) -> str:
-    stub.access_lifespan_seconds = 1
-    session = login(target)  # type: ignore[arg-type]
-    stub.access_lifespan_seconds = 240
-    time.sleep(1.3)
-    return session
+def _expired(stub: oidc_stub.Stub, target: Backend) -> str:
+    return expired_login(stub, target)
 
 
 def _send_async(target: object, session: str) -> None:
