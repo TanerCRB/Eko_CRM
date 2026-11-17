@@ -21,7 +21,7 @@ import pytest
 
 TIMING_FILE = "EKO134_TIMING_FILE"
 # Helpers a K-06 test module calls by its own name (imported into the module).
-MODULE_HELPERS = ("build_keycloak", "run_bootstrap")
+MODULE_HELPERS = ("build_keycloak", "run_bootstrap", "settle_host_network")
 # Helpers the K-06 tests call as attributes of `tests.runtime.eko201_login`.
 LOGIN_MODULE = "tests.runtime.eko201_login"
 LOGIN_HELPERS = ("provision_browser_account", "browser_login")

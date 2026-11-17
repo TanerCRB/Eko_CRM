@@ -13,6 +13,7 @@ from playwright.sync_api import Page, Request, expect, sync_playwright
 
 from tests.runtime import eko201_login as app
 from tests.runtime.conftest import UP_TIMEOUT_SECONDS, Composition
+from tests.runtime.eko134_host_network import settle_host_network
 from tests.runtime.keycloak_client import build_keycloak, run_bootstrap
 from tests.support.repo import REPO_ROOT
 
@@ -176,6 +177,9 @@ def test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement(
         try:
             context = browser.new_context(ignore_https_errors=True)
             page = context.new_page()
+            # EKO-1-34 (#192): the bootstrap's last proxy restart left a new host-side veth whose
+            # IPv6 link-local address lands 1-2 s later; the login starts only once it has.
+            settle_host_network(fresh)
             app.browser_login(page, fresh, username, password)
             requested: list[str] = []
             automatic_navigations: list[str] = []
@@ -300,6 +304,9 @@ def test_r01_two_consecutive_lazy_chunk_failures_stop_after_one_recovery(
         try:
             context = browser.new_context(ignore_https_errors=True)
             page = context.new_page()
+            # EKO-1-34 (#192): the bootstrap's last proxy restart left a new host-side veth whose
+            # IPv6 link-local address lands 1-2 s later; the login starts only once it has.
+            settle_host_network(fresh)
             app.browser_login(page, fresh, username, password)
             requested: list[str] = []
             responses: list[tuple[str, int]] = []

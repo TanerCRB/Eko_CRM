@@ -30,6 +30,16 @@ The **first-redirect window** starts at Playwright's first `"load" event fired` 
 mark when no such line comes first. That is the span of the `wait_for_url` call where all eight
 recorded failures happened.
 
+**Known limit of the computed window.** When the first `page.goto` itself fails, it never fires
+`load`. The probe then takes a later test's `load` as the window start, and the row's start comes
+after its end. Run 44169988387 it03 k06 is such a row. Its window was re-derived by hand from that
+iteration's timeline.
+
+## Records
+
+- [`pre-fix-probe-2026-11-17.md`](pre-fix-probe-2026-11-17.md): the K-01 record of the pre-fix
+  probe run 44169988387. It names the event, its source and the passing contrast.
+
 ## Hygiene (ADR-0005, K-07)
 
 Before upload, the workflow does the following:
