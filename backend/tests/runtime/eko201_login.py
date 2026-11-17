@@ -262,6 +262,19 @@ def ensure_staff_account(
         realm="eko",
     )
     assert reset.status_code == 204, f"password set status {reset.status_code}"
+    # A staff account holds an application role (EKO-2-02: a role-less caller is refused).
+    [client] = realm_admin.admin_json(
+        token, "GET", "clients", params={"clientId": "eko-backend"}, realm="eko"
+    )
+    rep = realm_admin.admin_json(token, "GET", f"clients/{client['id']}/roles/rep", realm="eko")
+    assigned = realm_admin.admin(
+        token,
+        "POST",
+        f"users/{user_id}/role-mappings/clients/{client['id']}",
+        json_body=[rep],
+        realm="eko",
+    )
+    assert assigned.status_code == 204, f"rep role status {assigned.status_code}"
     return user_id
 
 

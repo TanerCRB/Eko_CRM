@@ -34,6 +34,8 @@ export const messages = {
     retryLater: "Spróbuj ponownie za chwilę.",
     invalid: "Nie udało się sprawdzić sesji.",
     retry: "Spróbuj ponownie",
+    noRole:
+      "Twoje konto nie ma jeszcze dostępu do aplikacji. Skontaktuj się z administratorem albo wyloguj się.",
   },
   account: {
     label: "Konto",

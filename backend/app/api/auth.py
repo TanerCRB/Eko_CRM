@@ -1,9 +1,11 @@
 """Login start, login callback, session and logout (ADR-0003 *Browser flow*; G-2 A).
 
 Login start and the callback are two of the three routes served without a session; the session
-and logout operations go through the access dependency like every other route. No body or
-readable cookie carries a token: the browser gets only the opaque session and login-transaction
-identifiers, in `HttpOnly` `__Host-` cookies.
+and logout operations go through the access dependency like every other route. Both are non-CRM
+operations, so an administrator-only caller reaches them; logout alone is role-free, so a caller
+with no application role can still end its session (ADR-0003 roles addendum of EKO-2-02; the
+lists are `main.py`'s). No body or readable cookie carries a token: the browser gets only the
+opaque session and login-transaction identifiers, in `HttpOnly` `__Host-` cookies.
 """
 
 from typing import Annotated, Any, Literal

@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { readSession, type SessionInfo } from "../../api/auth";
 import { redirectToLogin } from "../../api/navigation";
 import { messages } from "../../i18n/pl";
+import { useLogout } from "./useLogout";
 
 export type Schedule = (run: () => void, delayMs: number) => () => void;
 
@@ -20,12 +21,33 @@ type Phase =
   | { name: "redirecting" }
   | { name: "unavailable"; retrying: boolean }
   | { name: "invalid" }
+  | { name: "noRole" }
   | { name: "authenticated"; session: SessionInfo };
 
 interface SessionGateProps {
   children: (session: SessionInfo) => ReactNode;
   retryDelaysMs?: readonly number[];
   schedule?: Schedule;
+}
+
+// No subject or name is shown: a 403 session read carries neither, and no retry polls for a role.
+function NoRoleLogout() {
+  const { pending, failed, signOut } = useLogout();
+  return (
+    <>
+      <p>{messages.session.noRole}</p>
+      {failed ? <p role="alert">{messages.account.logoutFailed}</p> : null}
+      <button
+        type="button"
+        className="button button-primary"
+        disabled={pending}
+        aria-busy={pending}
+        onClick={signOut}
+      >
+        {messages.account.logout}
+      </button>
+    </>
+  );
 }
 
 export function SessionGate({
@@ -53,6 +75,9 @@ export function SessionGate({
           return;
         case "invalid":
           setPhase({ name: "invalid" });
+          return;
+        case "noRole":
+          setPhase({ name: "noRole" });
           return;
         case "unavailable": {
           const delayMs = retryDelaysMs[check.failures];
@@ -98,6 +123,7 @@ export function SessionGate({
         </>
       ) : null}
       {phase.name === "invalid" ? <p role="alert">{messages.session.invalid}</p> : null}
+      {phase.name === "noRole" ? <NoRoleLogout /> : null}
       {phase.name === "unavailable" || phase.name === "invalid" ? (
         <button type="button" className="button button-primary" onClick={retryByHand}>
           {messages.session.retry}

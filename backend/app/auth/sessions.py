@@ -63,6 +63,12 @@ class LoginRefused(Exception):
     """A login callback that creates no session."""
 
 
+def _caller(access: VerifiedAccess) -> Caller:
+    """Built from the token verified for this request, so a refreshed token's roles apply at once
+    and none outlives the token that carried it (ADR-0003 *Bound*)."""
+    return Caller(access.subject, access.name, access.roles)
+
+
 @dataclass(frozen=True)
 class LoginStart:
     transaction: str
@@ -203,7 +209,7 @@ class Authenticator:
             except TokenExpired:
                 return self._refresh(session)
             self.store.touch(session.id, now)
-            return Caller(access.subject, access.name)
+            return _caller(access)
         return self._refresh(session)
 
     def _verify(self, token: str) -> VerifiedAccess:
@@ -221,7 +227,7 @@ class Authenticator:
             access = self._verify(self._open(session).access)
         except TokenExpired:
             raise Unavailable from None
-        return Caller(access.subject, access.name)
+        return _caller(access)
 
     def _refresh(self, seen: StoredSession) -> Caller:
         deadline = self.clock.monotonic() + WAIT_BOUND_SECONDS
@@ -264,7 +270,7 @@ class Authenticator:
             raise Unauthenticated
         sealed = self.sealer.seal(renewed.to_bytes(), current.session_hash)
         holder.store_tokens(sealed, access.expires_at, self.clock.now())
-        return Caller(access.subject, access.name)
+        return _caller(access)
 
     def _wait(self, seen: StoredSession, deadline: float) -> Caller:
         """Non-blocking probes, no connection held between them, never a refresh of its own."""

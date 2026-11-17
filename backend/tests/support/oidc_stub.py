@@ -55,6 +55,9 @@ class User:
     sub: str = "4b1c2d3e-0000-4000-8000-000000000201"
     given_name: str = "Synthetic"
     family_name: str = "Rep"
+    # The application client's roles in the access token (EKO-2-02: a role-less caller is
+    # refused, so the default user holds `rep`; human decision of 2026-11-16).
+    client_roles: list[str] = field(default_factory=lambda: ["rep"])
 
 
 @dataclass
@@ -176,7 +179,9 @@ class Stub:
 
     def mint(self, user: User, sid: str, nonce: str | None) -> dict[str, Any]:
         access = {**self._common(user, sid), "aud": [CLIENT_ID], "typ": "Bearer",
-                  "jti": secrets.token_hex(8), **self.access_overrides}  # fmt: skip
+                  "jti": secrets.token_hex(8),
+                  "resource_access": {CLIENT_ID: {"roles": list(user.client_roles)}},
+                  **self.access_overrides}  # fmt: skip
         id_claims = {**self._common(user, sid), "aud": CLIENT_ID, "typ": "ID",
                      **({"nonce": nonce} if nonce is not None else {}),
                      **self.id_overrides}  # fmt: skip

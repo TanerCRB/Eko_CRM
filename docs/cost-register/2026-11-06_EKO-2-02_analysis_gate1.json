@@ -1,0 +1,8 @@
+{
+  "kind": "gate",
+  "task": "EKO-2-02",
+  "gate": 1,
+  "waitingSince": "2026-11-06T20:18Z",
+  "decidedAt": "2026-11-06T20:36Z",
+  "outcome": "accepted — G-1 A, G-2 A, OQ-1 A, OQ-2 A, OQ-3 A (chat decisions of 2026-11-06); scope unchanged from the locked fingerprint 7ae6f453f6981a0ce18a28d61902952460842cc7; implementation blocked until EKO-1-12 (#53) and EKO-2-01 (#21) complete with foundation evidence"
+}
