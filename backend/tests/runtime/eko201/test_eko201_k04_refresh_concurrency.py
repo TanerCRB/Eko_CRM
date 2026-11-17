@@ -16,7 +16,7 @@ import httpx
 import pytest
 
 from tests.runtime.eko201.conftest import session_count
-from tests.runtime.eko201.processes import Backend, backends, login
+from tests.runtime.eko201.processes import Backend, backends, expired_login, expired_logins
 from tests.support import oidc_stub
 from tests.support.pg_instance import Postgres
 
@@ -48,11 +48,8 @@ def concurrently(calls: list[Callable[[], Outcome]]) -> list[Outcome]:
 
 
 def expired_session(stub: oidc_stub.Stub, target: Backend) -> tuple[str, str]:
-    stub.access_lifespan_seconds = 1
-    session = login(target)
+    session = expired_login(stub, target)
     [sid] = [s for s in stub.sessions if stub.sso_alive(s)][-1:]
-    stub.access_lifespan_seconds = 240
-    time.sleep(1.3)
     return session, sid
 
 
@@ -87,6 +84,7 @@ def test_k04_one_request_refreshes_once(pg: Postgres, stub: oidc_stub.Stub) -> N
     with backends(pg, stub, count=1) as (a,):
         session, sid = expired_session(stub, a)
         assert send(a, session).status == 200
+        assert len(stub.refreshes(sid)) == 1
         assert send(a, session).status == 200
     assert len(stub.refreshes(sid)) == 1
 
@@ -177,10 +175,7 @@ def test_k04_pool_exhausted_responsive_identity_server_serves_every_request(
 
 def test_k04_two_sessions_refresh_independently(pg: Postgres, stub: oidc_stub.Stub) -> None:
     with backends(pg, stub) as (a, b):
-        stub.access_lifespan_seconds = 1
-        first, second = login(a), login(b)
-        stub.access_lifespan_seconds = 240
-        time.sleep(1.3)
+        first, second = expired_logins(stub, [a, b])
         stub.refresh_delay_seconds = 2.0
         started = time.monotonic()
         outcomes = concurrently([lambda: send(a, first), lambda: send(b, second)])
