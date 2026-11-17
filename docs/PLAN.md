@@ -541,7 +541,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
 - [ ] **EKO-1-34** — Stop the frontend-replacement runtime browser tests failing intermittently with `net::ERR_NETWORK_CHANGED` (#192).
   *Done when:* cause named with evidence; a deterministic test fails before / passes after the fix; the two named K-06 tests pass in a loop and both runtime jobs are green on the PR head and on `main` in consecutive runs; what the tests prove is not reduced.
   **Out of scope (explicit):** `__Host-eko_session` (EKO-1-33); changing frontend-replacement behavior; retry/re-run masking; loosening or skipping the K-06 assertions; #188 and runner load.
-  After EKO-1-33; before EKO-2-02 gate 2.
+  After EKO-1-33.
 
 ## EKO-2 — Access
 
