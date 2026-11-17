@@ -579,8 +579,29 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   refused login start; blocks go-live of the application host to the internet), #171 (tie U-02 to the
   pinned base image).
 
-- [ ] **EKO-2-02** — Carry roles and account state into every request.
+- [x] **EKO-2-02** — Carry roles and account state into every request.
   *Done when:* tests prove a deactivated account cannot log in and its data stays; the backend
   knows the caller's role and user id; one person holding manager and administrator roles gets
   both; there is no self-registration path.
   **Out of scope (explicit):** per-resource ownership rules — each feature task proves its own.
+  **Done 2026-11-17:** merged in [PR #189](https://github.com/TanerCRB/Eko_CRM/pull/189) as `77d2643` by the human on 2026-11-17; code verified at
+  `857486a` (QA PROOF HOLDS at `d953190`, product code byte-identical at `857486a`; Invariant Guardian,
+  Reviewer and Security Auditor PASS at `857486a`, 0 findings). Mechanism: the application-wide access
+  dependency refuses by client role — role-less 403 everywhere outside the three session-exempt routes
+  except logout, administrator-only 403 outside the non-CRM list, `manager`+`administrator` as manager;
+  roles only from the verified token, rebuilt on every refresh; caller identity typed as
+  `app.domain.Caller`; against the running Keycloak, disable and role removal reach existing sessions
+  within 300 s while data stays; the SPA no-role screen with a working logout. One fix round (B-01, a
+  role-less session could not log out; R-01, the administrator exclusion was opt-in per route), decided by
+  the dated ADR-0003 addendum of 2026-11-16, appended in this commit to
+  [`ADR-0003-identity-and-access.md`](architecture/decisions/ADR-0003-identity-and-access.md) from the draft
+  [`EKO-2-02-adr0003-roles-addendum-draft-2026-11-16.md`](architecture/decisions/EKO-2-02-adr0003-roles-addendum-draft-2026-11-16.md);
+  it restates ADR-0003-C5 and supersedes gate-1 OQ-1 A. Gate 2: every developer assumption (backend
+  A-01..A-07, frontend A-01..A-04) accepted by the human on 2026-11-17 and recorded as amendment lines
+  under the criteria of #22 (scope fingerprint `44af1eb9`); no UNDECIDABLE; no recorded exceptions. The
+  K-04 tests are keyed under K-05 in the PR description. CI, stated plainly: at the head `f2ad9ad` (a
+  merge of `main` bringing EKO-1-33, no product change after verification) eight of nine checks were
+  green; "runtime tests on the composition" was red, 1 failed / 703 passed —
+  `test_k06_frontend_replacement.py::test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement`
+  with `net::ERR_NETWORK_CHANGED`, a pre-existing flake outside this change (#192); the human merged
+  with that classification. Follow-ups: #187 (the `eko-backend` client's full role scope), #192.
