@@ -235,6 +235,17 @@ def test_k07_no_real_person_data_in_added_lines() -> None:
     assert rc.personal_data(added_lines()) == []
 
 
+def test_k07_criterion_value_allowance_is_exact_and_bound_to_its_file() -> None:
+    """H6-D A (Issue #195): one exact value, in the one file whose criterion names it."""
+    path = "backend/tests/runtime/eko301/test_eko301_k03_phone_and_email.py"
+    lines = CASES["criterion_value_contrasts"]
+    assert list(rc.criterion_values()) == [path]
+    assert rc.personal_data({path: [lines["allowed"]]}) == []
+    assert rc.personal_data({path: [lines["other_value"]]}) != []
+    assert rc.personal_data({path: [lines["other_on_the_line"]]}) != []
+    assert rc.personal_data({"backend/tests/runtime/other.py": [lines["allowed"]]}) != []
+
+
 @pytest.mark.parametrize("line", CASES["personal_data"])
 def test_k07_personal_data_check_fails_on_a_real_looking_value(line: str) -> None:
     assert rc.personal_data({"x.txt": [line]}) != []

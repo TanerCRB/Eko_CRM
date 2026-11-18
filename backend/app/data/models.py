@@ -1,8 +1,23 @@
 """Every mapped table is imported here, so Alembic's autogenerate and `alembic check` see it."""
 
+import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Identity, LargeBinary, Text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Identity,
+    Index,
+    Integer,
+    LargeBinary,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.data.base import Base
@@ -54,4 +69,59 @@ class LoginTransaction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
-__all__ = ["AppSession", "Base", "LoginTransaction", "SchemaRevisionLineage"]
+class CustomerRow(Base):
+    """A rep's customer (CUS-1, CUS-2); an owned table (ADR-0003 addendum of EKO-3-01). Revision
+    0004. Read and changed only through `app.data.customers`, under a visibility scope.
+
+    `id` is a UUIDv4 the application generates: no sequence, so a restore cannot make an
+    identifier be issued twice (ADR-0005-C17).
+    """
+
+    __tablename__ = "customer"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    # NFC, trimmed, at most 120 characters (ADR-0002, G-1 A); PD-C1.
+    name: Mapped[str] = mapped_column(Text)
+    # A code from a closed list, compared byte-wise (G-3 A).
+    country: Mapped[str] = mapped_column(Text(collation="C"))
+    # The creating rep's subject, stored as received and compared exactly (ADR-0003).
+    owner_subject: Mapped[str] = mapped_column(Text(collation="C"), index=True)
+
+
+class CustomerContactRow(Base):
+    """One phone or e-mail of a customer, reached only through its customer; it carries no owner
+    of its own (ADR-0003 addendum of EKO-3-01). Revision 0004."""
+
+    __tablename__ = "customer_contact"
+    __table_args__ = (
+        CheckConstraint("kind IN ('phone', 'email')", name="kind"),
+        UniqueConstraint("customer_id", "position"),
+        # At most one primary contact per customer, counted across kinds (CUS-1).
+        Index(
+            "uq_customer_contact_one_primary",
+            "customer_id",
+            unique=True,
+            postgresql_where=text("is_primary"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    customer_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("customer.id"))
+    # The contact's place in the order it was sent (G-6 A).
+    position: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(Text(collation="C"))
+    # A phone in E.164 form, or an e-mail address as entered and trimmed (CUS-8, G-3 A).
+    value: Mapped[str] = mapped_column(Text(collation="C"))
+    # Who the contact reaches; NULL when there is none (G-4 A).
+    note: Mapped[str | None] = mapped_column(Text)
+    is_primary: Mapped[bool] = mapped_column(Boolean)
+
+
+__all__ = [
+    "AppSession",
+    "Base",
+    "CustomerContactRow",
+    "CustomerRow",
+    "LoginTransaction",
+    "SchemaRevisionLineage",
+]

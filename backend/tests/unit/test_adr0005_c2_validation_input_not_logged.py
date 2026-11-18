@@ -1,10 +1,13 @@
 """EKO-1-13 K-04, ADR-0005-C2: a request that fails validation leaves its input in no line the
 backend logs, on every route of `create_app()` that accepts a body.
 
-No such route exists yet, so the real-app test says so in its output (a warning naming the count)
-and never passes silently on an empty set. Contrast (b): the same enumeration on a fixture app with
-one body endpoint finds exactly that endpoint; with the fixture logging the rejected input the
-check fails, and with the repository's handling it passes.
+The real-app test says in its output how many routes it walked (a warning naming the count) and
+never passes silently on an empty set. The access dependency answers before the body is decoded
+(ADR-0003 addendum of EKO-3-01, section 4), so an anonymous invalid body never reaches validation:
+every app here has the access dependency overridden to a synthetic rep caller (decision H6-C A on
+Issue #195), and every request must still be answered 422. Contrast (b): the same enumeration on
+a fixture app with one more body endpoint finds exactly that endpoint more; with the fixture
+logging the rejected input the check fails, and with the repository's handling it passes.
 """
 
 import logging
@@ -18,6 +21,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 from starlette.responses import Response
 
+from app.auth.gate import authenticate
+from app.domain.caller import Caller, Role
 from app.main import create_app
 from tests.support import log_lines as ll
 from tests.support.c2_routes import BodyRoute, body_routes, invalid_bodies
@@ -34,6 +39,19 @@ Output = Callable[[], str]
 # Read at import, before any test installs the repository's printer in this process.
 PYTHON_SHOWWARNING = warnings.showwarning
 MARKERS = {"plain": MARKER, "non-ascii": NON_ASCII_MARKER, "long": LONG_MARKER}
+CALLER = Caller(
+    subject="5a1e0301-0000-4000-8000-0000000000c2", name=None, roles=frozenset({Role.REP})
+)
+
+
+def _as_rep() -> Caller:
+    return CALLER
+
+
+def with_caller(app: FastAPI) -> FastAPI:
+    """Validation is reached only past the access decision, so the walk needs a caller."""
+    app.dependency_overrides[authenticate] = _as_rep
+    return app
 
 
 @pytest.fixture
@@ -68,7 +86,7 @@ def c2_problems(app: FastAPI, routes: list[BodyRoute], output: Output) -> list[s
 def test_adr0005_c2_validation_input_not_logged_on_every_body_route(
     backend_env: None, output: Output
 ) -> None:
-    app = create_app()
+    app = with_caller(create_app())
     routes = body_routes(app)
     # Through Python's own printer, so pytest records the text: the repository's printer, which
     # create_app() installs, writes a warning's category only (ADR-0005 amendment, S-5).
@@ -89,12 +107,16 @@ def test_adr0005_c2_validation_input_not_logged_on_every_body_route(
 
 
 def test_adr0005_c2_contrast_enumeration_finds_the_fixture_endpoint(backend_env: None) -> None:
+    shipped = body_routes(create_app())
     routes = body_routes(add_fixture_routes(create_app()))
-    assert routes == [BodyRoute("POST", "/api/fixture/body", ("name", "count", "inner"))]
+    assert [r for r in routes if r not in shipped] == [
+        BodyRoute("POST", "/api/fixture/body", ("name", "count", "inner"))
+    ]
+    assert len(routes) == len(shipped) + 1
 
 
 def test_adr0005_c2_contrast_repository_handling_passes(backend_env: None, output: Output) -> None:
-    app = add_fixture_routes(create_app())
+    app = with_caller(add_fixture_routes(create_app()))
     assert c2_problems(app, body_routes(app), output) == []
 
 
@@ -102,7 +124,7 @@ def test_adr0005_c2_contrast_a_handler_logging_the_input_fails(
     backend_env: None, output: Output
 ) -> None:
     """Planted: a validation handler that logs what was rejected, through the app's logger."""
-    app = add_fixture_routes(create_app())
+    app = with_caller(add_fixture_routes(create_app()))
 
     async def logging_handler(request: Request, exc: Exception) -> Response:
         assert isinstance(exc, RequestValidationError)

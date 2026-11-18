@@ -7,14 +7,17 @@ response and `Cache-Control: no-store` under `/api/`, writes the request line, a
 error line of an unhandled exception once, as its type and location only.
 """
 
+import json
 import logging
 import re
 import secrets
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import Depends, FastAPI, Request, Response, routing
+from fastapi.encoders import jsonable_encoder
 from fastapi.exception_handlers import (
     http_exception_handler,
     request_validation_exception_handler,
@@ -25,9 +28,16 @@ from starlette.exceptions import HTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.auth import router as auth_router
+from app.api.customers import router as customers_router
 from app.api.health import router as health_router
 from app.auth.crypto import Sealer
-from app.auth.gate import OriginRefused, RoleRefused, authenticate
+from app.auth.gate import (
+    AccessFirstRoute,
+    OriginRefused,
+    RoleRefused,
+    authenticate,
+    routes_without_access_first,
+)
 from app.auth.oidc import OidcClient, http_client
 from app.auth.sessions import Authenticator, Unauthenticated, Unavailable
 from app.core.clock import SystemClock
@@ -35,6 +45,8 @@ from app.core.logs import RequestLine, correlation_id, install_interpreter_hooks
 from app.core.settings import AuthSettings, Settings, load_settings
 from app.data.database import Database
 from app.data.sessions import SessionStore, StorageUnavailable
+from app.domain.customers import CustomerNotFound
+from app.domain.ownership import NotPermitted
 
 logger = logging.getLogger(__name__)
 
@@ -148,10 +160,20 @@ class RequestHandling:
             correlation_id.reset(bound)
 
 
+class _EscapedJSONResponse(JSONResponse):
+    def render(self, content: Any) -> bytes:
+        return json.dumps(content, ensure_ascii=True, separators=(",", ":")).encode("ascii")
+
+
 async def _rejected_request(request: Request, exc: Exception) -> Response:
     if not isinstance(exc, RequestValidationError):
         raise exc
-    return await request_validation_exception_handler(request, exc)
+    try:
+        return await request_validation_exception_handler(request, exc)
+    except UnicodeEncodeError:
+        # The body echoes the rejected input, and a lone surrogate from a JSON escape has no
+        # UTF-8 form: the same body, escaped, instead of a 500.
+        return _EscapedJSONResponse({"detail": jsonable_encoder(exc.errors())}, status_code=422)
 
 
 async def _http_error(request: Request, exc: Exception) -> Response:
@@ -196,6 +218,32 @@ async def _role_refused(request: Request, exc: Exception) -> Response:
 
 async def _unavailable(request: Request, exc: Exception) -> Response:
     return _problem(503, "temporarily unavailable")
+
+
+async def _not_found(request: Request, exc: Exception) -> Response:
+    # One answer for a record that exists nowhere and one outside the caller's scope
+    # (ADR-0003 addendum of EKO-3-01, section 3): nothing about the record is in it.
+    return _problem(404, "not found")
+
+
+def _check_access_first(app: FastAPI) -> None:
+    if routes_without_access_first(app):
+        raise RuntimeError("a route would read its body before the access decision")
+
+
+def install_access_first(app: FastAPI) -> None:
+    """Every route, one registered later included, is an `AccessFirstRoute` (ADR-0003-C34): the
+    application's route class, checked when the application is built and again before the
+    first request, so a router created without it is never served."""
+    app.router.route_class = AccessFirstRoute
+    inner = app.build_middleware_stack
+
+    def build() -> ASGIApp:
+        _check_access_first(app)
+        return inner()
+
+    # A route added after `create_app()` returns is checked here, before the first request.
+    app.build_middleware_stack = build  # type: ignore[method-assign]
 
 
 def _public_routes(app: FastAPI) -> tuple[object, ...]:
@@ -268,8 +316,11 @@ def create_app() -> FastAPI:
         )
         app.state.database = database
         app.state.auth = auth
+        install_access_first(app)
         app.include_router(health_router, prefix="/api")
         app.include_router(auth_router, prefix="/api")
+        app.include_router(customers_router, prefix="/api")
+        _check_access_first(app)
         auth.public_routes = _public_routes(app)
         _check_lists()
         app.state.role_free_routes = _listed_routes(app, ROLE_FREE_OPERATIONS)
@@ -279,6 +330,8 @@ def create_app() -> FastAPI:
         app.add_exception_handler(RoleRefused, _role_refused)
         app.add_exception_handler(Unavailable, _unavailable)
         app.add_exception_handler(StorageUnavailable, _unavailable)
+        app.add_exception_handler(NotPermitted, _role_refused)
+        app.add_exception_handler(CustomerNotFound, _not_found)
         install_request_handling(app)
         return app
     except Exception:

@@ -1,0 +1,120 @@
+"""Customers and their contacts in PostgreSQL: the only module that reads or writes the owned
+tables (ADR-0003 addendum of EKO-3-01, section 2; ADR-0003-C35).
+
+Every function here takes the caller's scope as a required argument and applies it in the
+statement that selects or writes the rows, so a customer outside the scope is never loaded and
+"not visible" and "missing" are the same `None`. A create is one transaction: the customer and
+all its contacts are written together or not at all. Identifiers are UUIDv4 values generated
+here, never by a database sequence (ADR-0005-C17).
+"""
+
+import logging
+import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
+
+from sqlalchemy import ColumnElement, Connection, insert, select, true
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.data.database import Database
+from app.data.models import CustomerContactRow, CustomerRow
+from app.data.sessions import StorageUnavailable
+from app.domain.customers import Contact, ContactKind, Customer, CustomerDraft, CustomerSummary
+from app.domain.ownership import AllRecords, OwnedBy, VisibilityScope
+
+logger = logging.getLogger(__name__)
+
+
+def new_identifier() -> uuid.UUID:
+    """A random (version 4) identifier: no state a restore could rewind."""
+    return uuid.uuid4()
+
+
+def _visible(scope: VisibilityScope) -> ColumnElement[bool]:
+    if isinstance(scope, AllRecords):
+        return true()
+    return CustomerRow.owner_subject == scope.subject
+
+
+class CustomerStore:
+    def __init__(self, database: Database) -> None:
+        self._engine = database.engine
+
+    @contextmanager
+    def _connection(self) -> Iterator[Connection]:
+        try:
+            with self._engine.connect() as connection:
+                yield connection
+        except SQLAlchemyError as exc:
+            # The type only: driver messages carry statement parameters, here personal data.
+            logger.warning("customer storage unavailable: %s", type(exc).__name__)
+            raise StorageUnavailable from None
+
+    def create(self, scope: OwnedBy, draft: CustomerDraft) -> Customer:
+        """The customer, owned by the scope's subject, and its contacts in the order given."""
+        customer_id = new_identifier()
+        with self._connection() as connection:
+            connection.execute(
+                insert(CustomerRow).values(
+                    id=customer_id,
+                    name=draft.name,
+                    country=draft.country,
+                    owner_subject=scope.subject,
+                )
+            )
+            if draft.contacts:
+                connection.execute(
+                    insert(CustomerContactRow),
+                    [
+                        {
+                            "id": new_identifier(),
+                            "customer_id": customer_id,
+                            "position": position,
+                            "kind": contact.kind.value,
+                            "value": contact.value,
+                            "note": contact.note,
+                            "is_primary": contact.primary,
+                        }
+                        for position, contact in enumerate(draft.contacts)
+                    ],
+                )
+            connection.commit()
+        return Customer(customer_id, draft.name, draft.country, draft.contacts)
+
+    def find(self, scope: VisibilityScope, customer_id: uuid.UUID) -> Customer | None:
+        """One statement: the customer by identifier and scope, with its contacts in order."""
+        statement = (
+            select(
+                CustomerRow.id,
+                CustomerRow.name,
+                CustomerRow.country,
+                CustomerContactRow.kind,
+                CustomerContactRow.value,
+                CustomerContactRow.note,
+                CustomerContactRow.is_primary,
+            )
+            .outerjoin(CustomerContactRow, CustomerContactRow.customer_id == CustomerRow.id)
+            .where(CustomerRow.id == customer_id, _visible(scope))
+            .order_by(CustomerContactRow.position)
+        )
+        with self._connection() as connection:
+            rows = connection.execute(statement).all()
+        if not rows:
+            return None
+        found_id, name, country = rows[0][:3]
+        contacts = tuple(
+            Contact(ContactKind(kind), value, note, primary)
+            for _, _, _, kind, value, note, primary in rows
+            if kind is not None
+        )
+        return Customer(found_id, name, country, contacts)
+
+    def find_all(self, scope: VisibilityScope) -> list[CustomerSummary]:
+        """Every customer in the scope; ordered by identifier only so the answer is stable."""
+        statement = (
+            select(CustomerRow.id, CustomerRow.name, CustomerRow.country)
+            .where(_visible(scope))
+            .order_by(CustomerRow.id)
+        )
+        with self._connection() as connection:
+            return [CustomerSummary(*row) for row in connection.execute(statement).all()]

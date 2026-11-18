@@ -2,13 +2,15 @@
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, ConfigDict
 
+from app.api.dependencies import get_database
+from app.auth.gate import AccessFirstRoute
 from app.data.database import Database
 from app.services.health import is_ready
 
-router = APIRouter()
+router = APIRouter(route_class=AccessFirstRoute)
 
 
 class HealthStatus(BaseModel):
@@ -16,11 +18,6 @@ class HealthStatus(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: Literal["ok", "unavailable"]
-
-
-def get_database(request: Request) -> Database:
-    database: Database = request.app.state.database
-    return database
 
 
 _RESPONSES: dict[int | str, dict[str, object]] = {503: {"model": HealthStatus}}
