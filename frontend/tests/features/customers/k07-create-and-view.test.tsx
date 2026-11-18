@@ -73,6 +73,13 @@ async function openCreateForm(user: UserEvent) {
   return screen.findByRole("heading", { level: 1, name: "Nowy klient" });
 }
 
+// The rep focuses the field and enters the whole value at once: the same input events reach the
+// form as with typing, without per-key work that a busy machine stretches past the test timeout.
+async function enter(user: UserEvent, field: HTMLElement, value: string) {
+  await user.click(field);
+  await user.paste(value);
+}
+
 function contactGroups() {
   return screen.getAllByRole("group", { name: /^Kontakt \d+$/ });
 }
@@ -85,9 +92,9 @@ async function addContact(user: UserEvent, entry: ContactEntry) {
   }
   const scope = within(group);
   await user.selectOptions(scope.getByLabelText("Rodzaj kontaktu"), entry.kind);
-  await user.type(scope.getByLabelText("Numer telefonu lub adres e-mail"), entry.value);
+  await enter(user, scope.getByLabelText("Numer telefonu lub adres e-mail"), entry.value);
   if (entry.note !== undefined) {
-    await user.type(scope.getByLabelText("Opis kontaktu"), entry.note);
+    await enter(user, scope.getByLabelText("Opis kontaktu"), entry.note);
   }
   return group;
 }
@@ -97,7 +104,7 @@ function primaryRadio(group: HTMLElement) {
 }
 
 async function fillTheCriterionCustomer(user: UserEvent) {
-  await user.type(screen.getByLabelText(/Nazwa klienta/), NAME);
+  await enter(user, screen.getByLabelText(/Nazwa klienta/), NAME);
   const first = await addContact(user, { kind: "phone", value: ENTERED_PHONE, note: NOTE_OWNER });
   await addContact(user, { kind: "phone", value: ENTERED_SECOND_PHONE, note: NOTE_OFFICE });
   await addContact(user, { kind: "email", value: EMAIL, note: NOTE_EMAIL });
@@ -211,7 +218,7 @@ describe("K-07: in the SPA a rep creates a customer with contacts and sees the s
     });
     const user = userEvent.setup({ delay: null });
     await openCreateForm(user);
-    await user.type(screen.getByLabelText(/Nazwa klienta/), NAME);
+    await enter(user, screen.getByLabelText(/Nazwa klienta/), NAME);
     await user.click(screen.getByRole("button", { name: "Zapisz klienta" }));
 
     expect(await screen.findByText("Twoje konto nie może dodawać klientów.")).toBeVisible();
@@ -226,7 +233,7 @@ describe("K-07: in the SPA a rep creates a customer with contacts and sees the s
     });
     const user = userEvent.setup({ delay: null });
     await openCreateForm(user);
-    await user.type(screen.getByLabelText(/Nazwa klienta/), NAME);
+    await enter(user, screen.getByLabelText(/Nazwa klienta/), NAME);
     const first = await addContact(user, { kind: "phone", value: ENTERED_PHONE });
     const second = await addContact(user, { kind: "email", value: EMAIL });
 
@@ -277,7 +284,7 @@ describe("K-07: in the SPA a rep creates a customer with contacts and sees the s
     });
     const user = userEvent.setup({ delay: null });
     await openCreateForm(user);
-    await user.type(screen.getByLabelText(/Nazwa klienta/), markupName);
+    await enter(user, screen.getByLabelText(/Nazwa klienta/), markupName);
     await addContact(user, { kind: "email", value: EMAIL, note: markupNote });
     await user.click(screen.getByRole("button", { name: "Zapisz klienta" }));
 

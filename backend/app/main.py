@@ -231,19 +231,19 @@ def _check_access_first(app: FastAPI) -> None:
         raise RuntimeError("a route would read its body before the access decision")
 
 
-def install_access_first(app: FastAPI) -> None:
-    """Every route, one registered later included, is an `AccessFirstRoute` (ADR-0003-C34): the
-    application's route class, checked when the application is built and again before the
-    first request, so a router created without it is never served."""
-    app.router.route_class = AccessFirstRoute
-    inner = app.build_middleware_stack
+class AccessFirstApp(FastAPI):
+    """The application: every route, one registered later included, is an `AccessFirstRoute`
+    (ADR-0003-C34). It is the router's route class, and the middleware stack, built before the
+    first request, is refused while any served route is of another class, so a router created
+    without it is never served."""
 
-    def build() -> ASGIApp:
-        _check_access_first(app)
-        return inner()
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.router.route_class = AccessFirstRoute
 
-    # A route added after `create_app()` returns is checked here, before the first request.
-    app.build_middleware_stack = build  # type: ignore[method-assign]
+    def build_middleware_stack(self) -> ASGIApp:
+        _check_access_first(self)
+        return super().build_middleware_stack()
 
 
 def _public_routes(app: FastAPI) -> tuple[object, ...]:
@@ -305,7 +305,7 @@ def create_app() -> FastAPI:
 
         # The OpenAPI document and docs stay outside /api/: proxy forwards only /api/ to backend,
         # so they are reachable only inside the composition network (ADR-0003-C23).
-        app = FastAPI(
+        app = AccessFirstApp(
             title="Eko_CRM API",
             openapi_url="/openapi.json",
             docs_url="/docs",
@@ -316,7 +316,6 @@ def create_app() -> FastAPI:
         )
         app.state.database = database
         app.state.auth = auth
-        install_access_first(app)
         app.include_router(health_router, prefix="/api")
         app.include_router(auth_router, prefix="/api")
         app.include_router(customers_router, prefix="/api")

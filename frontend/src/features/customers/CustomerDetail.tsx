@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { countryName } from "../../api/countries";
 import { readCustomer, type CustomerRecord, type ReadResult } from "../../api/customers";
 import { CustomerSheet } from "../../components/CustomerSheet";
 import { messages } from "../../i18n/pl";
@@ -50,7 +51,10 @@ export function CustomerDetail({ id, created }: CustomerDetailProps) {
         </a>
       </p>
       {state.kind === "found" ? (
-        <CustomerSheet customer={state.customer} />
+        <CustomerSheet
+          customer={state.customer}
+          countryLabel={countryName(state.customer.country)}
+        />
       ) : (
         <div className="page-heading">
           <h1>{messages.customers}</h1>

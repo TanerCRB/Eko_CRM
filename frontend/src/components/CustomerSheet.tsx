@@ -1,13 +1,20 @@
 import { useId } from "react";
-import { countryName } from "../api/countries";
-import type { CustomerRecord } from "../api/customers";
 import { messages } from "../i18n/pl";
 import { useMountFocus } from "./useMountFocus";
 import "../styles/components.css";
 
+export interface SheetContact {
+  kind: string;
+  value: string;
+  note: string | null;
+  primary: boolean;
+}
+
 interface CustomerSheetProps {
-  // Always a record as the server returned it, never the form's values (K-07).
-  customer: CustomerRecord;
+  // Always the record the server returned, never the form's values (K-07).
+  customer: { name: string; contacts: readonly SheetContact[] };
+  // The country as display text, resolved by the feature from the record's code.
+  countryLabel: string;
 }
 
 function kindLabel(kind: string): string {
@@ -19,7 +26,7 @@ function kindLabel(kind: string): string {
 
 // P2 CustomerSheet, the part this release has: name, country and contacts. Every value is a
 // text child, so markup in it is shown, never interpreted.
-export function CustomerSheet({ customer }: CustomerSheetProps) {
+export function CustomerSheet({ customer, countryLabel }: CustomerSheetProps) {
   const headingRef = useMountFocus<HTMLHeadingElement>();
   const contactsId = useId();
 
@@ -33,7 +40,7 @@ export function CustomerSheet({ customer }: CustomerSheetProps) {
       <dl className="detail-grid">
         <div>
           <dt>{messages.customer.country}</dt>
-          <dd>{countryName(customer.country)}</dd>
+          <dd>{countryLabel}</dd>
         </div>
       </dl>
       <h2 id={contactsId}>{messages.customer.contactsTitle}</h2>

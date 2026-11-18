@@ -1,15 +1,18 @@
 import { useId } from "react";
-import type { ContactKind } from "../api/customers";
 import { messages } from "../i18n/pl";
 import { Button } from "./Button";
 import { Field } from "./Field";
 import { SelectField } from "./SelectField";
 import "../styles/components.css";
 
+// The editor's own kinds; the feature builds the request from them, so the compiler checks they
+// fit the contract's.
+export type ContactDraftKind = "phone" | "email";
+
 export interface ContactDraft {
   // Stable row identity for React keys and the primary choice; never sent to the API.
   key: number;
-  kind: ContactKind;
+  kind: ContactDraftKind;
   value: string;
   note: string;
 }
@@ -36,7 +39,7 @@ const kindOptions = [
   { value: "email", label: messages.customer.email },
 ] as const;
 
-function isContactKind(value: string): value is ContactKind {
+function isContactKind(value: string): value is ContactDraftKind {
   return value === "phone" || value === "email";
 }
 
