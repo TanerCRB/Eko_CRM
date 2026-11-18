@@ -13,10 +13,18 @@ set up then fails with `net::ERR_NETWORK_CHANGED`. Left to chance, that overlap 
 - the hold ends once the new veth has left duplicate address detection and either the browser
   reported the request failed or a grace of a few seconds passed.
 
-The pre-fix harness starts the login right after the interference: the change lands while the
-handshake is pending, and the login fails with `ERR_NETWORK_CHANGED`. The fixed harness puts the
-fix (`settle_host_network`) at the same place the two K-06 tests do; the login then completes.
-The contrast leaves the interference out and changes nothing else; the login completes.
+The pre-fix harness creates the interference only once the login's first request is out and held,
+so its whole change (the veth's link-up and its link-local address 1-2 s later) lands while that
+request is still being set up, however long Docker or the browser take; the login fails with
+`ERR_NETWORK_CHANGED`. The test asserts that order: the veth is absent from the bridge when the
+first request goes out and present when that same request fails. The fixed harness puts the fix
+(`settle_host_network`) at the same place the two K-06 tests do; the login then completes. The
+contrast leaves the interference out and changes nothing else; the login completes.
+
+The continuous interference keeps one new veth in duplicate address detection for longer than the
+settle bound: a throwaway privileged container of the same image, on the host's network, raises
+that veth's probe count and restarts its detection. The period is the kernel's (one probe a
+second), not Docker's or the runner's, so the wait meets an unsettled bridge on every poll.
 
 Each test asserts K-02's three edges in its clean-up, also when its body failed: no image was
 pulled or built, no other compose project's containers or networks changed, and nothing the
@@ -28,10 +36,11 @@ Synthetic accounts only.
 """
 
 import logging
+import re
 import subprocess
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -57,8 +66,9 @@ HOLD_BOUND_SECONDS = 10.0
 # Chromium aborted 11-17 ms after the address in the K-01 record; the hold stays this long after
 # the change, unless the browser reports the failure first.
 HOLD_GRACE_SECONDS = 3.0
-# The newest veth of the churn must stay younger than the shortest detection (about 1 s).
-CHURN_MAX_GAP_SECONDS = 0.9
+# Duplicate address detection probes, one a second: six times the settle bound.
+DAD_HOLD_TRANSMITS = int(host.SETTLE_BOUND_SECONDS) * 6
+VETH_NAME = re.compile(r"veth[0-9a-f]{1,11}")
 
 
 @pytest.fixture(scope="module")
@@ -178,6 +188,7 @@ class Interference:
         self.network = networks[0]
         self.bridges = host.project_bridges(composition.project)
         self.created: list[str] = []
+        self.added: set[str] = set()
 
     def hold(self) -> None:
         docker("pause", self.proxy)
@@ -198,7 +209,23 @@ class Interference:
         self.created.append(container)
         added = bridge_members(self.bridges) - before
         assert len(added) == 1, f"the interference added {sorted(added)} to the bridge"
+        self.added |= added
         return next(iter(added))
+
+    def hold_in_detection(self, veth: str) -> None:
+        """Restart the veth's duplicate address detection with `DAD_HOLD_TRANSMITS` probes, so
+        its link-local address stays tentative for longer than the settle bound."""
+        assert VETH_NAME.fullmatch(veth) and veth in self.added, f"not this test's veth: {veth}"
+        container = f"{self.composition.project}-eko134-dad"
+        self.created.append(container)
+        docker(
+            "run", "--rm", "--name", container, "--label", f"{INTERFERENCE_LABEL}=dad",
+            "--privileged", "--network", "host", "--pull", "never", "--entrypoint", "sh",
+            self.image, "-c",
+            'echo "$2" > "/proc/sys/net/ipv6/conf/$1/dad_transmits"'
+            ' && ip link set "$1" down && ip link set "$1" up',
+            "eko134-dad", veth, str(DAD_HOLD_TRANSMITS),
+        )  # fmt: skip
 
     def clean_up(self) -> None:
         self.release()
@@ -223,28 +250,55 @@ def guarded(composition: Composition) -> Iterator[Interference]:
 
 
 class HeldLogin:
-    """Ends the hold once the login's first request is out, the bridge has settled, and either
-    the browser reported a failed request or the grace passed. Never touches the page."""
+    """Ends the hold once the login's first request is out, the interference (if any) has been
+    created, the bridge has settled, and either the browser reported a failed request or the
+    grace passed. Never touches the page."""
 
-    def __init__(self, interference: Interference, page: Page) -> None:
+    def __init__(
+        self, interference: Interference, page: Page, interfere: Callable[[], str] | None = None
+    ) -> None:
         self.interference = interference
+        self.interfere = interfere
         self.in_flight = threading.Event()
         self.failed = threading.Event()
+        self.first_url: str | None = None
+        self.in_flight_at: float | None = None
         self.settled_at_flight: bool | None = None
         self.members_at_flight: frozenset[str] = frozenset()
+        self.veth: str | None = None
+        self.interfered_at: float | None = None
+        self.failed_url: str | None = None
+        self.failure: str | None = None
+        self.failed_at: float | None = None
+        self.settled_at_failure: bool | None = None
+        self.members_at_failure: frozenset[str] = frozenset()
         page.on("request", self._request)
-        page.on("requestfailed", lambda request: self.failed.set())
+        page.on("requestfailed", self._failed)
 
     def _request(self, request: Request) -> None:
         if request.resource_type == "document" and not self.in_flight.is_set():
+            self.first_url = request.url
             self.settled_at_flight = all_settled(self.interference.bridges)
             self.members_at_flight = bridge_members(self.interference.bridges)
+            self.in_flight_at = time.monotonic()
             self.in_flight.set()
+
+    def _failed(self, request: Request) -> None:
+        if not self.failed.is_set():
+            self.failed_at = time.monotonic()
+            self.failed_url = request.url
+            self.failure = request.failure
+            self.settled_at_failure = all_settled(self.interference.bridges)
+            self.members_at_failure = bridge_members(self.interference.bridges)
+            self.failed.set()
 
     def _run(self) -> None:
         try:
             if not self.in_flight.wait(HOLD_BOUND_SECONDS):
                 raise AssertionError("EKO-1-34 K-02 hold: the login's first request never started")
+            if self.interfere is not None:
+                self.interfered_at = time.monotonic()
+                self.veth = self.interfere()
             deadline = time.monotonic() + HOLD_BOUND_SECONDS
             while not all_settled(self.interference.bridges):
                 if time.monotonic() >= deadline:
@@ -263,11 +317,24 @@ class HeldLogin:
                 yield
             finally:
                 logger.info(
-                    "hold: settled at first request %s, members %s",
+                    "hold: settled at first request %s, members %s; interference %s started "
+                    "%s s after it; first failure %r (of the first request: %s) %s s after it, "
+                    "settled %s, members %s",
                     self.settled_at_flight,
                     sorted(self.members_at_flight),
+                    self.veth,
+                    since(self.in_flight_at, self.interfered_at),
+                    self.failure,
+                    None if self.failed_url is None else self.failed_url == self.first_url,
+                    since(self.in_flight_at, self.failed_at),
+                    self.settled_at_failure,
+                    sorted(self.members_at_failure),
                 )
                 released.result(timeout=HOLD_BOUND_SECONDS * 2 + HOLD_GRACE_SECONDS)
+
+
+def since(start: float | None, end: float | None) -> str:
+    return "-" if start is None or end is None else f"{end - start:.3f}"
 
 
 @contextmanager
@@ -293,15 +360,20 @@ def test_eko134_k02_new_veth_during_login_redirect_fails_at_the_pre_fix_harness(
     username, password = app.provision_browser_account(bootstrapped, "login")
     with guarded(bootstrapped) as interference:
         with browser_page(bootstrapped, chromium_executable) as page:
-            held = HeldLogin(interference, page)
+            held = HeldLogin(interference, page, lambda: interference.new_veth("prefix"))
             interference.hold()
-            veth = interference.new_veth("prefix")
             with held.running():
                 with pytest.raises(PlaywrightError) as raised:
                     app.browser_login(page, bootstrapped, username, password)
     assert "net::ERR_NETWORK_CHANGED" in str(raised.value), str(raised.value)
-    assert veth in held.members_at_flight
-    assert held.settled_at_flight is False, "the change had settled before the login started"
+    assert held.first_url == app.app_origin(bootstrapped) + "/", held.first_url
+    assert held.settled_at_flight is True, "the bridge was already changing before the login"
+    assert held.veth is not None and held.veth not in held.members_at_flight
+    assert held.in_flight_at is not None and held.interfered_at is not None
+    assert held.failed_at is not None and held.in_flight_at < held.interfered_at < held.failed_at
+    assert held.failed_url == held.first_url, "another request failed than the held first one"
+    assert held.failure == "net::ERR_NETWORK_CHANGED", held.failure
+    assert held.veth in held.members_at_failure
 
 
 def test_eko134_k02_new_veth_before_login_passes_at_the_fixed_harness(
@@ -344,32 +416,15 @@ def test_eko134_k02_continuous_interference_fails_the_wait_by_name_within_its_bo
 ) -> None:
     host.settle_host_network(bootstrapped)
     with guarded(bootstrapped) as interference:
-        for number in range(3):
-            interference.new_veth(f"churn{number}")
-        containers = list(interference.created)
-        stop = threading.Event()
-        gaps: list[float] = []
-
-        def churn() -> None:
-            last = time.monotonic()
-            while not stop.is_set():
-                for container in containers:
-                    docker("network", "disconnect", interference.network, container)
-                    docker("network", "connect", interference.network, container)
-                    now = time.monotonic()
-                    gaps.append(now - last)
-                    last = now
-
-        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="eko134-churn") as pool:
-            churning = pool.submit(churn)
-            started = time.monotonic()
-            try:
-                with pytest.raises(host.HostNetworkNotSettled) as raised:
-                    host.settle_host_network(bootstrapped)
-                elapsed = time.monotonic() - started
-            finally:
-                stop.set()
-                churning.result(timeout=60)
-    assert max(gaps) < CHURN_MAX_GAP_SECONDS, f"the churn paused {max(gaps):.2f} s: not continuous"
+        veth = interference.new_veth("churn")
+        interference.hold_in_detection(veth)
+        conf = HOST_ROOT / "proc/sys/net/ipv6/conf" / veth
+        transmits = (conf / "dad_transmits").read_text("ascii")
+        started = time.monotonic()
+        with pytest.raises(host.HostNetworkNotSettled) as raised:
+            host.settle_host_network(bootstrapped)
+        elapsed = time.monotonic() - started
+    assert transmits.strip() == str(DAD_HOLD_TRANSMITS), transmits
     assert "did not settle within 10 s" in str(raised.value)
+    assert f"{veth}: link-local address 0x" in str(raised.value), str(raised.value)
     assert host.SETTLE_BOUND_SECONDS <= elapsed < host.SETTLE_BOUND_SECONDS + 5, elapsed
