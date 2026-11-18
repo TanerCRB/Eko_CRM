@@ -19,6 +19,15 @@ CONTACT_LIMIT = 50
 # HS10 (b) A on Issue #195 (2026-11-18), counted on the trimmed NFC form.
 EMAIL_LIMIT = 254
 DEFAULT_COUNTRY = "PL"
+# Raw caps, checked on the value as sent before trimming and NFC run (fix round 1, R-01 A). NFC
+# composes at most four code points into one character (U+1F82 from its four-code-point NFD, the
+# most in Unicode 15), so four times a bound never refuses a value whose NFC is within it.
+NFC_COMPOSITION_LIMIT = 4
+NAME_RAW_LIMIT = NFC_COMPOSITION_LIMIT * NAME_LIMIT
+# The e-mail bound is the larger of the two kinds; a valid phone is at most 16 characters once
+# its separators are dropped.
+VALUE_RAW_LIMIT = NFC_COMPOSITION_LIMIT * EMAIL_LIMIT
+NOTE_RAW_LIMIT = NFC_COMPOSITION_LIMIT * NOTE_LIMIT
 NATIONAL_PREFIX = "+48"
 
 # ISO 3166-1 alpha-2, the officially assigned codes: the closed list of G-3 A.

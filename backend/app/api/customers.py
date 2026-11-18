@@ -41,9 +41,9 @@ class ContactIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["phone", "email"]
-    value: StrictStr
+    value: Annotated[StrictStr, Field(max_length=rules.VALUE_RAW_LIMIT)]
     # Who the contact reaches; omitted, `null` or `""` is no note.
-    note: StrictStr | None = None
+    note: Annotated[StrictStr, Field(max_length=rules.NOTE_RAW_LIMIT)] | None = None
     primary: StrictBool = False
 
     @field_validator("value")
@@ -64,12 +64,12 @@ class CustomerCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: StrictStr
+    name: Annotated[StrictStr, Field(max_length=rules.NAME_RAW_LIMIT)]
     # Omitted: Poland. `null`, `""` or a code outside the closed list: rejected (G-2 A, G-3 A).
     # The list is an enum on the request only; the answer types the country as a string, so a
     # code added later does not break it.
     country: Annotated[
-        StrictStr, Field(json_schema_extra={"enum": sorted(rules.COUNTRY_CODES)})
+        StrictStr, Field(max_length=2, json_schema_extra={"enum": sorted(rules.COUNTRY_CODES)})
     ] = rules.DEFAULT_COUNTRY
     contacts: list[ContactIn] = Field(default_factory=list, max_length=rules.CONTACT_LIMIT)
 
@@ -94,6 +94,23 @@ class CustomerCreate(BaseModel):
             country=self.country,
             contacts=tuple(_contact(c) for c in self.contacts),
         )
+
+
+# The largest create body whose every field passes its raw cap: each code point at most 12 bytes
+# (an astral character written as two `\uXXXX` escapes), plus the keys, quotes and separators of
+# the object and of each contact, generously. Insignificant JSON whitespace is not counted.
+_ESCAPED_BYTES_PER_CODE_POINT = 12
+_OBJECT_FRAMING = 128
+_CONTACT_FRAMING = 128
+LARGEST_CREATE_BODY = (
+    _OBJECT_FRAMING
+    + _ESCAPED_BYTES_PER_CODE_POINT * rules.NAME_RAW_LIMIT
+    + rules.CONTACT_LIMIT
+    * (
+        _CONTACT_FRAMING
+        + _ESCAPED_BYTES_PER_CODE_POINT * (rules.VALUE_RAW_LIMIT + rules.NOTE_RAW_LIMIT)
+    )
+)
 
 
 def _contact(contact: ContactIn) -> Contact:

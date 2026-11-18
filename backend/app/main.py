@@ -20,7 +20,6 @@ from fastapi import Depends, FastAPI, Request, Response, routing
 from fastapi.encoders import jsonable_encoder
 from fastapi.exception_handlers import (
     http_exception_handler,
-    request_validation_exception_handler,
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -28,6 +27,7 @@ from starlette.exceptions import HTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.auth import router as auth_router
+from app.api.customers import LARGEST_CREATE_BODY
 from app.api.customers import router as customers_router
 from app.api.health import router as health_router
 from app.auth.crypto import Sealer
@@ -65,6 +65,13 @@ STANDARD_METHODS = frozenset(
 UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 ROUTE_LIMIT = 256
 CORRELATION_HEADER = b"eko-correlation-id"
+# The most bytes an `/api/` request body may carry (fix round 1, R-01 A): the largest create body
+# whose fields pass their raw caps is `LARGEST_CREATE_BODY` (1 821 888 bytes), rounded up to
+# 2 MiB; `create_app()` refuses to build if a body route ever needs more.
+REQUEST_BODY_LIMIT = 2 * 1024 * 1024
+BODY_TOO_LARGE = "request body too large"
+# Validation errors whose input is the over-long value or list itself: never echoed back.
+_UNECHOED_ERRORS = frozenset({"string_too_long", "too_long"})
 SERVER_ERROR_BODY = b"Internal Server Error"
 
 
@@ -78,6 +85,31 @@ def opaque_route(path: str, fixed_segments: frozenset[str]) -> str:
     segments = path.split("/")
     kept = [s if s == "" or s in fixed_segments or UUID.fullmatch(s) else "*" for s in segments]
     return "/".join(kept)[:ROUTE_LIMIT]
+
+
+def limited_receive(receive: Receive, scope: Scope) -> Receive:
+    """`receive`, refusing with 413 once the body passes `REQUEST_BODY_LIMIT`: a stated
+    `Content-Length` before any byte is read, and the bytes counted as they arrive, so a body
+    without a length is cut off too. Nothing reads the body before the access decision
+    (`AccessFirstRoute`), so a refused caller gets the access answer instead (ADR-0003-C34)."""
+    stated = [
+        value for name, value in scope.get("headers", []) if name.lower() == b"content-length"
+    ]
+    declared = max((int(v) for v in stated if v.strip().isdigit()), default=0)
+    received = 0
+
+    async def limited() -> Message:
+        nonlocal received
+        if declared > REQUEST_BODY_LIMIT:
+            raise HTTPException(413, BODY_TOO_LARGE)
+        message = await receive()
+        if message["type"] == "http.request":
+            received += len(message.get("body", b""))
+            if received > REQUEST_BODY_LIMIT:
+                raise HTTPException(413, BODY_TOO_LARGE)
+        return message
+
+    return limited
 
 
 class RequestHandling:
@@ -131,7 +163,7 @@ class RequestHandling:
             await send(message)
 
         try:
-            await self.app(scope, receive, shaped)
+            await self.app(scope, limited_receive(receive, scope) if api else receive, shaped)
         except Exception:
             # Written once, here; the exception is not passed on, so uvicorn writes no second one.
             logger.error("unhandled exception in a request", exc_info=True)
@@ -168,12 +200,20 @@ class _EscapedJSONResponse(JSONResponse):
 async def _rejected_request(request: Request, exc: Exception) -> Response:
     if not isinstance(exc, RequestValidationError):
         raise exc
+    errors = [
+        {
+            k: v
+            for k, v in error.items()
+            if k != "input" or error.get("type") not in _UNECHOED_ERRORS
+        }
+        for error in exc.errors()
+    ]
     try:
-        return await request_validation_exception_handler(request, exc)
+        return JSONResponse({"detail": jsonable_encoder(errors)}, status_code=422)
     except UnicodeEncodeError:
         # The body echoes the rejected input, and a lone surrogate from a JSON escape has no
         # UTF-8 form: the same body, escaped, instead of a 500.
-        return _EscapedJSONResponse({"detail": jsonable_encoder(exc.errors())}, status_code=422)
+        return _EscapedJSONResponse({"detail": jsonable_encoder(errors)}, status_code=422)
 
 
 async def _http_error(request: Request, exc: Exception) -> Response:
@@ -320,6 +360,8 @@ def create_app() -> FastAPI:
         app.include_router(auth_router, prefix="/api")
         app.include_router(customers_router, prefix="/api")
         _check_access_first(app)
+        if LARGEST_CREATE_BODY > REQUEST_BODY_LIMIT:
+            raise RuntimeError("the request body limit refuses a valid customer")
         auth.public_routes = _public_routes(app)
         _check_lists()
         app.state.role_free_routes = _listed_routes(app, ROLE_FREE_OPERATIONS)
