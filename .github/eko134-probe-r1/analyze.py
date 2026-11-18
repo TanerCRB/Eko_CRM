@@ -183,4 +183,4 @@ else:
     problems.append(f"unknown mode {mode}")
 
 append("problems.txt", problems)
-print("\n".join(problems) or f"{label}: no problem found")
+print("\n".join(problems) or f"{label}: no problem found")  # leftovers-allow: verdict for the job log
