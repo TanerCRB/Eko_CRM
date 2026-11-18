@@ -12,12 +12,11 @@ import logging
 import re
 import secrets
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, Request, Response, routing
-from fastapi.encoders import jsonable_encoder
 from fastapi.exception_handlers import (
     http_exception_handler,
 )
@@ -70,8 +69,10 @@ CORRELATION_HEADER = b"eko-correlation-id"
 # 2 MiB; `create_app()` refuses to build if a body route ever needs more.
 REQUEST_BODY_LIMIT = 2 * 1024 * 1024
 BODY_TOO_LARGE = "request body too large"
-# Validation errors whose input is the over-long value or list itself: never echoed back.
-_UNECHOED_ERRORS = frozenset({"string_too_long", "too_long"})
+# A 422 names at most this many errors, each string in it at most this long: one per unknown key
+# would otherwise grow with the body (fix round 2, decision D).
+_ERROR_COUNT_LIMIT = 50
+_ERROR_TEXT_LIMIT = 200
 SERVER_ERROR_BODY = b"Internal Server Error"
 
 
@@ -197,23 +198,37 @@ class _EscapedJSONResponse(JSONResponse):
         return json.dumps(content, ensure_ascii=True, separators=(",", ":")).encode("ascii")
 
 
+def _bounded(value: object) -> str | int | float | bool:
+    if isinstance(value, bool | int | float):
+        return value
+    return str(value)[:_ERROR_TEXT_LIMIT]
+
+
+def _public_error(error: Mapping[str, Any]) -> dict[str, Any]:
+    """`loc`, `msg`, `type` and a scalar `ctx` only: never `input`, so neither a value the caller
+    sent nor the body is echoed or walked (fix round 2, decision D). Every string is bounded,
+    since a `loc` can hold an unknown key the caller chose."""
+    public: dict[str, Any] = {
+        "type": _bounded(error.get("type", "")),
+        "loc": [item if isinstance(item, int) else _bounded(item) for item in error.get("loc", ())],
+        "msg": _bounded(error.get("msg", "")),
+    }
+    context = error.get("ctx")
+    if isinstance(context, Mapping):
+        public["ctx"] = {_bounded(k): _bounded(v) for k, v in context.items()}
+    return public
+
+
 async def _rejected_request(request: Request, exc: Exception) -> Response:
     if not isinstance(exc, RequestValidationError):
         raise exc
-    errors = [
-        {
-            k: v
-            for k, v in error.items()
-            if k != "input" or error.get("type") not in _UNECHOED_ERRORS
-        }
-        for error in exc.errors()
-    ]
+    errors = [_public_error(error) for error in exc.errors()[:_ERROR_COUNT_LIMIT]]
     try:
-        return JSONResponse({"detail": jsonable_encoder(errors)}, status_code=422)
+        return JSONResponse({"detail": errors}, status_code=422)
     except UnicodeEncodeError:
-        # The body echoes the rejected input, and a lone surrogate from a JSON escape has no
-        # UTF-8 form: the same body, escaped, instead of a 500.
-        return _EscapedJSONResponse({"detail": jsonable_encoder(errors)}, status_code=422)
+        # A bounded `loc` or `msg` can still hold a lone surrogate from a JSON escape, which has
+        # no UTF-8 form: the same body, escaped, instead of a 500.
+        return _EscapedJSONResponse({"detail": errors}, status_code=422)
 
 
 async def _http_error(request: Request, exc: Exception) -> Response:

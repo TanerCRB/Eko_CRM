@@ -3,9 +3,9 @@
 The raw caps sit exactly at four times the NFC bound and run before trimming, so padding past the
 cap is refused even where the trimmed value would be valid (assumption A-12), and the value at the
 cap itself is still accepted. Each pair below differs in one code point. A 422 for a value past a
-cap names `string_too_long` and does not echo it; a 422 for a short value still echoes it, so the
-echo bound removes the input only where it is the over-long value. Every value is synthetic
-(ADR-0005).
+cap names `string_too_long` and does not echo it. Since fix round 2 (decision D on Issue #195) a
+422 for a short value does not echo it either: no error carries `input`, while `loc` and `type`
+still name what was refused. Every value is synthetic (ADR-0005).
 """
 
 import unicodedata
@@ -80,8 +80,8 @@ def test_qa_r01_an_over_long_country_is_refused_unechoed(crm: Crm) -> None:
     assert "input" not in error
 
 
-def test_qa_r01_contrast_a_short_rejected_country_is_still_echoed(crm: Crm) -> None:
+def test_qa_r01_contrast_a_short_rejected_country_is_named_but_not_echoed(crm: Crm) -> None:
     rep = crm.login(REP_A, ["rep"])
     error = only_error(rep.send("POST", CUSTOMERS, json={"name": NAME, "country": "XX"}))
-    assert error["loc"] == ["body", "country"]
-    assert error["input"] == "XX"
+    assert (error["type"], error["loc"]) == ("value_error", ["body", "country"])
+    assert "input" not in error
