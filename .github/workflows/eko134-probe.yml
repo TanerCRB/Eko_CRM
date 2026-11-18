@@ -2,12 +2,14 @@
 # .github/workflows/ differs from the base at the PR head). Gate-1 decisions Q-1 A and Q-4 A,
 # written under boundary exception EKO-1-34/boundary-1.
 #
-# It runs only the two K-06 tests, isolated, ITERATIONS times on ubuntu-latest, with the runtime
-# job's own preparation (checkout, uv, `uv sync --locked`; Chromium comes from the session fixture),
-# while host network events (`ip -ts monitor all`) and Docker events are recorded. The harness is
-# unchanged: the timing marks come from a logging-only plugin loaded with `-p` and from Playwright's
-# own `DEBUG=pw:api` log. Each iteration is its own pytest invocation; a failed iteration does not
-# stop the loop, and the final step fails the run when any iteration failed or did not run.
+# Each of ITERATIONS iterations on ubuntu-latest runs separate pytest invocations: `both` (k06,
+# then r01), `r01` (r01 alone), and in iterations 01-K02_ITERATIONS also `k02` (the K-02 module).
+# It uses the runtime job's own preparation (checkout, uv, `uv sync --locked`; Chromium comes from
+# the session fixture) and records host network events (`ip -ts monitor all`) and Docker events.
+# The harness is unchanged. The timing marks come from logging-only plugins loaded with `-p` and
+# from Playwright's own `DEBUG=pw:api` log. A failed invocation does not stop the loop. The final
+# step fails the run when any invocation failed or did not run. It also fails when a settle
+# reported "not applicable" or did not run where it should.
 # Read-only token, no secret, no registry login; only redacted files are uploaded (ADR-0005).
 name: eko134-probe
 
@@ -28,15 +30,19 @@ concurrency:
 
 jobs:
   probe:
-    name: EKO-1-34 probe (K-06 tests looped, host events recorded)
+    name: EKO-1-34 probe (K-06 tests and K-02 looped, host events recorded)
     runs-on: ubuntu-latest
-    # About 4 minutes per iteration (two tests of 71-102 s each, a fresh composition and the
-    # Chromium fixture per invocation), the first one longer for the image builds: about 80 to
-    # 100 minutes for 20. The loop starts no iteration after LOOP_BUDGET_MINUTES, so the
-    # redaction and upload steps always get their turn inside this bound.
+    # Run 44169988387 took about 3.6 minutes per `both` invocation. Estimate: `both` 3.6 and `r01`
+    # 2 minutes in each of 20 iterations, plus `k02` (one composition and four browser tests) of
+    # about 6 minutes in iterations 01-05: about 145 minutes. The loop starts no invocation after
+    # LOOP_BUDGET_MINUTES, so the redaction and upload steps always get their turn inside this
+    # bound. An iteration cut short by the budget turns the verdict red; it is never dropped.
     timeout-minutes: 240
     env:
       ITERATIONS: "20"
+      # The K-02 module has no repetition setting: its five repetitions are its runs in
+      # iterations 01-05, each one separate pytest invocation.
+      K02_ITERATIONS: "5"
       LOOP_BUDGET_MINUTES: "200"
     steps:
       # The runner context is not available in a job's env: the probe directory is set here.
@@ -75,6 +81,7 @@ jobs:
             echo "docker_server=$(docker version --format '{{.Server.Version}}')"
             echo "compose=$(docker compose version --short)"
             echo "iterations=$ITERATIONS"
+            echo "k02_iterations=$K02_ITERATIONS"
           } > "$PROBE_DIR/upload/run-identity.txt"
           cat "$PROBE_DIR/upload/run-identity.txt"
           ip -br link > "$PROBE_DIR/upload/interfaces-before.txt"
@@ -99,54 +106,136 @@ jobs:
             fi
           done
 
-      - name: Loop the two K-06 tests, one pytest invocation per iteration
+      # Probe-only, logging-only: one mark per settle_host_network call, with whether it applied.
+      # It wraps the module attribute (the K-02 module calls `host.settle_host_network`) and the
+      # name a test module imported (the K-06 tests). The settle's result or exception passes
+      # through unchanged and is never caught.
+      - name: Write the probe's settle-marks plugin
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$PROBE_DIR/plugins"
+          cat > "$PROBE_DIR/plugins/eko134_probe_settle.py" <<'PY'
+          """EKO-1-34 probe, transient: marks each settle_host_network call and its outcome."""
+          import functools
+          import importlib
+          import os
+          import sys
+          from types import ModuleType
+
+          from tests.support.eko134_probe_timing import TIMING_FILE, mark
+
+          HOST_MODULE = "tests.runtime.eko134_host_network"
+          NAME = "settle_host_network"
+          FLAG = "__eko134_settle_marked__"
+
+
+          def settle_marked(helper):
+              @functools.wraps(helper)
+              def wrapper(*args, **kwargs):
+                  mark("settle start")
+                  result = None
+                  try:
+                      result = helper(*args, **kwargs)
+                      return result
+                  finally:
+                      raised = sys.exc_info()[1]
+                      if raised is not None:
+                          mark(f"settle raised {type(raised).__name__}")
+                      else:
+                          waited = getattr(result, "waited_seconds", 0.0)
+                          count = len(getattr(result, "interfaces", ()))
+                          mark(f"settle returned applies={getattr(result, 'applies', None)}"
+                               f" waited={waited:.2f} interfaces={count}")
+
+              setattr(wrapper, FLAG, True)
+              return wrapper
+
+
+          def wrap(module):
+              helper = getattr(module, NAME, None)
+              if callable(helper) and not getattr(helper, FLAG, False):
+                  setattr(module, NAME, settle_marked(helper))
+
+
+          def pytest_collection_modifyitems(items):
+              if not os.environ.get(TIMING_FILE):
+                  return
+              wrap(importlib.import_module(HOST_MODULE))
+              for item in items:
+                  module = getattr(item, "module", None)
+                  if isinstance(module, ModuleType):
+                      wrap(module)
+          PY
+
+      - name: Loop the K-06 tests (both orders) and the K-02 module, one invocation each
         id: loop
         working-directory: backend
         shell: bash
         env:
           # Playwright's own API log, ISO-timestamped on a non-terminal stderr: per-navigation
           # marks without changing the harness. Captured per test, shown for passes too by -rA.
+          # INFO log capture shows the settle's own "settled after" line for each test.
           DEBUG: pw:api
-          PYTHONPATH: .
         run: |
           set -Eeuo pipefail
-          tests=(
-            "tests/runtime/test_k06_frontend_replacement.py::test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement"
-            "tests/runtime/test_k06_frontend_replacement.py::test_r01_two_consecutive_lazy_chunk_failures_stop_after_one_recovery"
-          )
+          export PYTHONPATH=".:$PROBE_DIR/plugins"
+          k06="tests/runtime/test_k06_frontend_replacement.py::test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement"
+          r01="tests/runtime/test_k06_frontend_replacement.py::test_r01_two_consecutive_lazy_chunk_failures_stop_after_one_recovery"
+          k02="tests/runtime/test_eko134_k02_network_change_during_login.py"
           deadline=$(( $(date +%s) + LOOP_BUDGET_MINUTES * 60 ))
           failures=0
           completed=0
+          invocations=0
+          budget=ok
           # pytest creates --basetemp itself, but not its parent.
           mkdir -p "$PROBE_DIR/basetemp"
-          printf 'iteration\tstart_utc\tend_utc\texit\n' > "$PROBE_DIR/raw/iterations.tsv"
+          printf 'iteration\torder\tstart_utc\tend_utc\texit\n' > "$PROBE_DIR/raw/iterations.tsv"
           for i in $(seq -w 1 "$ITERATIONS"); do
-            if [ "$(date +%s)" -ge "$deadline" ]; then
-              echo "::error::loop budget spent before iteration $i"
-              break
+            orders=(both r01)
+            if [ "$((10#$i))" -le "$K02_ITERATIONS" ]; then
+              orders+=(k02)
             fi
-            dir="$PROBE_DIR/raw/iteration-$i"
-            mkdir -p "$dir"
-            start="$(date -u +%Y-%m-%dT%H:%M:%S.%6NZ)"
-            if EKO134_TIMING_FILE="$dir/marks.log" uv run pytest -m "runtime or previous_release" \
-                -v -rA -p tests.support.eko134_probe_timing \
-                --basetemp="$PROBE_DIR/basetemp/iteration-$i" \
-                --junitxml="$dir/junit.xml" "${tests[@]}" > "$dir/pytest.log" 2>&1; then
-              rc=0
-            else
-              rc=$?
-            fi
-            end="$(date -u +%Y-%m-%dT%H:%M:%S.%6NZ)"
-            printf '%s\t%s\t%s\t%s\n' "$i" "$start" "$end" "$rc" >> "$PROBE_DIR/raw/iterations.tsv"
+            for order in "${orders[@]}"; do
+              if [ "$(date +%s)" -ge "$deadline" ]; then
+                echo "::error::loop budget spent before iteration $i order $order"
+                budget=spent
+                break 2
+              fi
+              case "$order" in
+                both) selected=("$k06" "$r01") ;;
+                r01) selected=("$r01") ;;
+                k02) selected=("$k02") ;;
+              esac
+              dir="$PROBE_DIR/raw/iteration-$i-$order"
+              mkdir -p "$dir"
+              start="$(date -u +%Y-%m-%dT%H:%M:%S.%6NZ)"
+              if EKO134_TIMING_FILE="$dir/marks.log" uv run pytest -m "runtime or previous_release" \
+                  -v -rA -p tests.support.eko134_probe_timing -p eko134_probe_settle \
+                  --log-level=INFO \
+                  --basetemp="$PROBE_DIR/basetemp/iteration-$i-$order" \
+                  --junitxml="$dir/junit.xml" "${selected[@]}" > "$dir/pytest.log" 2>&1; then
+                rc=0
+              else
+                rc=$?
+              fi
+              end="$(date -u +%Y-%m-%dT%H:%M:%S.%6NZ)"
+              printf '%s\t%s\t%s\t%s\t%s\n' "$i" "$order" "$start" "$end" "$rc" >> "$PROBE_DIR/raw/iterations.tsv"
+              invocations=$((invocations + 1))
+              if [ "$rc" -ne 0 ]; then
+                failures=$((failures + 1))
+                echo "::warning::iteration $i order $order exited $rc"
+              fi
+            done
             completed=$((completed + 1))
-            if [ "$rc" -ne 0 ]; then
-              failures=$((failures + 1))
-              echo "::warning::iteration $i exited $rc"
-            fi
           done
-          echo "failures=$failures" >> "$GITHUB_OUTPUT"
-          echo "completed=$completed" >> "$GITHUB_OUTPUT"
-          echo "iterations completed: $completed, failed: $failures"
+          {
+            echo "failures=$failures"
+            echo "completed=$completed"
+            echo "invocations=$invocations"
+            echo "budget=$budget"
+          } >> "$GITHUB_OUTPUT"
+          echo "iterations completed: $completed, invocations: $invocations, failed: $failures, budget: $budget"
 
       - name: Stop host instrumentation
         id: stop
@@ -300,20 +389,32 @@ jobs:
 
           MARK = re.compile(r"^(\S+Z) mark (.*)$")
           PW = re.compile(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+Z) pw:api (.*)$")
-          summary = ["iteration\tstart_utc\tend_utc\texit\ttest\toutcome\terror\t"
+          SETTLE = re.compile(r"^settle returned applies=(\w+)")
+          FLAKE = "ERR_NETWORK_CHANGED"
+          BOUND = "HostNetworkNotSettled"
+          NOT_APPLICABLE = "HostNetworkNotApplicable"
+          summary = ["iteration\torder\tstart_utc\tend_utc\texit\ttest\toutcome\terror\t"
                      "redirect_window_start\tredirect_window_end\twindow_end_by\t"
                      "ip_events_in_window\tdocker_events_in_window"]
+          invocations = ["iteration\torder\texit\ttests\tpassed\tfailed\tskipped\t"
+                         "err_network_changed\thost_network_not_settled\tsettle_calls\t"
+                         "settle_applies\tsettle_not_applicable\tsettle_raised\tnot_applicable_warnings"]
+          problems: list[str] = []
           windows_all = []
           rows = [r.split("\t") for r in read(raw / "iterations.tsv")[1:] if r]
-          for number, start, end, code in rows:
-              source = raw / f"iteration-{number}"
-              target = out / f"iteration-{number}"
+          if not rows:
+              problems.append("no invocation was recorded")
+          for number, order, start, end, code in rows:
+              label = f"iteration-{number}-{order}"
+              source = raw / label
+              target = out / label
               target.mkdir(parents=True, exist_ok=True)
               # A captured stream can arrive with its line breaks escaped as a literal "\n".
               log = [clean_line(part) for line in read(source / "pytest.log")
                      for part in line.split("\\n")]
               (target / "pytest.log").write_text("\n".join(log) + "\n", encoding="utf-8")
               outcomes: dict[str, tuple[str, str]] = {}
+              flake = bound = 0
               junit = source / "junit.xml"
               if junit.is_file():
                   for case in ET.parse(junit).getroot().iter("testcase"):
@@ -323,6 +424,10 @@ jobs:
                       if bad is not None:
                           message = (bad.get("message") or "").splitlines()
                           outcomes[case.get("name", "")] = (bad.tag, clean_line(message[0] if message else ""))
+                          # Counted from the failure itself, never from a passing test's captured output.
+                          text = (bad.get("message") or "") + "\n" + (bad.text or "")
+                          flake += FLAKE in text
+                          bound += BOUND in text
                       elif case.find("skipped") is not None:
                           outcomes[case.get("name", "")] = ("skipped", "")
                       else:
@@ -336,6 +441,34 @@ jobs:
                   found = PW.search(line)
                   if found:
                       events.append((parse_iso(found.group(1)), "pw:api", found.group(2)))
+              settles = [t for m, k, t in events if k == "mark" and t.startswith("settle ")]
+              calls = sum(1 for t in settles if t == "settle start")
+              returned = [found.group(1) for found in map(SETTLE.match, settles) if found]
+              applies = sum(1 for value in returned if value == "True")
+              not_applies = len(returned) - applies
+              raised_settles = sum(1 for t in settles if t.startswith("settle raised"))
+              warned = sum(1 for line in log if NOT_APPLICABLE in line)
+              counts = {kind: sum(1 for o, _ in outcomes.values() if o == kind)
+                        for kind in ("passed", "failure", "error", "skipped")}
+              invocations.append("\t".join(str(v) for v in [
+                  number, order, code, len(outcomes), counts["passed"], counts["failure"] + counts["error"],
+                  counts["skipped"], flake, bound, calls, applies, not_applies, raised_settles, warned]))
+              where = f"iteration {number} order {order}"
+              if not outcomes:
+                  problems.append(f"{where}: no test result (junit missing or empty)")
+              if code != "0":
+                  problems.append(f"{where}: pytest exited {code} (ERR_NETWORK_CHANGED {flake},"
+                                  f" HostNetworkNotSettled {bound})")
+              if counts["skipped"]:
+                  problems.append(f"{where}: {counts['skipped']} test(s) skipped")
+              # The masking guard: on the runner every settle must apply, and every test calls it at
+              # least once, so fewer applying settles than tests means a settle did not run or applied
+              # nowhere.
+              if not_applies or warned:
+                  problems.append(f"{where}: settle reported not applicable ({not_applies} marks,"
+                                  f" {warned} warning lines)")
+              if applies < len(outcomes):
+                  problems.append(f"{where}: {applies} applying settle(s) for {len(outcomes)} test(s)")
               low, high = parse_iso(start), parse_iso(end)
               merged = events + [row for row in host if low <= row[0] <= high]
               merged.sort(key=lambda row: row[0])
@@ -358,25 +491,28 @@ jobs:
                           l0 = login[0]
                           login_end = [(m, t) for m, k, t in events if k == "mark"
                                        and t in ("browser_login returned", "browser_login raised")
-                                       and m >= l0]
+                                       and l0 <= m <= c1]
+                          # The stop comes first: a `load` is only this login's when it precedes the
+                          # login's own end. A first `page.goto` that fails fires no `load`, and the
+                          # window then starts at `browser_login start`.
+                          stop = (login_end[0][0], login_end[0][1]) if login_end else (c1, "call end")
                           loaded = [m for m, k, t in events if k == "pw:api"
-                                    and t.strip() == '"load" event fired' and m >= l0]
+                                    and t.strip() == '"load" event fired' and l0 <= m <= stop[0]]
                           w_start = loaded[0] if loaded else l0
                           to_auth = [m for m, k, t in events if k == "pw:api"
                                      and t.strip().startswith('navigated to "https://auth.')
-                                     and m >= w_start]
-                          stop = login_end[0] if login_end else (c1, "call end")
-                          if to_auth and to_auth[0] <= stop[0]:
+                                     and w_start <= m <= stop[0]]
+                          if to_auth:
                               w_end, end_by = to_auth[0], "navigated-to-auth-host"
                           else:
                               w_end, end_by = stop[0], stop[1].replace(" ", "-")
                   inside = [row for row in host if w_start and w_end and w_start <= row[0] <= w_end]
                   ip_count = sum(1 for row in inside if row[1] == "ip")
                   dk_count = sum(1 for row in inside if row[1] == "docker")
-                  summary.append("\t".join([number, start, end, code, test, outcome, error,
+                  summary.append("\t".join([number, order, start, end, code, test, outcome, error,
                                             iso(w_start) if w_start else "", iso(w_end) if w_end else "",
                                             end_by, str(ip_count), str(dk_count)]))
-                  lines_out.append(f"## iteration {number} - {test} - {outcome}")
+                  lines_out.append(f"## iteration {number} {order} - {test} - {outcome}")
                   lines_out.append(f"error: {error or '-'}")
                   lines_out.append(f"first-redirect window: {iso(w_start) if w_start else '?'}"
                                    f" .. {iso(w_end) if w_end else '?'} (ends by {end_by})")
@@ -391,8 +527,14 @@ jobs:
               (target / "windows.txt").write_text("\n".join(lines_out) + "\n", encoding="utf-8")
               windows_all += lines_out
           (out / "iterations.tsv").write_text("\n".join(summary) + "\n", encoding="utf-8")
+          (out / "invocations.tsv").write_text("\n".join(invocations) + "\n", encoding="utf-8")
           (out / "windows.txt").write_text("\n".join(windows_all) + "\n", encoding="utf-8")
-          print("\n".join(summary))
+          # The verdict step reads this file; a crash above leaves it missing, which is red too.
+          (out / "verdict.txt").write_text(
+              f"problems={len(problems)}\n" + "".join(f"problem: {p}\n" for p in problems),
+              encoding="utf-8")
+          print("\n".join(invocations))
+          print("\n".join(problems) or "no problem found")
           PY
           python3 -I "$PROBE_DIR/scripts/timeline.py" "$PROBE_DIR/raw" "$PROBE_DIR/upload" "$PROBE_DIR/basetemp"
           # The iterations' env files hold the synthetic secrets; nothing of basetemp is uploaded.
@@ -400,7 +542,11 @@ jobs:
           {
             echo '### EKO-1-34 probe iterations'
             echo '```'
-            cut -f1,4,5,6,10,11,12 "$PROBE_DIR/upload/iterations.tsv"
+            cat "$PROBE_DIR/upload/invocations.tsv"
+            echo
+            cut -f1,2,5,6,7,11,12,13 "$PROBE_DIR/upload/iterations.tsv"
+            echo
+            cat "$PROBE_DIR/upload/verdict.txt"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -412,18 +558,27 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-      # No masking: red when any iteration failed, when fewer than ITERATIONS ran, or when the
-      # instrumentation did not cover the whole loop.
+      # No masking. Red when any invocation failed (k02 included), when fewer than ITERATIONS
+      # iterations or fewer than their invocations ran, or when the instrumentation did not cover
+      # the whole loop. Also red when the per-invocation analysis found a problem or did not run:
+      # a skip, a settle reported "not applicable", or fewer applying settles than tests.
       - name: Verdict
         if: always()
         shell: bash
         env:
           FAILURES: ${{ steps.loop.outputs.failures }}
           COMPLETED: ${{ steps.loop.outputs.completed }}
+          INVOCATIONS: ${{ steps.loop.outputs.invocations }}
           INSTRUMENTATION: ${{ steps.stop.outputs.state }}
         run: |
           set -Eeuo pipefail
-          echo "iterations: ${COMPLETED:-none} of $ITERATIONS, failed: ${FAILURES:-unknown}, instrumentation: ${INSTRUMENTATION:-unknown}"
+          expected=$(( ITERATIONS * 2 + K02_ITERATIONS ))
+          echo "iterations: ${COMPLETED:-none} of $ITERATIONS, invocations: ${INVOCATIONS:-none} of $expected, failed: ${FAILURES:-unknown}, instrumentation: ${INSTRUMENTATION:-unknown}"
+          verdict="$PROBE_DIR/upload/verdict.txt"
+          [ -f "$verdict" ] || { echo "::error::the per-invocation analysis did not run"; exit 1; }
+          cat "$verdict"
           [ "${COMPLETED:-}" = "$ITERATIONS" ] || { echo "::error::not every iteration ran"; exit 1; }
+          [ "${INVOCATIONS:-}" = "$expected" ] || { echo "::error::not every invocation ran"; exit 1; }
           [ "${INSTRUMENTATION:-}" = ok ] || { echo "::error::instrumentation incomplete"; exit 1; }
-          [ "${FAILURES:-}" = 0 ] || { echo "::error::$FAILURES of $ITERATIONS iterations failed"; exit 1; }
+          [ "${FAILURES:-}" = 0 ] || { echo "::error::$FAILURES of $expected invocations failed"; exit 1; }
+          grep -qx 'problems=0' "$verdict" || { echo "::error::the analysis found problems (see above)"; exit 1; }
