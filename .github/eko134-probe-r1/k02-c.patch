@@ -1,0 +1,13 @@
+diff --git a/backend/tests/runtime/test_eko134_k02_network_change_during_login.py b/backend/tests/runtime/test_eko134_k02_network_change_during_login.py
+index bc80378..f9d3305 100644
+--- a/backend/tests/runtime/test_eko134_k02_network_change_during_login.py
++++ b/backend/tests/runtime/test_eko134_k02_network_change_during_login.py
+@@ -229,8 +229,6 @@ class Interference:
+ 
+     def clean_up(self) -> None:
+         self.release()
+-        for container in self.created:
+-            docker("rm", "-f", "-v", container, check=False)
+ 
+ 
+ @contextmanager

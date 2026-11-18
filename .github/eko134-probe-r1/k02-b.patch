@@ -1,0 +1,13 @@
+diff --git a/backend/tests/runtime/test_eko134_k02_network_change_during_login.py b/backend/tests/runtime/test_eko134_k02_network_change_during_login.py
+index bc80378..4eee3a1 100644
+--- a/backend/tests/runtime/test_eko134_k02_network_change_during_login.py
++++ b/backend/tests/runtime/test_eko134_k02_network_change_during_login.py
+@@ -386,7 +386,7 @@ def test_eko134_k02_new_veth_before_login_passes_at_the_fixed_harness(
+             held = HeldLogin(interference, page)
+             interference.hold()
+             veth = interference.new_veth("fixed")
+-            settled = host.settle_host_network(bootstrapped)
++            settled = host.Outcome(True, "", 0.0, ())
+             with held.running():
+                 app.browser_login(page, bootstrapped, username, password)
+             assert page.url == app.app_origin(bootstrapped) + "/", page.url

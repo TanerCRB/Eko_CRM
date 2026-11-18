@@ -1,0 +1,370 @@
+# EKO-1-34 (#192), fix round 1, TRANSIENT. This file lives only on the throwaway branch
+# EKO-1-34-probe-r1 and is never part of the PR. It is written under the conditions of boundary
+# exception EKO-1-34/boundary-1, as the human approved for this branch.
+#
+# It confirms the Reviewer's R-01 fix on ubuntu-latest with four kinds of job:
+# - isolation: the K-02 module run 5 times, alone;
+# - full-job: the composition job's runtime invocation once, with the K-02 module inside it, under
+#   load;
+# - one job per mutation: K-02(a), (b), (b'), (c) and the new dad_transmits mutation. Each runs only
+#   the named test on a patched tree. It is green only if that test goes red with the expected kill.
+# - verdict: red unless every job above is green.
+#
+# Every job records the runner image version and `git rev-parse HEAD`. Its pytest output is
+# redacted before upload by `.github/eko134-probe-r1/analyze.py`, with the same rules as the
+# EKO-1-34 probe. The per-settle log lines come from the logging-only plugin
+# `.github/eko134-probe-r1/eko134_probe_settle_log.py`, loaded with `-p`.
+#
+# Read-only token, no secret, no registry login, no workflow_dispatch.
+name: eko134-probe-r1
+
+on:
+  push:
+    branches: [EKO-1-34-probe-r1]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eko134-probe-r1-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  isolation:
+    name: K-02 module in isolation, 5 repetitions
+    runs-on: ubuntu-latest
+    # One repetition is about 2.5 minutes (one composition and its bootstrap, four browser tests),
+    # plus the Chromium fixture each time: about 20 minutes for 5.
+    timeout-minutes: 90
+    env:
+      REPETITIONS: "5"
+    steps:
+      - name: Name the probe directory
+        shell: bash
+        run: echo "PROBE_DIR=$RUNNER_TEMP/eko134" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.21"
+          python-version: "3.12"
+      - name: Install
+        working-directory: backend
+        run: uv sync --locked
+      - name: Record the run's identity (runner image, commit, Docker)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$PROBE_DIR/raw" "$PROBE_DIR/upload" "$PROBE_DIR/basetemp"
+          {
+            echo "job=isolation"
+            echo "recorded_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "head_sha=$(git rev-parse HEAD)"
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "image_os=${ImageOS:-unknown}"
+            echo "image_version=${ImageVersion:-unknown}"
+            echo "kernel=$(uname -r)"
+            echo "docker_server=$(docker version --format '{{.Server.Version}}')"
+          } > "$PROBE_DIR/upload/run-identity.txt"
+          cat "$PROBE_DIR/upload/run-identity.txt"
+      - name: Run the K-02 module, one pytest invocation per repetition
+        working-directory: backend
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export PYTHONPATH=".:$GITHUB_WORKSPACE/.github/eko134-probe-r1"
+          for i in $(seq 1 "$REPETITIONS"); do
+            label="isolation-$i"
+            if uv run pytest -m runtime tests/runtime/test_eko134_k02_network_change_during_login.py \
+                -v -rA -o log_cli=true --log-cli-level=INFO -p eko134_probe_settle_log \
+                --basetemp="$PROBE_DIR/basetemp/$label" --junitxml="$PROBE_DIR/raw/$label.xml" \
+                > "$PROBE_DIR/raw/$label.log" 2>&1; then
+              rc=0
+            else
+              rc=$?
+            fi
+            python3 -I "$GITHUB_WORKSPACE/.github/eko134-probe-r1/analyze.py" k02 "$label" \
+              "$PROBE_DIR/raw/$label.log" "$PROBE_DIR/raw/$label.xml" "$rc" \
+              "$PROBE_DIR/basetemp/$label" "$PROBE_DIR/upload"
+            echo "$label" >> "$PROBE_DIR/upload/analysed.txt"
+          done
+      # The basetemp holds the synthetic env files: nothing of it goes up.
+      - name: Remove the raw logs' sources of secrets
+        if: always()
+        shell: bash
+        run: rm -rf "$PROBE_DIR/basetemp"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: eko134-probe-r1-isolation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/eko134/upload
+          retention-days: 30
+          if-no-files-found: error
+      - name: Judge the repetitions
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          up="$PROBE_DIR/upload"
+          [ -f "$up/hold-values.tsv" ] && cat "$up/hold-values.tsv"
+          [ -f "$up/continuous.tsv" ] && cat "$up/continuous.tsv"
+          analysed=0
+          [ -f "$up/analysed.txt" ] && analysed=$(wc -l < "$up/analysed.txt")
+          [ "$analysed" -eq "$REPETITIONS" ] || { echo "::error::$analysed of $REPETITIONS repetitions analysed"; exit 1; }
+          if [ -s "$up/problems.txt" ]; then
+            cat "$up/problems.txt"
+            echo "::error::the isolation repetitions have problems"
+            exit 1
+          fi
+          echo "all $REPETITIONS repetitions: 4 of 4 K-02 tests passed"
+
+  full-job:
+    name: K-02 module inside the composition job's runtime invocation
+    runs-on: ubuntu-latest
+    # The same bound as ci.yml's "runtime tests on the composition" job.
+    timeout-minutes: 360
+    steps:
+      - name: Name the probe directory
+        shell: bash
+        run: echo "PROBE_DIR=$RUNNER_TEMP/eko134" >> "$GITHUB_ENV"
+      # ci.yml's "runtime tests on the composition" job: the same checkout, uv and install. Its
+      # read-only registry login and RELEASE_RECORD_TOKEN are left out (no registry login, no
+      # record token in a probe), so the previous_release tests cannot read the record: their reds
+      # are reported by name in other-failures.txt and kept apart from the K-02 verdict.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.21"
+          python-version: "3.12"
+      - name: Install
+        working-directory: backend
+        run: uv sync --locked
+      - name: Record the run's identity (runner image, commit, Docker)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$PROBE_DIR/raw" "$PROBE_DIR/upload" "$PROBE_DIR/basetemp"
+          {
+            echo "job=full-job"
+            echo "recorded_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "head_sha=$(git rev-parse HEAD)"
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "image_os=${ImageOS:-unknown}"
+            echo "image_version=${ImageVersion:-unknown}"
+            echo "kernel=$(uname -r)"
+            echo "docker_server=$(docker version --format '{{.Server.Version}}')"
+          } > "$PROBE_DIR/upload/run-identity.txt"
+          cat "$PROBE_DIR/upload/run-identity.txt"
+      # ci.yml's command `uv run pytest -m "runtime or previous_release" tests/runtime -v`, plus
+      # only live INFO logs (the hold lines), the logging-only settle plugin, junit and basetemp.
+      - name: Runtime tests on the composition (ci.yml's invocation)
+        working-directory: backend
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export PYTHONPATH=".:$GITHUB_WORKSPACE/.github/eko134-probe-r1"
+          label="full-job"
+          if uv run pytest -m "runtime or previous_release" tests/runtime -v \
+              -o log_cli=true --log-cli-level=INFO -p eko134_probe_settle_log \
+              --basetemp="$PROBE_DIR/basetemp/$label" --junitxml="$PROBE_DIR/raw/$label.xml" \
+              > "$PROBE_DIR/raw/$label.log" 2>&1; then
+            rc=0
+          else
+            rc=$?
+          fi
+          echo "pytest exited $rc"
+          tail -n 5 "$PROBE_DIR/raw/$label.log" | grep -E "passed|failed|error" || echo "no summary line"
+          python3 -I "$GITHUB_WORKSPACE/.github/eko134-probe-r1/analyze.py" full "$label" \
+            "$PROBE_DIR/raw/$label.log" "$PROBE_DIR/raw/$label.xml" "$rc" \
+            "$PROBE_DIR/basetemp/$label" "$PROBE_DIR/upload"
+          echo "$label" >> "$PROBE_DIR/upload/analysed.txt"
+      - name: Remove the raw logs' sources of secrets
+        if: always()
+        shell: bash
+        run: rm -rf "$PROBE_DIR/basetemp"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: eko134-probe-r1-full-job-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/eko134/upload
+          retention-days: 30
+          if-no-files-found: error
+      - name: Judge the K-02 module inside the full invocation
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          up="$PROBE_DIR/upload"
+          [ -f "$up/analysed.txt" ] || { echo "::error::the invocation was not analysed"; exit 1; }
+          [ -f "$up/hold-values.tsv" ] && cat "$up/hold-values.tsv"
+          [ -f "$up/continuous.tsv" ] && cat "$up/continuous.tsv"
+          if [ -s "$up/other-failures.txt" ]; then
+            echo "::warning::$(wc -l < "$up/other-failures.txt") failure(s) outside the K-02 module, listed by name:"
+            cat "$up/other-failures.txt"
+            {
+              echo '### Failures outside the K-02 module (reported, not part of the K-02 verdict)'
+              echo '```'
+              cat "$up/other-failures.txt"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -s "$up/problems.txt" ]; then
+            cat "$up/problems.txt"
+            echo "::error::the K-02 module has problems inside the full invocation"
+            exit 1
+          fi
+          echo "K-02 module: 4 of 4 tests passed inside the full invocation"
+
+  mutation:
+    name: Mutation ${{ matrix.id }} (only the named test, green only on the expected kill)
+    runs-on: ubuntu-latest
+    # One composition and its bootstrap, then one test.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      # Each mutation job is a heavy runtime job; at most two run at once.
+      max-parallel: 2
+      matrix:
+        include:
+          - id: k02-a
+            patch: k02-a.patch
+            test: test_eko134_k02_new_veth_during_login_redirect_fails_at_the_pre_fix_harness
+            kills: "DID NOT RAISE <class 'playwright._impl._errors.Error'>"
+          - id: k02-b
+            patch: k02-b.patch
+            test: test_eko134_k02_new_veth_before_login_passes_at_the_fixed_harness
+            kills: "playwright._impl._errors.Error|net::ERR_NETWORK_CHANGED"
+          - id: k02-b-prime
+            patch: k02-b-prime.patch
+            test: test_eko134_k02_new_veth_before_login_passes_at_the_fixed_harness
+            kills: "playwright._impl._errors.Error|net::ERR_NETWORK_CHANGED"
+          - id: k02-c
+            patch: k02-c.patch
+            test: test_eko134_k02_new_veth_during_login_redirect_fails_at_the_pre_fix_harness
+            kills: "EKO-1-34 K-02 interference edges|(3) interference containers remain"
+          - id: k02-dad
+            patch: k02-dad.patch
+            test: test_eko134_k02_continuous_interference_fails_the_wait_by_name_within_its_bound
+            kills: "DID NOT RAISE|HostNetworkNotSettled"
+    env:
+      MUTATION: ${{ matrix.id }}
+      PATCH: ${{ matrix.patch }}
+      TEST: ${{ matrix.test }}
+      KILLS: ${{ matrix.kills }}
+    steps:
+      - name: Name the probe directory
+        shell: bash
+        run: echo "PROBE_DIR=$RUNNER_TEMP/eko134" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.21"
+          python-version: "3.12"
+      - name: Install
+        working-directory: backend
+        run: uv sync --locked
+      - name: Record the run's identity (runner image, commit, Docker)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$PROBE_DIR/raw" "$PROBE_DIR/upload" "$PROBE_DIR/basetemp"
+          {
+            echo "job=mutation-$MUTATION"
+            echo "recorded_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "head_sha=$(git rev-parse HEAD)"
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "image_os=${ImageOS:-unknown}"
+            echo "image_version=${ImageVersion:-unknown}"
+            echo "kernel=$(uname -r)"
+            echo "docker_server=$(docker version --format '{{.Server.Version}}')"
+          } > "$PROBE_DIR/upload/run-identity.txt"
+          cat "$PROBE_DIR/upload/run-identity.txt"
+      # The patch must apply and change exactly one file, or the job is red before any test.
+      - name: Apply the mutation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git apply ".github/eko134-probe-r1/$PATCH"
+          changed="$(git diff --name-only)"
+          echo "changed: $changed"
+          [ "$(printf '%s\n' "$changed" | wc -l)" -eq 1 ] || { echo "::error::the patch changed more than one file"; exit 1; }
+          git diff > "$PROBE_DIR/upload/mutation.diff"
+      - name: Run only the named test on the mutated tree
+        working-directory: backend
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export PYTHONPATH=".:$GITHUB_WORKSPACE/.github/eko134-probe-r1"
+          label="mutation-$MUTATION"
+          if uv run pytest -m runtime "tests/runtime/test_eko134_k02_network_change_during_login.py::$TEST" \
+              -v -rA -o log_cli=true --log-cli-level=INFO -p eko134_probe_settle_log \
+              --basetemp="$PROBE_DIR/basetemp/$label" --junitxml="$PROBE_DIR/raw/$label.xml" \
+              > "$PROBE_DIR/raw/$label.log" 2>&1; then
+            rc=0
+          else
+            rc=$?
+          fi
+          echo "pytest exited $rc"
+          IFS='|' read -r -a kills <<< "$KILLS"
+          python3 -I "$GITHUB_WORKSPACE/.github/eko134-probe-r1/analyze.py" mutation "$label" \
+            "$PROBE_DIR/raw/$label.log" "$PROBE_DIR/raw/$label.xml" "$rc" \
+            "$PROBE_DIR/basetemp/$label" "$PROBE_DIR/upload" "$TEST" "${kills[@]}"
+          echo "$label" >> "$PROBE_DIR/upload/analysed.txt"
+      - name: Remove the raw logs' sources of secrets
+        if: always()
+        shell: bash
+        run: rm -rf "$PROBE_DIR/basetemp"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: eko134-probe-r1-mutation-${{ matrix.id }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/eko134/upload
+          retention-days: 30
+          if-no-files-found: error
+      - name: Judge the kill
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          up="$PROBE_DIR/upload"
+          [ -f "$up/analysed.txt" ] || { echo "::error::the mutated test was not analysed"; exit 1; }
+          cat "$up/mutation.tsv"
+          if [ -s "$up/problems.txt" ]; then
+            cat "$up/problems.txt"
+            echo "::error::mutation $MUTATION was not killed as expected"
+            exit 1
+          fi
+          echo "mutation $MUTATION killed: $TEST red with the expected kill"
+
+  # No masking: the run is red unless every job above is green.
+  verdict:
+    name: Verdict
+    needs: [isolation, full-job, mutation]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job green
+        shell: bash
+        env:
+          ISOLATION: ${{ needs.isolation.result }}
+          FULL_JOB: ${{ needs.full-job.result }}
+          MUTATIONS: ${{ needs.mutation.result }}
+        run: |
+          set -Eeuo pipefail
+          echo "isolation: $ISOLATION, full-job: $FULL_JOB, mutations: $MUTATIONS"
+          [ "$ISOLATION" = success ] || { echo "::error::isolation is $ISOLATION"; exit 1; }
+          [ "$FULL_JOB" = success ] || { echo "::error::full-job is $FULL_JOB"; exit 1; }
+          [ "$MUTATIONS" = success ] || { echo "::error::a mutation job is $MUTATIONS"; exit 1; }
+          echo "all jobs green"

@@ -1,0 +1,14 @@
+diff --git a/backend/tests/runtime/test_eko134_k02_network_change_during_login.py b/backend/tests/runtime/test_eko134_k02_network_change_during_login.py
+index bc80378..104ea05 100644
+--- a/backend/tests/runtime/test_eko134_k02_network_change_during_login.py
++++ b/backend/tests/runtime/test_eko134_k02_network_change_during_login.py
+@@ -222,8 +222,7 @@ class Interference:
+             "run", "--rm", "--name", container, "--label", f"{INTERFERENCE_LABEL}=dad",
+             "--privileged", "--network", "host", "--pull", "never", "--entrypoint", "sh",
+             self.image, "-c",
+-            'echo "$2" > "/proc/sys/net/ipv6/conf/$1/dad_transmits"'
+-            ' && ip link set "$1" down && ip link set "$1" up',
++            'ip link set "$1" down && ip link set "$1" up',
+             "eko134-dad", veth, str(DAD_HOLD_TRANSMITS),
+         )  # fmt: skip
+ 
