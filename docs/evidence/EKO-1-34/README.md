@@ -9,7 +9,8 @@ index. It is not evidence by itself.
 |---|---|---|---|
 | [`pre-fix-probe-2026-11-17.md`](pre-fix-probe-2026-11-17.md) | 44169988387 | K-01, and the K-04 contrast | pre-fix |
 | [`fixed-tree-probe-2026-11-18.md`](fixed-tree-probe-2026-11-18.md) | 44261867387 | K-02, K-04 | fixed |
-| [`fix-round-1-probe-2026-11-18.md`](fix-round-1-probe-2026-11-18.md) | 44387692426 | K-02 after the R-01 fix: isolation, full job, mutations | fixed, fix round 1 (throwaway branch `EKO-1-34-probe-r1`) |
+| [`fix-round-1-probe-2026-11-18.md`](fix-round-1-probe-2026-11-18.md) | 44387692426 | K-02 after the R-01 fix: isolation, full job, mutations (corrected 2026-11-19 for R-03) | fixed, fix round 1 (throwaway branch `EKO-1-34-probe-r1`) |
+| [`fix-round-1-probe-r2-2026-11-19.md`](fix-round-1-probe-r2-2026-11-19.md) | 44480047835 | K-02 guard mutations o1, o2 and link, and K-02(a) again | fixed, fix round 1 (throwaway branch `EKO-1-34-probe-r1`) |
 
 - The pre-fix record names the event, its source and the cause site, and gives the passing
   contrast.

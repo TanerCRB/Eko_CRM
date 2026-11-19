@@ -5,6 +5,23 @@ said that two K-02 runtime tests depended on runner speed. The values come from 
 artifacts and the jobs' set-up logs. Nothing here comes from a local machine, and nothing here
 claims production behaviour.
 
+> **Correction, 2026-11-19 (Reviewer finding R-03).** Two readings in the isolation section below
+> were too strong. The text below is left as first written.
+>
+> 1. **The 1.3–2.2 s interval.** It runs from the held first request to the first failure. It is
+>    not purely the kernel's address-detection time. `interfered_at` is taken before
+>    `interference.new_veth("prefix")` runs, so the interval also contains that call's `docker run`
+>    and its bridge-member wait. That part was not measured separately. The kernel's detection is
+>    one part of the interval, of unknown share.
+> 2. **`in_flight_at < interfered_at < failed_at`.** The first half holds by construction: the hold
+>    thread sets `interfered_at` only after `in_flight` is set. So it is a guard on the test's
+>    structure, not an observation about the runner.
+>    - Probe run 44480047835, mutation o1 (see
+>      [`fix-round-1-probe-r2-2026-11-19.md`](fix-round-1-probe-r2-2026-11-19.md)), shows the guard
+>      catches a reordering. With the interference moved before the wait, the assertion went red
+>      with `in_flight_at` later than `interfered_at`.
+>    - The second half (`interfered_at < failed_at`) is observed.
+
 ## Run
 
 | Field | Value |
