@@ -543,6 +543,11 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** `__Host-eko_session` (EKO-1-33); changing frontend-replacement behavior; retry/re-run masking; loosening or skipping the K-06 assertions; #188 and runner load.
   After EKO-1-33.
 
+- [ ] **EKO-1-35** — Check the frontend API types (auth, customers, country list) against the backend OpenAPI document (#161).
+  *Done when:* a CI check (or generation) fails when `SessionInfo`, a customer type, or the `country` code list disagrees with the OpenAPI document; renaming `SessionInfo.name` in the backend alone fails it; swapping one country code for a non-ISO pair fails it.
+  **Out of scope (explicit):** choosing generation vs comparison; backend schema changes; runtime response validation; types for endpoints not yet built (they must join the check in their own Story).
+  After EKO-3-01.
+
 ## EKO-2 — Access
 
 - [x] **EKO-2-01** — Require login for the whole application.
