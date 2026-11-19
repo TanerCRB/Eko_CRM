@@ -614,7 +614,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
 
 ## EKO-3 — Customers
 
-- [ ] **EKO-3-01** — Let a rep create and view their own customers with contacts (#195).
+- [x] **EKO-3-01** — Let a rep create and view their own customers with contacts (#195).
   *Done when:* tests prove: a customer is saved with name and country only, country defaulting to
   Poland (CUS-2); any number of phones and e-mails, each with an optional note on who answers, at
   most one contact primary (CUS-1); phones stored in international format, `+48` by default, and a
@@ -626,3 +626,51 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   search (EKO-3-04); archiving (CUS-9); reassignment (CUS-10); the manager editing another rep's
   customer (ACC-5 edit half); visits, notes, actions, Google Calendar; real customer data. After
   EKO-2-02 and EKO-1-07.
+  **Done 2026-11-19:** merged in [PR #198](https://github.com/TanerCRB/Eko_CRM/pull/198) as `416fa46` by the human on 2026-11-19; code verified at
+  `8e0c5cc` (QA's checkpoint of fix round 3; its production code is byte-identical to QA's round-3 base
+  `e421d12`, which differs only by QA's unit test file; QA PROOF HOLDS at `9ebcc55`, `6228f00`, `f6033ba`
+  and `e421d12`; Invariant Guardian, Reviewer and Security Auditor PASS at `8e0c5cc`, 0 findings). Mechanism:
+  revision `0004_customers_and_contacts` creates the first product tables, `customer` and
+  `customer_contact` (create-only, UUIDv4 keys issued by the application, no sequence or database
+  default); `POST /api/customers`, `GET /api/customers` and `GET /api/customers/{customer_id}`; the
+  ownership rule enforced by one visibility scope built in `app.domain.ownership` from the caller and
+  required by every `data` function on an owned table, applied in the selecting statement (gate-1 O-1 A,
+  ADR-0003-C35); another rep's customer answered exactly as an identifier that exists nowhere (C33);
+  the access answer given before the request body is decoded, on every route, by `AccessFirstRoute` and
+  the `AccessFirstApp` build guard (O-2 A, C34); a `manager`-only account refused when it creates; the
+  server-side value rules of CUS-1, CUS-2 and CUS-8; the SPA customer list, create form with its contact
+  editor and customer view under `/klienci`. Three fix rounds, all on Reviewer R-01 / Security Auditor B-01
+  (the cost of the first body-accepting route) and Reviewer R-02 (the session resolved once per request):
+  round 1 (human decision A, 2026-11-18) added the 2 MiB body limit after the access decision, raw-length
+  caps before normalisation and the request-scope access cache; round 2 (decision D, 2026-11-18) removed
+  `input` from every 422 error and bounded its text to 200 characters and its list to 50 errors; round 3
+  (decision D, 2026-11-18, beyond the two-round limit with the human's approval) answers unknown keys with
+  one `extra_forbidden` error per request model instead of one per key. The record-ownership addendum of
+  2026-11-17, accepted at gate 1 (O-3 A), is appended in this commit to
+  [`ADR-0003-identity-and-access.md`](architecture/decisions/ADR-0003-identity-and-access.md) from the draft
+  [`EKO-3-01-adr0003-record-ownership-addendum-draft-2026-11-17.md`](architecture/decisions/EKO-3-01-adr0003-record-ownership-addendum-draft-2026-11-17.md),
+  with the G-01 sentence (decision A, 2026-11-18) and the request-body rules of the fix rounds, the
+  unknown-key validator recorded as `mode="wrap"`, as the human decided at gate 2; it adds controls
+  ADR-0003-C33..C35 and restates none. Gate 2: every developer assumption (backend A-01..A-12, frontend
+  A-01..A-08, frontend A-05 a deviation from K-07's literal phone value) accepted as built by the human on
+  2026-11-19 and recorded as amendment lines under the criteria of #195 (scope re-locked, fingerprint
+  `7ee0b16d`); no UNDECIDABLE; the human also kept M09 (the visibility scope's refusal of a caller with no
+  CRM role, shadowed by the role gate) as defence in depth, kept the lone-surrogate 422 fallback as a guard
+  against a library change, accepted the 200-character and 50-error bounds as part of the contract,
+  accepted `ctx.error` of `value_error` as the rule's message text instead of `{}`, and accepted as a known
+  limit that a `PydanticCustomError` added later to a request model could answer 500 on the unknown-key
+  path. One recorded exception, EKO-3-01/H6-D (the K-07 changeset guard's exact-value allowance for
+  K-03's criterion value in its one test file; blocks again 2027-05-19), is entered in
+  `docs/architecture/exception-register.md`. CI, stated plainly: at the head `d6c69b7` (only cost-register
+  rows after verification) every check was green except "runtime tests on the composition", red with 2
+  failed / 857 passed — `test_k06_frontend_replacement.py::test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement`
+  and `::test_r01_two_consecutive_lazy_chunk_failures_stop_after_one_recovery`, both with
+  `net::ERR_NETWORK_CHANGED` in `browser_login`, the pre-existing flake #192 (fixed on `main` by #197 after
+  that run started); the release-mode runtime job ran the same tests green (859 passed); the human merged
+  with that classification. CI on `main` at `416fa46` when this entry was written:
+  [run 44532033598](https://github.com/TanerCRB/Eko_CRM/actions/runs/44532033598) (`process-ci`) green;
+  [run 44532033531](https://github.com/TanerCRB/Eko_CRM/actions/runs/44532033531) (`ci`) still pending, so
+  no result of it is claimed here. Mutation patches: the two comments on
+  [PR #198](https://github.com/TanerCRB/Eko_CRM/pull/198) (round 0; fix rounds 1-3). Follow-ups: #196 (a
+  request-body limit and timeout at the proxy), #161 (frontend API types, now including the customer
+  types and the hand-copied country list, checked against the OpenAPI document).

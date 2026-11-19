@@ -1085,3 +1085,78 @@ Restating ADR-0003-C5 and the *Roles* no-role bullet is a declared deviation. It
 precedent of this decision's addendum of 2026-10-28 on ADR-0003-C4. It supersedes gate-1
 decision OQ-1 A of EKO-2-02 (2026-11-06), whose exemption reading it keeps as text. Approved by
 the human at gate 1 of EKO-2-02 on 2026-11-16 (Issue #22).
+
+### 2026-11-17 — Record ownership of customers; the access decision before the request body
+
+**Status:** Accepted 2026-11-17 (gate 1 of EKO-3-01, Issue #195).
+
+**What it adds.** *Roles* and the addendum of 2026-11-16 decide who may reach CRM data at all,
+but not which records a caller may reach, nor where that rule is enforced. From this date:
+
+- **Owner.** Every customer has one owner, the subject identifier of the caller that created it,
+  taken from the caller value and stored as received. A request value never sets it. Creating a
+  customer requires `rep`; a caller with `manager` and without `rep` is refused (403) and nothing
+  is stored. A caller without `manager` reads only customers it owns; a caller with `manager`
+  reads every customer. A customer's contacts are reached only through it.
+- **Where it is enforced.** One `domain` function turns the caller value into a visibility scope
+  and decides creation. Every `data` function that reads or changes rows of an owned table takes
+  that scope as a required argument with no default and applies it in the statement that selects
+  by identifier. No `data` function serving a request reads an owned table without it. `api`
+  passes the caller value inward and decides nothing about ownership. Row-level security is not
+  used. The owned tables at this date are the customer table and its contact table; a later task
+  adding an owned record names its tables and owner rule at its gate 1.
+- **Outside the scope means missing.** A record outside the caller's scope is answered exactly
+  as a well-formed identifier that exists nowhere: the same status, body and headers other than
+  `Eko-Correlation-Id`. A malformed identifier may be refused on its own terms.
+- **Access first.** For every operation, the access dependency's answers (401, 503, the `Origin`
+  refusal, the role refusals) are given whatever the request body holds, a body that is not valid
+  JSON included; a request the dependency refuses is never answered 422 or 400.
+- **New controls ADR-0003-C33, C34 and C35** (table below).
+
+Every other rule and control of this decision is unchanged. The session-exempt, role-free and
+non-CRM lists are unchanged; no customer operation is marked non-CRM.
+
+**Why.** The brief makes the ownership rule a server-side guarantee (ACC-4, PRH-4). A rule that
+each route must remember fails open on the first route that forgets it (EKO-2-02 Reviewer
+finding R-01), and a denial computed after the record was loaded makes "not yours" and "missing"
+depend on two branches staying identical. FastAPI decodes a JSON body before it solves the
+access dependency, so without the access-first rule the first route with a body would answer an
+unauthenticated request 422 against *How a request is verified*. This adds rules and controls
+and restates none, so it is not a deviation. Approved by the human at gate 1 of EKO-3-01 on
+2026-11-17 (Issue #195).
+
+**New controls.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0003-C33 | For every operation that names an owned record by identifier, a caller holding `rep` without `manager` that does not own the record gets an answer equal to the answer for a well-formed identifier that exists nowhere (status, body, and headers other than `Eko-Correlation-Id`), containing no field value of the record, while its owner and a caller holding `manager` get the record; every list answers a caller holding `rep` without `manager` exactly the records it owns and a caller holding `manager` all of them; a create stores the caller's subject as owner whatever owner the request names, and a caller holding `manager` without `rep` is refused and stores nothing. |
+| ADR-0003-C34 | A test walking every API operation that accepts a request body sends, without a session cookie, with a foreign `Origin`, with a role-less session and with an administrator-only session, a body that is not valid JSON and a body that fails validation; each answer equals the answer the same request gets with a valid body (401, 403 `origin refused`, 403 `not permitted`), and nothing is stored. |
+| ADR-0003-C35 | Every function under `backend/app/data/` that reads or changes rows of an owned table takes a visibility scope as a required parameter with no default; a fixture function on an owned table without one fails the check, and no module outside `backend/app/data/` refers to an owned table. |
+
+**Added at gate 2 of EKO-3-01 (2026-11-19).** The human decided these at gate 2 of EKO-3-01
+([PR #198](https://github.com/TanerCRB/Eko_CRM/pull/198), Issue #195); they add rules and restate
+none.
+
+- **A role field on a strict route (Invariant Guardian finding G-01, decision A of 2026-11-18).**
+  On a route that refuses unknown fields, a role field is refused (422) and never honoured.
+- **The cost of a request body (Reviewer finding R-01 and Security Auditor finding B-01; decision
+  A of 2026-11-18 and the two decisions D of 2026-11-18).** The rules that bound what the first
+  body-accepting operation costs, as built in EKO-3-01:
+  - A request body is limited to 2 MiB. The limit is checked after the access decision and before
+    the body is decoded, so a refused caller keeps the access answer: a stated length past the
+    limit is refused before any byte is read, and a body counted past it while it arrives is cut
+    off. The answer is 413 and nothing is stored. The application refuses to build when the
+    largest valid request body is larger than the limit.
+  - Each text field of a request model has a raw-length cap applied before trimming and Unicode
+    normalisation; the limits counted on the NFC form stay the real bounds.
+  - A 422 for a rejected request keeps the shape `{"detail": [...]}`. Each error carries only
+    `type`, `loc`, `msg` and `ctx`, never `input`; every text in it is cut to 200 characters, and
+    it names at most 50 errors.
+  - Unknown keys in a request model are answered with one `extra_forbidden` error per model,
+    naming the first unknown key in body order, while the known fields keep their own errors. The
+    model validator that does this runs in `mode="wrap"`. The second decision D named a
+    `mode="before"` validator; `wrap` is recorded because a `before` validator cannot keep the
+    known fields' errors, which the same decision requires.
+  - When a 422 body cannot be encoded as UTF-8 (a lone surrogate), it is answered as an
+    ASCII-escaped 422, not a 500. No current request model reaches this branch; it stays as a guard
+    against a library change.
