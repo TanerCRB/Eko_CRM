@@ -1,0 +1,15 @@
+diff --git a/backend/tests/runtime/test_eko134_k02_network_change_during_login.py b/backend/tests/runtime/test_eko134_k02_network_change_during_login.py
+index bc80378..6e2a2fe 100644
+--- a/backend/tests/runtime/test_eko134_k02_network_change_during_login.py
++++ b/backend/tests/runtime/test_eko134_k02_network_change_during_login.py
+@@ -360,8 +360,9 @@ def test_eko134_k02_new_veth_during_login_redirect_fails_at_the_pre_fix_harness(
+     username, password = app.provision_browser_account(bootstrapped, "login")
+     with guarded(bootstrapped) as interference:
+         with browser_page(bootstrapped, chromium_executable) as page:
+-            held = HeldLogin(interference, page, lambda: interference.new_veth("prefix"))
+             interference.hold()
++            veth = interference.new_veth("prefix")
++            held = HeldLogin(interference, page, lambda: veth)
+             with held.running():
+                 with pytest.raises(PlaywrightError) as raised:
+                     app.browser_login(page, bootstrapped, username, password)

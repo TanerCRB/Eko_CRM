@@ -5,7 +5,11 @@ on the throwaway branch EKO-1-34-probe-r1 (never part of the PR).
 
   analyze.py k02      LABEL LOG JUNIT RC BASETEMP OUT
   analyze.py full     LABEL LOG JUNIT RC BASETEMP OUT
-  analyze.py mutation LABEL LOG JUNIT RC BASETEMP OUT TEST KILL [KILL ...]
+  analyze.py mutation LABEL LOG JUNIT RC BASETEMP OUT TEST KILLS
+
+KILLS: `||` separates alternatives, any one of which is enough; within an alternative, `|`
+separates kills that must all appear. A kill starting with `re:` is a regular expression searched
+line by line (multiline) in the failure text; any other kill is a substring.
 
 It writes the redacted log to OUT/LABEL/pytest.log and appends rows to these files in OUT:
 - results.tsv: every test and its outcome;
@@ -50,8 +54,11 @@ for env in Path(basetemp).rglob("*.env"):
         if SECRET_NAME.search(name) and len(value) >= 6:
             values.add(value)
 RULES = [
-    (re.compile(r"(?i)\b(code|state|session_state|nonce|code_challenge|code_verifier"
-                r"|id_token_hint|id_token|access_token|refresh_token|token)=[^&\s\"'#<>]*"),
+    # S-01: any parameter whose name ends in `code` or `state` (`session_code`, `session_state`),
+    # and Keycloak's `client_data`, `tab_id` and `execution`; the name is kept, the value goes.
+    (re.compile(r"(?i)\b(\w*code|\w*state|nonce|code_challenge|code_verifier|client_data|tab_id"
+                r"|execution|id_token_hint|id_token|access_token|refresh_token|token)"
+                r"=[^&\s\"'#<>]*"),
      r"\1=<redacted>"),
     (re.compile(r"(?i)\b(__Host-[\w-]+|__Secure-[\w-]+|KEYCLOAK_[\w-]+"
                 r"|AUTH_SESSION_ID[\w-]*|KC_RESTART|KC_AUTH_SESSION_HASH)=[^;\s\"']*"),
@@ -169,16 +176,26 @@ elif mode == "full":
                                   for (module, name), (outcome, first, _) in sorted(outcomes.items())
                                   if module != MODULE and outcome in ("failure", "error")])
 elif mode == "mutation":
-    test, kills = extra[0], extra[1:]
+    test, spec = extra[0], "|".join(extra[1:])
     outcome, first, text = outcomes.get((MODULE, test), ("missing", "", ""))
     append("mutation.tsv", [f"{label}\t{test}\t{rc}\t{outcome}\t{first}"])
     if rc != "1":
         problems.append(f"{label}: pytest exited {rc}, expected 1 (a test failure)")
     if outcome != "failure":
         problems.append(f"{label}: {test} {outcome}, expected failure")
-    for kill in kills:
-        if kill not in text:
-            problems.append(f"{label}: the red does not hold the expected kill {kill!r}")
+    def holds(kill: str) -> bool:
+        if kill.startswith("re:"):
+            return re.search(kill[3:], text, re.MULTILINE) is not None
+        return kill in text
+
+    alternatives = [[k for k in alt.split("|") if k] for alt in spec.split("||")]
+    matched = [alt for alt in alternatives if alt and all(holds(k) for k in alt)]
+    append("mutation-kill.txt", [
+        f"{label}\texpected {spec!r}\t"
+        + (f"matched {'|'.join(matched[0])!r}" if matched else "no match")
+    ])
+    if not matched:
+        problems.append(f"{label}: the red does not hold the expected kill {spec!r}")
 else:
     problems.append(f"unknown mode {mode}")
 
