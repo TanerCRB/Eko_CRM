@@ -226,8 +226,9 @@ async def _rejected_request(request: Request, exc: Exception) -> Response:
     try:
         return JSONResponse({"detail": errors}, status_code=422)
     except UnicodeEncodeError:
-        # A bounded `loc` or `msg` can still hold a lone surrogate from a JSON escape, which has
-        # no UTF-8 form: the same body, escaped, instead of a 500.
+        # A guard against a library change, not reachable through the current models (a key with
+        # a lone surrogate is one `string_unicode` at the body): a lone surrogate has no UTF-8
+        # form, so the same body, escaped, instead of a 500.
         return _EscapedJSONResponse({"detail": errors}, status_code=422)
 
 

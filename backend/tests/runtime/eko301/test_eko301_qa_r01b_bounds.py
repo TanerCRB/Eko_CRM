@@ -2,7 +2,11 @@
 
 - Every string in an error is cut to 200 characters: an unknown key the caller chose comes back
   in `loc` at most that long.
-- A 422 names at most 50 errors: 50 unknown keys are all named, 51 or ten thousand give 50.
+- Unknown keys are refused with one error naming the first of them, however many there are
+  (fix round 3, decision D and hard-stop-6 option B on Issue #195).
+- A 422 names at most 50 errors, pinned through invalid contact fields: each contact
+  `{"kind": "fax", "value": 1}` gives two errors (measured), so 24 contacts give 48, all named,
+  and 25, 26 or 50 contacts give 50, 52 or 100, of which 50 are named.
 - `ctx` of a `value_error` is the rule's fixed message as text, not the exception object.
 - An unknown key holding a lone surrogate gets a 422 naming the body, not a 500: the key is
   refused as text before it can reach `loc`.
@@ -56,18 +60,36 @@ def test_qa_r01b_a_huge_unknown_key_comes_back_cut_to_200_characters(crm: Crm) -
     assert len(response.content) < 1024, len(response.content)
 
 
-@pytest.mark.parametrize(("count", "named"), [(50, 50), (51, 50), (10_000, 50)])
-def test_qa_r01b_a_422_names_at_most_50_errors(crm: Crm, count: int, named: int) -> None:
+@pytest.mark.parametrize("count", [50, 51, 10_000])
+def test_qa_r01b_unknown_keys_give_one_error_naming_the_first(crm: Crm, count: int) -> None:
     response = rejected(crm, unknown_keys(count))
     errors = response.json()["detail"]
+    assert [(e["type"], e["loc"]) for e in errors] == [("extra_forbidden", ["body", "unknown_0"])]
+    assert len(response.content) < 100 * 50, len(response.content)
+
+
+def invalid_contacts(count: int) -> bytes:
+    """`count` contacts, each refused on two fields, `kind` and `value` (measured)."""
+    return json.dumps({"name": NAME, "contacts": [{"kind": "fax", "value": 1}] * count}).encode()
+
+
+@pytest.mark.parametrize(("contacts", "named"), [(25, 50), (26, 50), (50, 50)])
+def test_qa_r01b_a_422_names_at_most_50_errors(crm: Crm, contacts: int, named: int) -> None:
+    response = rejected(crm, invalid_contacts(contacts))
+    errors = response.json()["detail"]
     assert len(errors) == named
-    assert {e["type"] for e in errors} == {"extra_forbidden"}
-    assert len(response.content) < 100 * named, len(response.content)
+    assert {e["type"] for e in errors} == {"literal_error", "string_type"}
+    assert len(response.content) < 150 * named, len(response.content)
 
 
 def test_qa_r01b_contrast_fewer_errors_than_the_bound_are_all_named(crm: Crm) -> None:
     errors = rejected(crm, unknown_keys(3)).json()["detail"]
-    assert sorted(e["loc"][1] for e in errors) == ["unknown_0", "unknown_1", "unknown_2"]
+    assert [(e["type"], e["loc"]) for e in errors] == [("extra_forbidden", ["body", "unknown_0"])]
+    known = rejected(crm, invalid_contacts(24)).json()["detail"]
+    assert len(known) == 48
+    assert sorted((e["loc"][2], e["loc"][3]) for e in known) == sorted(
+        (n, field) for n in range(24) for field in ("kind", "value")
+    )
 
 
 def test_qa_r01b_a_value_error_ctx_is_the_rules_message_as_text(crm: Crm) -> None:

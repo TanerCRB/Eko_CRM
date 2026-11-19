@@ -9,6 +9,7 @@ response names the owner (Q-O A). Every response here carries `Cache-Control: no
 all of `/api/` in `main.py` (ADR-0005-C12); path parameters are UUIDs only (ADR-0005-C13).
 """
 
+import re
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -17,12 +18,15 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    ModelWrapValidatorHandler,
     StrictBool,
     StrictStr,
+    ValidationError,
     ValidationInfo,
     field_validator,
     model_validator,
 )
+from pydantic_core import ErrorDetails, InitErrorDetails
 
 from app.api.auth import Problem
 from app.api.dependencies import get_database
@@ -37,9 +41,54 @@ from app.services import customers as service
 router = APIRouter(prefix="/customers", route_class=AccessFirstRoute)
 
 
-class ContactIn(BaseModel):
+SURROGATES = re.compile("[\\ud800-\\udfff]")
+
+
+class RequestModel(BaseModel):
+    """A request body that refuses unknown keys with one error, not one per key (fix round 3,
+    decision D on Issue #195): pydantic-core would build an `extra_forbidden` per key, and a
+    2 MiB body holds 184 000 of them. The keys are scanned once; the known ones are validated as
+    before, so their errors keep their own `loc`, and only the first unknown key is named. A key
+    holding a lone surrogate gives pydantic's own single `string_unicode`, as before.
+    `extra="forbid"` stays as the backstop."""
+
     model_config = ConfigDict(extra="forbid")
 
+    @model_validator(mode="wrap")
+    @classmethod
+    def _one_unknown_key_error(cls, data: Any, handler: ModelWrapValidatorHandler[Any]) -> Any:
+        if not isinstance(data, dict):
+            return handler(data)
+        fields = cls.model_fields
+        first: str | None = None
+        for key in data:
+            if key in fields:
+                continue
+            if isinstance(key, str) and not key.isascii() and SURROGATES.search(key):
+                raise ValidationError.from_exception_data(
+                    cls.__name__, [{"type": "string_unicode", "loc": (), "input": data}]
+                )
+            if first is None:
+                first = key
+        if first is None:
+            return handler(data)
+        details: list[InitErrorDetails] = []
+        try:
+            handler({key: value for key, value in data.items() if key in fields})
+        except ValidationError as known:
+            details = [_detail(error) for error in known.errors(include_url=False)]
+        details.append({"type": "extra_forbidden", "loc": (first,), "input": data[first]})
+        raise ValidationError.from_exception_data(cls.__name__, details)
+
+
+def _detail(error: ErrorDetails) -> InitErrorDetails:
+    detail: InitErrorDetails = {"type": error["type"], "loc": error["loc"], "input": error["input"]}
+    if "ctx" in error:
+        detail["ctx"] = error["ctx"]
+    return detail
+
+
+class ContactIn(RequestModel):
     kind: Literal["phone", "email"]
     value: Annotated[StrictStr, Field(max_length=rules.VALUE_RAW_LIMIT)]
     # Who the contact reaches; omitted, `null` or `""` is no note.
@@ -59,10 +108,8 @@ class ContactIn(BaseModel):
         return rules.contact_note(note)
 
 
-class CustomerCreate(BaseModel):
+class CustomerCreate(RequestModel):
     """A new customer. The owner is never part of the request: an unknown field is a 422."""
-
-    model_config = ConfigDict(extra="forbid")
 
     name: Annotated[StrictStr, Field(max_length=rules.NAME_RAW_LIMIT)]
     # Omitted: Poland. `null`, `""` or a code outside the closed list: rejected (G-2 A, G-3 A).
