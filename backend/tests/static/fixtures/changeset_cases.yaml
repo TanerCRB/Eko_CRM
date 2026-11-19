@@ -14,3 +14,15 @@ personal_data:
   - "phone: 601-234-567"
 allowed_references:
   - {path: x.yml, text: "      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?KEYCLOAK_DB_PASSWORD is required}\n"}
+# Decision H6-D A (Issue #195, 2026-11-18): an exact value a locked acceptance criterion names,
+# allowed in one file only; `personal_data` removes it from a line of that file before checking.
+criterion_values:
+  - path: backend/tests/runtime/eko301/test_eko301_k03_phone_and_email.py
+    value: "601 234 567"
+    criterion: "EKO-3-01 K-03"
+# The allowance's contrasts: the allowed value passes; another value, or the allowed value next to
+# another phone-shaped value, or the allowed value in another file, is still found.
+criterion_value_contrasts:
+  allowed: 'phone("601 234 567")'
+  other_value: 'phone("601 234 568")'
+  other_on_the_line: 'phone("601 234 567"), phone("602 345 678")'

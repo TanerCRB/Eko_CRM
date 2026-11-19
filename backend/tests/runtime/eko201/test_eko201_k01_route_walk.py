@@ -7,6 +7,7 @@ against the stub, and the verifying side is changed by exactly one element (publ
 expected issuer, expected audience, refresh outcome).
 """
 
+import uuid
 from typing import Any
 
 import pytest
@@ -50,8 +51,26 @@ def protected_operations(app: FastAPI) -> list[tuple[str, str]]:
     return [(m, p) for m, p in operations(app) if p not in EXEMPT]
 
 
-def call(browser: Browser, method: str, path: str) -> int:
-    return browser.send(method, path).status_code
+# A valid request for each operation that needs one (decision H6-C A on Issue #195): the body a
+# create accepts, and a customer identifier in place of the path parameter, so the valid-session
+# answer is the operation's own success and every other answer is the access dependency's.
+VALID_BODIES: dict[tuple[str, str], dict[str, Any]] = {
+    ("POST", "/api/customers"): {"json": {"name": "Gospodarstwo Trasa"}},
+}
+CUSTOMER_PARAMETER = "{customer_id}"
+
+
+def call(browser: Browser, method: str, path: str, customer_id: str | None = None) -> int:
+    concrete = path.replace(CUSTOMER_PARAMETER, customer_id or str(uuid.uuid4()))
+    return browser.send(method, concrete, **VALID_BODIES.get((method, path), {})).status_code
+
+
+def existing_customer(browser: Browser) -> str:
+    """A customer the caller of `browser` owns, so reading it by identifier succeeds."""
+    made = browser.send("POST", "/api/customers", **VALID_BODIES[("POST", "/api/customers")])
+    assert made.status_code == 201, made.text
+    identifier: str = made.json()["id"]
+    return identifier
 
 
 def test_k01_route_walk_without_a_session_answers_401_outside_exactly_three_routes(
@@ -228,7 +247,10 @@ def test_k01_every_protected_operation_answers_per_session_state(
         elif scenario in {"refused", "unreachable"}:
             clock.advance(**EXPIRED)
             stub.refresh_mode = "refuse" if scenario == "refused" else "error"
-        status = call(browser, method, path)
+        owned = None
+        if scenario == "valid" and CUSTOMER_PARAMETER in path:
+            owned = existing_customer(browser)
+        status = call(browser, method, path, owned)
         if scenario == "valid":
             assert status not in {401, 403, 404, 405, 503}, (method, path, status)
             assert status < 400, (method, path, status)

@@ -48,6 +48,7 @@ from tests.support.repo import REPO_ROOT
 pytestmark = pytest.mark.runtime
 
 PAD_ROWS = 150_000
+CUSTOMER_OWNER = "5a1e0301-0000-4000-8000-0000000000f1"
 SERVER_UTC = "to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')"
 BACKUP_POINT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z")
 APPLICATION_TABLES = (
@@ -95,6 +96,8 @@ def produced(backup_lab: BackupLab) -> Produced:
         label: unique_marker(label) for label in ("row", "user", "row-window", "user-window")
     }
     backup_lab.plant_row(markers["row"])
+    # EKO-3-01 F-1 A: the product tables' rows are counted like every other table's.
+    backup_lab.plant_customer(CUSTOMER_OWNER, contacts=2)
     backup_lab.plant_keycloak_user(markers["user"])
     backup_lab.pad(PAD_ROWS)
     before = set_names(backup_lab.double)
@@ -224,6 +227,9 @@ def test_k03_5_manifest_revision_images_and_counts(
     assert set(manifest["row_counts"]) == produced.tables
     assert manifest["row_counts"]["public.eko_test_backup_empty"] == 0
     assert manifest["row_counts"]["public.alembic_version"] == 1
+    # EKO-3-01 F-1 A (Issue #195): revision 0004's product tables, with their planted rows.
+    assert manifest["row_counts"]["public.customer"] == 1
+    assert manifest["row_counts"]["public.customer_contact"] == 2
 
 
 # Point 6: the backup point --------------------------------------------------------------------

@@ -52,7 +52,7 @@ def test_k06_openapi_document_exposes_no_account_operation() -> None:
     assert account_operations(document) == []
 
 
-def test_k06_the_only_changing_operation_is_logout() -> None:
+def test_k06_the_only_changing_operations_are_logout_and_customer_create() -> None:
     document = real_app().openapi()
     changing = {
         f"{method.upper()} {path}"
@@ -60,7 +60,8 @@ def test_k06_the_only_changing_operation_is_logout() -> None:
         for method in item
         if method in CHANGING
     }
-    assert changing == {"POST /api/auth/logout"}
+    # EKO-3-01 adds customer creation (decision H6-B A on Issue #195); it creates no account.
+    assert changing == {"POST /api/auth/logout", "POST /api/customers"}
 
 
 def test_k06_no_application_source_calls_keycloak_admin_api() -> None:

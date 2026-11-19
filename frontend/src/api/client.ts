@@ -4,10 +4,13 @@ export type ApiResponse =
   | { kind: "ok"; status: number; body: unknown }
   | { kind: "unauthenticated" }
   | { kind: "unavailable" }
-  | { kind: "failed"; status: number };
+  // `body` only on 422: the validation answer names fields; no other refusal's body is read.
+  | { kind: "failed"; status: number; body?: unknown };
 
 export interface RequestOptions {
   method?: "GET" | "POST";
+  // Sent as JSON; absent means no body and no Content-Type.
+  body?: unknown;
   // "report" leaves a 401 to the caller; every other request starts a login on 401.
   onUnauthenticated?: "redirect" | "report";
 }
@@ -15,15 +18,17 @@ export interface RequestOptions {
 // The one way the SPA talks to the API: the browser sends the HttpOnly session cookie itself.
 export async function apiRequest(
   path: `/api/${string}`,
-  { method = "GET", onUnauthenticated = "redirect" }: RequestOptions = {},
+  { method = "GET", body: payload, onUnauthenticated = "redirect" }: RequestOptions = {},
 ): Promise<ApiResponse> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  const init: RequestInit = { method, credentials: "same-origin", headers };
+  if (payload !== undefined) {
+    headers["Content-Type"] = "application/json";
+    init.body = JSON.stringify(payload);
+  }
   let response: Response;
   try {
-    response = await fetch(path, {
-      method,
-      credentials: "same-origin",
-      headers: { Accept: "application/json" },
-    });
+    response = await fetch(path, init);
   } catch {
     return { kind: "unavailable" };
   }
@@ -44,14 +49,22 @@ export async function apiRequest(
   if (response.status === 503) {
     return { kind: "unavailable" };
   }
+  if (response.status === 422) {
+    return { kind: "failed", status: 422, body: parseJson(text) };
+  }
   if (!response.ok) {
     return { kind: "failed", status: response.status };
   }
-  let body: unknown;
-  try {
-    body = text === undefined ? undefined : JSON.parse(text);
-  } catch {
-    body = undefined;
+  return { kind: "ok", status: response.status, body: parseJson(text) };
+}
+
+function parseJson(text: string | undefined): unknown {
+  if (text === undefined) {
+    return undefined;
   }
-  return { kind: "ok", status: response.status, body };
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return undefined;
+  }
 }

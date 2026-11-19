@@ -9,7 +9,7 @@ interface FieldProps
   > {
   id?: string;
   label: string;
-  error?: string;
+  error?: string | undefined;
 }
 
 export function Field({ id, label, error, required, ...props }: FieldProps) {

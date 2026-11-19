@@ -611,3 +611,18 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   `test_k06_frontend_replacement.py::test_k06_open_spa_recovers_unloaded_lazy_chunk_after_frontend_replacement`
   with `net::ERR_NETWORK_CHANGED`, a pre-existing flake outside this change (#192); the human merged
   with that classification. Follow-ups: #187 (the `eko-backend` client's full role scope), #192.
+
+## EKO-3 — Customers
+
+- [ ] **EKO-3-01** — Let a rep create and view their own customers with contacts (#195).
+  *Done when:* tests prove: a customer is saved with name and country only, country defaulting to
+  Poland (CUS-2); any number of phones and e-mails, each with an optional note on who answers, at
+  most one contact primary (CUS-1); phones stored in international format, `+48` by default, and a
+  malformed e-mail rejected by the server (CUS-8); a rep sees and creates only own customers; a rep
+  reading another rep's customer by id gets a denial that discloses no data, while the manager gets
+  the record (ACC-4, PRH-4); an administrator-only account is refused; the SPA lets a rep create a
+  customer with contacts and view it, built on the P2 CustomerSheet and ContactEditor material.
+  **Out of scope (explicit):** address and NIP validation (EKO-3-02); duplicates (EKO-3-03); list
+  search (EKO-3-04); archiving (CUS-9); reassignment (CUS-10); the manager editing another rep's
+  customer (ACC-5 edit half); visits, notes, actions, Google Calendar; real customer data. After
+  EKO-2-02 and EKO-1-07.

@@ -33,7 +33,7 @@ def test_k04_c23_openapi_and_docs_are_not_served_under_the_api_prefix(client: Te
         assert client.get(path).status_code == 404, path
 
 
-def test_k04_c23_api_prefix_holds_exactly_health_and_the_four_auth_routes(
+def test_k04_c23_api_prefix_holds_exactly_health_the_four_auth_routes_and_customers(
     client: TestClient,
 ) -> None:
     paths = client.get("/openapi.json").json()["paths"]
@@ -42,6 +42,11 @@ def test_k04_c23_api_prefix_holds_exactly_health_and_the_four_auth_routes(
         "/api/auth/login",
         "/api/auth/logout",
         "/api/auth/session",
+        "/api/customers",
+        "/api/customers/{customer_id}",
         "/api/health",
     ]
+    # EKO-3-01 (decision H6-B A on Issue #195): the three customer operations.
+    assert sorted(paths["/api/customers"]) == ["get", "post"]
+    assert sorted(paths["/api/customers/{customer_id}"]) == ["get"]
     assert sorted(paths["/api/health"]) == ["get", "head"]

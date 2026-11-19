@@ -5,6 +5,7 @@ import json
 import re
 from collections.abc import Iterable, Mapping
 
+import yaml
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 
@@ -13,6 +14,7 @@ from tests.support.image_refs import (
     keycloak_text_references,
     postgres_text_references,
 )
+from tests.support.repo import REPO_ROOT
 
 COMPOSE_GLOB = "*compose*.y*ml"
 # K-04 edge: the checks' own negative fixtures, named one by one; never a directory.
@@ -227,11 +229,25 @@ NIP = re.compile(
 PHONE = re.compile(r"(?<![0-9A-Za-z])(\+48[\s-]?)?\d{3}[\s-]\d{3}[\s-]\d{3}(?![0-9A-Za-z])")
 
 
+def criterion_values() -> dict[str, str]:
+    """Path -> the one exact value a locked acceptance criterion names that the path may hold
+    (`criterion_values` in the changeset fixture, decision H6-D A on Issue #195)."""
+    cases = yaml.safe_load(
+        (REPO_ROOT / "backend/tests/static/fixtures/changeset_cases.yaml").read_text("utf-8")
+    )
+    return {entry["path"]: entry["value"] for entry in cases.get("criterion_values", [])}
+
+
 def personal_data(added_lines: Mapping[str, Iterable[str]]) -> list[str]:
     """K-07: no real-looking e-mail address, NIP or phone number in added lines."""
     problems = []
+    allowances = criterion_values()
     for path, lines in added_lines.items():
+        allowed = allowances.get(path)
         for line in lines:
+            if allowed is not None:
+                # Removed before checking, so anything else on the line is still checked.
+                line = line.replace(allowed, "")
             for match in EMAIL.finditer(line):
                 if not RESERVED_DOMAIN.search(match.group("domain")):
                     problems.append(f"{path}: e-mail address outside reserved domains")

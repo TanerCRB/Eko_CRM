@@ -7,17 +7,18 @@ response and `Cache-Control: no-store` under `/api/`, writes the request line, a
 error line of an unhandled exception once, as its type and location only.
 """
 
+import json
 import logging
 import re
 import secrets
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import Depends, FastAPI, Request, Response, routing
 from fastapi.exception_handlers import (
     http_exception_handler,
-    request_validation_exception_handler,
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -25,9 +26,17 @@ from starlette.exceptions import HTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.auth import router as auth_router
+from app.api.customers import LARGEST_CREATE_BODY
+from app.api.customers import router as customers_router
 from app.api.health import router as health_router
 from app.auth.crypto import Sealer
-from app.auth.gate import OriginRefused, RoleRefused, authenticate
+from app.auth.gate import (
+    AccessFirstRoute,
+    OriginRefused,
+    RoleRefused,
+    authenticate,
+    routes_without_access_first,
+)
 from app.auth.oidc import OidcClient, http_client
 from app.auth.sessions import Authenticator, Unauthenticated, Unavailable
 from app.core.clock import SystemClock
@@ -35,6 +44,8 @@ from app.core.logs import RequestLine, correlation_id, install_interpreter_hooks
 from app.core.settings import AuthSettings, Settings, load_settings
 from app.data.database import Database
 from app.data.sessions import SessionStore, StorageUnavailable
+from app.domain.customers import CustomerNotFound
+from app.domain.ownership import NotPermitted
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +64,15 @@ STANDARD_METHODS = frozenset(
 UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 ROUTE_LIMIT = 256
 CORRELATION_HEADER = b"eko-correlation-id"
+# The most bytes an `/api/` request body may carry (fix round 1, R-01 A): the largest create body
+# whose fields pass their raw caps is `LARGEST_CREATE_BODY` (1 821 888 bytes), rounded up to
+# 2 MiB; `create_app()` refuses to build if a body route ever needs more.
+REQUEST_BODY_LIMIT = 2 * 1024 * 1024
+BODY_TOO_LARGE = "request body too large"
+# A 422 names at most this many errors, each string in it at most this long: one per unknown key
+# would otherwise grow with the body (fix round 2, decision D).
+_ERROR_COUNT_LIMIT = 50
+_ERROR_TEXT_LIMIT = 200
 SERVER_ERROR_BODY = b"Internal Server Error"
 
 
@@ -66,6 +86,31 @@ def opaque_route(path: str, fixed_segments: frozenset[str]) -> str:
     segments = path.split("/")
     kept = [s if s == "" or s in fixed_segments or UUID.fullmatch(s) else "*" for s in segments]
     return "/".join(kept)[:ROUTE_LIMIT]
+
+
+def limited_receive(receive: Receive, scope: Scope) -> Receive:
+    """`receive`, refusing with 413 once the body passes `REQUEST_BODY_LIMIT`: a stated
+    `Content-Length` before any byte is read, and the bytes counted as they arrive, so a body
+    without a length is cut off too. Nothing reads the body before the access decision
+    (`AccessFirstRoute`), so a refused caller gets the access answer instead (ADR-0003-C34)."""
+    stated = [
+        value for name, value in scope.get("headers", []) if name.lower() == b"content-length"
+    ]
+    declared = max((int(v) for v in stated if v.strip().isdigit()), default=0)
+    received = 0
+
+    async def limited() -> Message:
+        nonlocal received
+        if declared > REQUEST_BODY_LIMIT:
+            raise HTTPException(413, BODY_TOO_LARGE)
+        message = await receive()
+        if message["type"] == "http.request":
+            received += len(message.get("body", b""))
+            if received > REQUEST_BODY_LIMIT:
+                raise HTTPException(413, BODY_TOO_LARGE)
+        return message
+
+    return limited
 
 
 class RequestHandling:
@@ -119,7 +164,7 @@ class RequestHandling:
             await send(message)
 
         try:
-            await self.app(scope, receive, shaped)
+            await self.app(scope, limited_receive(receive, scope) if api else receive, shaped)
         except Exception:
             # Written once, here; the exception is not passed on, so uvicorn writes no second one.
             logger.error("unhandled exception in a request", exc_info=True)
@@ -148,10 +193,43 @@ class RequestHandling:
             correlation_id.reset(bound)
 
 
+class _EscapedJSONResponse(JSONResponse):
+    def render(self, content: Any) -> bytes:
+        return json.dumps(content, ensure_ascii=True, separators=(",", ":")).encode("ascii")
+
+
+def _bounded(value: object) -> str | int | float | bool:
+    if isinstance(value, bool | int | float):
+        return value
+    return str(value)[:_ERROR_TEXT_LIMIT]
+
+
+def _public_error(error: Mapping[str, Any]) -> dict[str, Any]:
+    """`loc`, `msg`, `type` and a scalar `ctx` only: never `input`, so neither a value the caller
+    sent nor the body is echoed or walked (fix round 2, decision D). Every string is bounded,
+    since a `loc` can hold an unknown key the caller chose."""
+    public: dict[str, Any] = {
+        "type": _bounded(error.get("type", "")),
+        "loc": [item if isinstance(item, int) else _bounded(item) for item in error.get("loc", ())],
+        "msg": _bounded(error.get("msg", "")),
+    }
+    context = error.get("ctx")
+    if isinstance(context, Mapping):
+        public["ctx"] = {_bounded(k): _bounded(v) for k, v in context.items()}
+    return public
+
+
 async def _rejected_request(request: Request, exc: Exception) -> Response:
     if not isinstance(exc, RequestValidationError):
         raise exc
-    return await request_validation_exception_handler(request, exc)
+    errors = [_public_error(error) for error in exc.errors()[:_ERROR_COUNT_LIMIT]]
+    try:
+        return JSONResponse({"detail": errors}, status_code=422)
+    except UnicodeEncodeError:
+        # A guard against a library change, not reachable through the current models (a key with
+        # a lone surrogate is one `string_unicode` at the body): a lone surrogate has no UTF-8
+        # form, so the same body, escaped, instead of a 500.
+        return _EscapedJSONResponse({"detail": errors}, status_code=422)
 
 
 async def _http_error(request: Request, exc: Exception) -> Response:
@@ -196,6 +274,32 @@ async def _role_refused(request: Request, exc: Exception) -> Response:
 
 async def _unavailable(request: Request, exc: Exception) -> Response:
     return _problem(503, "temporarily unavailable")
+
+
+async def _not_found(request: Request, exc: Exception) -> Response:
+    # One answer for a record that exists nowhere and one outside the caller's scope
+    # (ADR-0003 addendum of EKO-3-01, section 3): nothing about the record is in it.
+    return _problem(404, "not found")
+
+
+def _check_access_first(app: FastAPI) -> None:
+    if routes_without_access_first(app):
+        raise RuntimeError("a route would read its body before the access decision")
+
+
+class AccessFirstApp(FastAPI):
+    """The application: every route, one registered later included, is an `AccessFirstRoute`
+    (ADR-0003-C34). It is the router's route class, and the middleware stack, built before the
+    first request, is refused while any served route is of another class, so a router created
+    without it is never served."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.router.route_class = AccessFirstRoute
+
+    def build_middleware_stack(self) -> ASGIApp:
+        _check_access_first(self)
+        return super().build_middleware_stack()
 
 
 def _public_routes(app: FastAPI) -> tuple[object, ...]:
@@ -257,7 +361,7 @@ def create_app() -> FastAPI:
 
         # The OpenAPI document and docs stay outside /api/: proxy forwards only /api/ to backend,
         # so they are reachable only inside the composition network (ADR-0003-C23).
-        app = FastAPI(
+        app = AccessFirstApp(
             title="Eko_CRM API",
             openapi_url="/openapi.json",
             docs_url="/docs",
@@ -270,6 +374,10 @@ def create_app() -> FastAPI:
         app.state.auth = auth
         app.include_router(health_router, prefix="/api")
         app.include_router(auth_router, prefix="/api")
+        app.include_router(customers_router, prefix="/api")
+        _check_access_first(app)
+        if LARGEST_CREATE_BODY > REQUEST_BODY_LIMIT:
+            raise RuntimeError("the request body limit refuses a valid customer")
         auth.public_routes = _public_routes(app)
         _check_lists()
         app.state.role_free_routes = _listed_routes(app, ROLE_FREE_OPERATIONS)
@@ -279,6 +387,8 @@ def create_app() -> FastAPI:
         app.add_exception_handler(RoleRefused, _role_refused)
         app.add_exception_handler(Unavailable, _unavailable)
         app.add_exception_handler(StorageUnavailable, _unavailable)
+        app.add_exception_handler(NotPermitted, _role_refused)
+        app.add_exception_handler(CustomerNotFound, _not_found)
         install_request_handling(app)
         return app
     except Exception:

@@ -13,13 +13,19 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, ConfigDict
 
-from app.auth.gate import LOGIN_COOKIE, SESSION_COOKIE, authenticator, current_caller
+from app.auth.gate import (
+    LOGIN_COOKIE,
+    SESSION_COOKIE,
+    AccessFirstRoute,
+    authenticator,
+    current_caller,
+)
 from app.auth.sessions import LoginRefused, Unavailable
 from app.data.sessions import StorageUnavailable
 from app.domain.caller import Caller
 from app.domain.session_policy import ABSOLUTE_LIMIT, LOGIN_TRANSACTION_VALIDITY
 
-router = APIRouter(prefix="/auth")
+router = APIRouter(prefix="/auth", route_class=AccessFirstRoute)
 
 LOGIN_TRANSACTION_MAX_AGE = int(LOGIN_TRANSACTION_VALIDITY.total_seconds())
 SESSION_MAX_AGE = int(ABSOLUTE_LIMIT.total_seconds())

@@ -26,10 +26,11 @@ from tests.runtime.conftest import BUILT_SERVICES, Composition
 from tests.support.repo import REPO_ROOT
 
 REVISIONS = Path(__file__).parent / "revisions"
-SHIPPED_HEAD = "0003"
-SHIPPED_TREE = ("0001", "0002", "0003")
-# The tables of the shipped revisions after 0002 (0003: sessions and login transactions).
-LATER_TABLES = ("app_session", "login_transaction")
+SHIPPED_HEAD = "0004"
+SHIPPED_TREE = ("0001", "0002", "0003", "0004")
+# The tables of the shipped revisions after 0002 (0003: sessions and login transactions; 0004:
+# customers and contacts, the contact table first for its foreign key).
+LATER_TABLES = ("app_session", "login_transaction", "customer_contact", "customer")
 # pg_dump writes a random \restrict key into every dump unless one is given.
 DUMP_RESTRICT_KEY = "ekotestdump"
 HEALTH_URL = "http://backend:8000/api/health"
@@ -572,6 +573,6 @@ REFUSING_STATES: dict[str, Callable[[Lab], None]] = {
     "vi-descendant-lineage-dropped": _lineage_dropped,
 }
 ACCEPTING_STATES: dict[str, Callable[[Lab], None]] = {
-    "head-0003": Lab.at_head,
+    "head-0004": Lab.at_head,
     "descendant-t_next": lambda lab: lab.at_variant_head("next"),
 }

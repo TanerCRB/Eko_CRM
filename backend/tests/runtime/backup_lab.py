@@ -455,6 +455,27 @@ class BackupLab:
             h=value.encode("utf-8").hex(),
         )
 
+    def plant_customer(self, owner: str, contacts: int = 0) -> str:
+        """A synthetic customer with `contacts` phone contacts (revision 0004's product tables,
+        EKO-3-01 F-1 and C17), with random UUIDv4 identifiers as the application issues them."""
+        customer_id = str(uuid.uuid4())
+        self.sql(
+            "INSERT INTO customer (id, name, country, owner_subject) "
+            "VALUES (CAST(:'i' AS uuid), 'Gospodarstwo Kopia', 'PL', :'o')",
+            i=customer_id,
+            o=owner,
+        )
+        for position in range(contacts):
+            self.sql(
+                "INSERT INTO customer_contact (id, customer_id, position, kind, value, note, "
+                "is_primary) VALUES (CAST(:'c' AS uuid), CAST(:'i' AS uuid), "
+                "CAST(:'p' AS integer), 'phone', '+48601000700', NULL, false)",
+                c=str(uuid.uuid4()),
+                i=customer_id,
+                p=str(position),
+            )
+        return customer_id
+
     def plant_keycloak_user(self, value: str) -> str:
         """A Keycloak user of the master realm whose first name is `value`."""
         user_id = str(uuid.uuid4())
