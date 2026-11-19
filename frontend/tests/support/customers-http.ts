@@ -1,11 +1,13 @@
 import { vi } from "vitest";
 import type { Problem } from "../../src/api/auth";
 import type { CustomerList, CustomerRecord, ValidationProblem } from "../../src/api/customers";
+import type { VoivodeshipList } from "../../src/api/reference";
 
 // Bodies are typed by the contracts layer, so a contract change breaks the stubs at compile time.
 export type CustomerReply =
   | { status: 200 | 201; body: CustomerRecord }
   | { status: 200; body: CustomerList }
+  | { status: 200; body: VoivodeshipList }
   | { status: 422; body: ValidationProblem }
   | { status: 403 | 404 | 500 | 503; body: Problem }
   | { status: 200; raw: string };
@@ -20,6 +22,7 @@ export interface RecordedCall {
 export type ReplySource = CustomerReply | (() => Promise<CustomerReply>);
 
 export const CUSTOMERS_URL = "/api/customers";
+export const VOIVODESHIPS_URL = "/api/reference/voivodeships";
 
 export function stubCustomerApi(routes: Record<string, ReplySource>) {
   const calls: RecordedCall[] = [];

@@ -1,5 +1,5 @@
-"""Customers as the brief defines them (CUS-1, CUS-2, CUS-8) and the value rules gate 1 fixed
-(EKO-3-01, G-1 A to G-6 A).
+"""Customers as the brief defines them (CUS-1 to CUS-5, CUS-8) and the value rules gate 1 fixed
+(EKO-3-01, G-1 A to G-6 A; EKO-3-02, C-1 A to C-3 A, G-1 A to G-5 A, Q-4 A).
 
 Text is stored as Unicode NFC, normalised here before it is written (ADR-0002 *Polish text*);
 every length bound is counted on that form. A rule that refuses a value raises `ValueError` with
@@ -12,6 +12,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from uuid import UUID
+
+from app.domain import regions
 
 NAME_LIMIT = 120
 NOTE_LIMIT = 500
@@ -29,6 +31,18 @@ NAME_RAW_LIMIT = NFC_COMPOSITION_LIMIT * NAME_LIMIT
 VALUE_RAW_LIMIT = NFC_COMPOSITION_LIMIT * EMAIL_LIMIT
 NOTE_RAW_LIMIT = NFC_COMPOSITION_LIMIT * NOTE_LIMIT
 NATIONAL_PREFIX = "+48"
+# EKO-3-02 G-1 A, counted on the trimmed NFC form; a Polish NIP is bounded as sent instead.
+STREET_LIMIT = 150
+TOWN_LIMIT = 100
+FOREIGN_POSTAL_CODE_LIMIT = 20
+FOREIGN_TAX_ID_LIMIT = 32
+NIP_SENT_LIMIT = 32
+STREET_RAW_LIMIT = NFC_COMPOSITION_LIMIT * STREET_LIMIT
+TOWN_RAW_LIMIT = NFC_COMPOSITION_LIMIT * TOWN_LIMIT
+# A Polish postal code is six characters once trimmed, well inside the foreign bound's cap.
+POSTAL_CODE_RAW_LIMIT = NFC_COMPOSITION_LIMIT * FOREIGN_POSTAL_CODE_LIMIT
+TAX_ID_RAW_LIMIT = NFC_COMPOSITION_LIMIT * FOREIGN_TAX_ID_LIMIT
+REGION_RAW_LIMIT = NFC_COMPOSITION_LIMIT * regions.NAME_LIMIT
 
 # ISO 3166-1 alpha-2, the officially assigned codes: the closed list of G-3 A.
 COUNTRY_CODES = frozenset(
@@ -52,6 +66,13 @@ PHONE_SEPARATORS = re.compile(r"[\s()-]")
 NATIONAL_NUMBER = re.compile(r"[0-9]{9}")
 INTERNATIONAL_NUMBER = re.compile(r"\+[1-9][0-9]{7,14}")
 EMAIL_SHAPE = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
+# CUS-3: `00-000` in ASCII digits only (`[0-9]`, never `\d`, which takes any Unicode digit).
+POLISH_POSTAL_CODE = re.compile(r"[0-9]{2}-[0-9]{3}")
+# CUS-5, P2 `domain.js` l. 39-53: a leading `PL` in either case (G-4 A), then hyphens and spaces.
+NIP_PREFIX = re.compile(r"\A[Pp][Ll]")
+NIP_SEPARATORS = re.compile(r"[ -]")
+NIP_DIGITS = re.compile(r"[0-9]{10}")
+NIP_WEIGHTS = (6, 5, 7, 2, 3, 4, 5, 6, 7)
 
 
 class ContactKind(StrEnum):
@@ -119,6 +140,105 @@ def email_address(raw: str) -> str:
     return address
 
 
+def given(raw: str | None) -> str | None:
+    """`None`, `""` and whitespace only are a value not given (EKO-3-02 G-2 A)."""
+    if raw is None or not raw.strip():
+        return None
+    return raw
+
+
+def _bounded(raw: str, limit: int) -> str:
+    text = _text(raw.strip())
+    if len(text) > limit:
+        raise ValueError(f"at most {limit} characters")
+    return text
+
+
+def street(raw: str | None) -> str | None:
+    """Street and number: trimmed, NFC, at most `STREET_LIMIT` characters, stored as text."""
+    value = given(raw)
+    return None if value is None else _bounded(value, STREET_LIMIT)
+
+
+def town(raw: str | None) -> str | None:
+    """Post office or town: trimmed, NFC, at most `TOWN_LIMIT` characters."""
+    value = given(raw)
+    return None if value is None else _bounded(value, TOWN_LIMIT)
+
+
+def is_polish(country: str) -> bool:
+    return country == DEFAULT_COUNTRY
+
+
+def postal_code(country: str, raw: str | None) -> str | None:
+    """Poland, sent or defaulted: `00-000` once trimmed (CUS-3). Elsewhere: free text, trimmed,
+    NFC, at most `FOREIGN_POSTAL_CODE_LIMIT` characters (CUS-4)."""
+    value = given(raw)
+    if value is None:
+        return None
+    if not is_polish(country):
+        return _bounded(value, FOREIGN_POSTAL_CODE_LIMIT)
+    code = value.strip()
+    if not POLISH_POSTAL_CODE.fullmatch(code):
+        raise ValueError("not a Polish postal code (00-000)")
+    return code
+
+
+def _region_name(raw: str) -> str:
+    # Exactly as sent but for NFC: no trimming and no case folding (G-3 A).
+    return _text(raw)
+
+
+def voivodeship(country: str, raw: str | None) -> str | None:
+    """One of the register's 16 for Poland; refused for any other country (C-3 A)."""
+    value = given(raw)
+    if value is None:
+        return None
+    if not is_polish(country):
+        raise ValueError("only a Polish address has a voivodeship")
+    return regions.voivodeship(_region_name(value))
+
+
+def county(country: str, voivodeship_name: str | None, raw: str | None) -> str | None:
+    """A county of the chosen voivodeship for Poland, never without one (C-2 A; G-5 A: the error
+    is the county's); refused for any other country (C-3 A). `voivodeship_name` is the value
+    `voivodeship()` returned."""
+    value = given(raw)
+    if value is None:
+        return None
+    if not is_polish(country):
+        raise ValueError("only a Polish address has a county")
+    if voivodeship_name is None:
+        raise ValueError("a county needs its voivodeship")
+    return regions.county(voivodeship_name, _region_name(value))
+
+
+def polish_nip(raw: str) -> str:
+    """At most `NIP_SENT_LIMIT` characters as sent; trimmed, a leading `PL` and then every
+    hyphen and space removed; ten ASCII digits whose weighted sum modulo 11 is the last digit, a
+    remainder of 10 being no NIP (CUS-5). The ten digits are the canonical form."""
+    if len(raw) > NIP_SENT_LIMIT:
+        raise ValueError(f"at most {NIP_SENT_LIMIT} characters")
+    digits = NIP_SEPARATORS.sub("", NIP_PREFIX.sub("", raw.strip(), count=1))
+    if not NIP_DIGITS.fullmatch(digits):
+        raise ValueError("not a Polish NIP")
+    check = sum(int(d) * w for d, w in zip(digits, NIP_WEIGHTS, strict=False)) % 11
+    if check == 10 or check != int(digits[9]):
+        raise ValueError("not a Polish NIP: the check digit does not match")
+    return digits
+
+
+def tax_id(country: str, raw: str | None) -> str | None:
+    """Poland: the canonical NIP. Elsewhere: free text, trimmed, NFC, at most
+    `FOREIGN_TAX_ID_LIMIT` characters, no checksum (CUS-5; ADR-0002 addendum of EKO-3-02)."""
+    value = given(raw)
+    if value is None:
+        return None
+    if is_polish(country):
+        return polish_nip(value)
+    return _bounded(value, FOREIGN_TAX_ID_LIMIT)
+
+
 def contact_value(kind: ContactKind, raw: str) -> str:
     if kind is ContactKind.PHONE:
         return phone_number(raw)
@@ -142,6 +262,38 @@ def check_contacts(contacts: Sequence[Contact]) -> None:
 
 
 @dataclass(frozen=True)
+class Address:
+    """One address per customer (CUS-1), every part optional; voivodeship and county only for
+    Poland, as the register names them (Q-4 A)."""
+
+    street: str | None = None
+    postal_code: str | None = None
+    town: str | None = None
+    voivodeship: str | None = None
+    county: str | None = None
+
+
+@dataclass(frozen=True)
+class TaxId:
+    """At most one tax identifier, placed by the country: a Polish customer's canonical NIP in
+    `nip`, any other customer's text in `foreign`, the other one `None` (ADR-0002 addendum of
+    EKO-3-02, section 3)."""
+
+    nip: str | None = None
+    foreign: str | None = None
+
+    @classmethod
+    def placed(cls, country: str, value: str | None) -> "TaxId":
+        if value is None:
+            return cls()
+        return cls(nip=value) if is_polish(country) else cls(foreign=value)
+
+    @property
+    def value(self) -> str | None:
+        return self.nip if self.nip is not None else self.foreign
+
+
+@dataclass(frozen=True)
 class CustomerDraft:
     """A customer as a create request asks for it, every value already normalised; contacts in
     the order sent (G-6 A)."""
@@ -149,6 +301,8 @@ class CustomerDraft:
     name: str
     country: str
     contacts: tuple[Contact, ...]
+    address: Address = Address()
+    tax_id: TaxId = TaxId()
 
 
 @dataclass(frozen=True)
@@ -157,6 +311,8 @@ class Customer:
     name: str
     country: str
     contacts: tuple[Contact, ...]
+    address: Address = Address()
+    tax_id: TaxId = TaxId()
 
 
 @dataclass(frozen=True)

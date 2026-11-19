@@ -33,7 +33,7 @@ browser_for = eko201.browser_for
 
 EXEMPT = frozenset({"/api/auth/login", "/api/auth/callback", "/api/health"})
 # The product's operations: EKO-2-02 added none; EKO-3-01 adds the three customer operations
-# (decision H6-B A on Issue #195).
+# (decision H6-B A on Issue #195); EKO-3-02 the voivodeship reference (Q-3 A on Issue #208).
 PRODUCT = frozenset(
     {
         ("GET", "/api/health"),
@@ -45,6 +45,7 @@ PRODUCT = frozenset(
         ("POST", "/api/customers"),
         ("GET", "/api/customers"),
         ("GET", "/api/customers/{customer_id}"),
+        ("GET", "/api/reference/voivodeships"),
     }
 )
 HIDDEN = "/api/eko202-hidden"

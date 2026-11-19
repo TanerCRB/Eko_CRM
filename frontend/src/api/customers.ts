@@ -14,7 +14,22 @@ export interface ContactInput {
   primary: boolean;
 }
 
-export interface CustomerInput {
+// The address parts and the tax ID (EKO-3-02): optional on create, a part not given is left out of
+// the request. `tax_id` is one field; the server places it as a NIP or a foreign tax ID by country.
+export const ADDRESS_PARTS = [
+  "street",
+  "postal_code",
+  "town",
+  "voivodeship",
+  "county",
+  "tax_id",
+] as const;
+
+export type AddressPart = (typeof ADDRESS_PARTS)[number];
+
+export type AddressInput = Partial<Record<AddressPart, string>>;
+
+export interface CustomerInput extends AddressInput {
   name: string;
   country: string;
   contacts: ContactInput[];
@@ -27,7 +42,9 @@ export interface ContactRecord {
   primary: boolean;
 }
 
-export interface CustomerRecord {
+// The address parts are optional here because a backend from before EKO-3-02 sends none of them
+// during a rolling deployment; `parseCustomer` always fills them, `null` meaning not given.
+export interface CustomerRecord extends Partial<Record<AddressPart, string | null>> {
   id: string;
   name: string;
   country: string;
@@ -55,6 +72,7 @@ export type RejectedField =
   | { field: "country" }
   | { field: "contacts" }
   | { field: "contact"; index: number; part: "kind" | "value" | "note" | "primary" }
+  | { field: AddressPart }
   | { field: "request" };
 
 export type CreateResult =
@@ -114,6 +132,22 @@ export function parseCustomer(value: unknown): CustomerRecord | null {
   if (summary === null || !isRecord(value) || !Array.isArray(value["contacts"])) {
     return null;
   }
+  const address: Record<AddressPart, string | null> = {
+    street: null,
+    postal_code: null,
+    town: null,
+    voivodeship: null,
+    county: null,
+    tax_id: null,
+  };
+  for (const part of ADDRESS_PARTS) {
+    const given = value[part];
+    if (typeof given === "string") {
+      address[part] = given;
+    } else if (given !== undefined && given !== null) {
+      return null;
+    }
+  }
   const contacts: ContactRecord[] = [];
   for (const entry of value["contacts"]) {
     const contact = parseContact(entry);
@@ -122,7 +156,7 @@ export function parseCustomer(value: unknown): CustomerRecord | null {
     }
     contacts.push(contact);
   }
-  return { ...summary, contacts };
+  return { ...summary, ...address, contacts };
 }
 
 export function parseCustomerList(value: unknown): CustomerSummary[] | null {
@@ -155,6 +189,10 @@ function rejectedField(loc: unknown): RejectedField {
   }
   if (top === "contacts" && loc.length === 2) {
     return { field: "contacts" };
+  }
+  const addressPart = ADDRESS_PARTS.find((candidate) => candidate === top);
+  if (addressPart !== undefined && loc.length === 2) {
+    return { field: addressPart };
   }
   if (top === "contacts" && typeof index === "number") {
     const known = CONTACT_PARTS.find((candidate) => candidate === part);

@@ -10,11 +10,18 @@ export interface SheetContact {
   primary: boolean;
 }
 
+export interface SheetDetail {
+  label: string;
+  value: string;
+}
+
 interface CustomerSheetProps {
   // Always the record the server returned, never the form's values (K-07).
   customer: { name: string; contacts: readonly SheetContact[] };
   // The country as display text, resolved by the feature from the record's code.
   countryLabel: string;
+  // Further labelled values shown after the country, in order; each label appears once.
+  details?: readonly SheetDetail[];
 }
 
 function kindLabel(kind: string): string {
@@ -24,9 +31,10 @@ function kindLabel(kind: string): string {
   return kind === "email" ? messages.customer.email : kind;
 }
 
-// P2 CustomerSheet, the part this release has: name, country and contacts. Every value is a
-// text child, so markup in it is shown, never interpreted.
-export function CustomerSheet({ customer, countryLabel }: CustomerSheetProps) {
+// P2 CustomerSheet, the part this release has: name, country, the details the feature passes
+// (address and tax ID) and contacts. Every value is a text child, so markup in it is shown, never
+// interpreted.
+export function CustomerSheet({ customer, countryLabel, details = [] }: CustomerSheetProps) {
   const headingRef = useMountFocus<HTMLHeadingElement>();
   const contactsId = useId();
 
@@ -42,6 +50,12 @@ export function CustomerSheet({ customer, countryLabel }: CustomerSheetProps) {
           <dt>{messages.customer.country}</dt>
           <dd>{countryLabel}</dd>
         </div>
+        {details.map((detail) => (
+          <div key={detail.label}>
+            <dt>{detail.label}</dt>
+            <dd>{detail.value}</dd>
+          </div>
+        ))}
       </dl>
       <h2 id={contactsId}>{messages.customer.contactsTitle}</h2>
       {customer.contacts.length === 0 ? (
