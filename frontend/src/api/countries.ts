@@ -1,7 +1,7 @@
 // The closed country list of `POST /api/customers` (G-3 A): ISO 3166-1 alpha-2, the officially
-// assigned codes, copied by hand from the backend's `COUNTRY_CODES` and not checked against it
-// (#161). The answer types the country as a plain string, so a code outside this list is shown
-// as it came.
+// assigned codes, copied by hand from the backend's `COUNTRY_CODES` and checked against the
+// OpenAPI document's request enum and default by the backend's contract check (EKO-1-35). The
+// answer types the country as a plain string, so a code outside this list is shown as it came.
 export const COUNTRY_CODES = `
   AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR
   BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ

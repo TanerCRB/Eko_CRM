@@ -1,9 +1,9 @@
 import { apiRequest } from "./client";
 
 // Shapes of backend/app/api/customers.py (CustomerCreate, ContactIn, CustomerOut, CustomerList),
-// written by hand and not checked against the OpenAPI document (#161). Unknown extra fields in an
-// answer are ignored, so a backend that adds one does not break the SPA during a rolling
-// deployment. The answer's `kind` and `country` are plain strings.
+// written by hand and checked against the OpenAPI document by the backend's contract check
+// (EKO-1-35). Unknown extra fields in an answer are ignored, so a backend that adds one does not
+// break the SPA during a rolling deployment. The answer's `kind` and `country` are plain strings.
 
 export type ContactKind = "phone" | "email";
 
@@ -62,8 +62,9 @@ export interface CustomerList {
 }
 
 // FastAPI's 422 answer; only `loc` is read, never `msg` or `input` (which echoes the value).
+// The document does not require `detail`; without it the request as a whole is named as rejected.
 export interface ValidationProblem {
-  detail: { type: string; loc: (string | number)[]; msg: string }[];
+  detail?: { type: string; loc: (string | number)[]; msg: string }[];
 }
 
 // Which field a rejection names, by its place in the request.
