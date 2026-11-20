@@ -1,7 +1,8 @@
 """EKO-3-02 K-06, recorded exception `EKO-3-02/weakening-2` (A-09), both bases: the K-06 runtime
 tests run their step while the previous release's head is 0004 and skip once a published release
 already holds 0005 (the step then lies behind it); a release older than 0004 fails, as Q-2 B
-requires. Without both halves the skip could hide K-06 on the very base it exists for.
+requires, and so does a release whose head is not a numeric revision (no order can be told).
+Without both halves the skip could hide K-06 on the very base it exists for.
 
 The decision is the `step` fixture of `tests/runtime/test_eko302_k06_expand_on_customer.py`, called
 unwrapped with the image's head stubbed, so no image is pulled or run here (QA, EKO-3-02). The
@@ -53,3 +54,12 @@ def test_k06_a_previous_release_older_than_0004_fails_rather_than_skips(
     kind, reason = outcome(monkeypatch, head)
     assert kind == "failed", reason
     assert "must be published" in reason
+
+
+@pytest.mark.parametrize("head", ["ae1027a6acf", "base", "head", ""])
+def test_k06_a_previous_release_with_a_non_numeric_head_fails_rather_than_skips(
+    monkeypatch: pytest.MonkeyPatch, head: str
+) -> None:
+    kind, reason = outcome(monkeypatch, head)
+    assert kind == "failed", reason
+    assert f"head {head!r} is not a numeric revision" in reason
