@@ -101,7 +101,11 @@ def image_head(image: str) -> str:
 @pytest.fixture(scope="module")
 def step(previous_backend: str) -> str:
     head = image_head(previous_backend)
-    if head == HEAD or not head.isdigit() or int(head) > int(HEAD):
+    if not head.isdigit():
+        pytest.fail(
+            f"K-06: the previous release's head {head!r} is not a numeric revision: could not tell"
+        )
+    if int(head) >= int(HEAD):
         pytest.skip(f"the previous release's head is {head}: the {HEAD} step is behind it")
     if head != STEP_BASE:
         pytest.fail(
