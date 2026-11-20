@@ -43,7 +43,7 @@ class SessionInfo(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     subject: str
-    name: str | None
+    display_name: str | None
 
 
 class LoggedOut(BaseModel):
