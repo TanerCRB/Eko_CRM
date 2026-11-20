@@ -153,7 +153,7 @@ def login_callback(
     "/session", operation_id="session_read", response_model=SessionInfo, responses=_UNAUTHENTICATED
 )
 def session_read(caller: Annotated[Caller, Depends(current_caller)]) -> SessionInfo:
-    return SessionInfo(subject=caller.subject, name=caller.name)
+    return SessionInfo(subject=caller.subject, display_name=caller.name)
 
 
 @router.post("/logout", operation_id="logout", response_model=LoggedOut, responses=_UNAUTHENTICATED)
