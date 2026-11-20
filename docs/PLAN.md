@@ -680,3 +680,15 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   [PR #198](https://github.com/TanerCRB/Eko_CRM/pull/198) (round 0; fix rounds 1-3). Follow-ups: #196 (a
   request-body limit and timeout at the proxy), #161 (frontend API types, now including the customer
   types and the hand-copied country list, checked against the OpenAPI document).
+
+- [ ] **EKO-3-04** — Let users find customers in a list (#215).
+  *Done when:* server tests prove: one text query matches a customer's name, town or contact value
+  case-insensitively; a rep's search never returns another rep's customer (by name, town or contact), the
+  result being indistinguishable from no match; the manager's list shows all customers and narrows by an
+  owner filter that a rep cannot use to widen scope or probe; search and owner filter combine; the
+  unfiltered list, by-id read and create behave as EKO-3-01; no response hints at an out-of-scope customer;
+  query input is bound as data; the SPA Customers screen carries the search field and, for the manager
+  only, the owner selector.
+  **Out of scope (explicit):** the active/archived filter (EKO-3-05, which brings archiving); export; search
+  by NIP or other address fields; fuzzy search; duplicate warnings (EKO-3-03); real data.
+  After EKO-3-02.
