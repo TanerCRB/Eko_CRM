@@ -43,6 +43,9 @@ TOWN_RAW_LIMIT = NFC_COMPOSITION_LIMIT * TOWN_LIMIT
 POSTAL_CODE_RAW_LIMIT = NFC_COMPOSITION_LIMIT * FOREIGN_POSTAL_CODE_LIMIT
 TAX_ID_RAW_LIMIT = NFC_COMPOSITION_LIMIT * FOREIGN_TAX_ID_LIMIT
 REGION_RAW_LIMIT = NFC_COMPOSITION_LIMIT * regions.NAME_LIMIT
+# EKO-3-04 G-6 A: the longest searchable value (an e-mail address), counted on the trimmed NFC form.
+SEARCH_LIMIT = EMAIL_LIMIT
+SEARCH_RAW_LIMIT = NFC_COMPOSITION_LIMIT * SEARCH_LIMIT
 
 # ISO 3166-1 alpha-2, the officially assigned codes: the closed list of G-3 A.
 COUNTRY_CODES = frozenset(
@@ -239,6 +242,14 @@ def tax_id(country: str, raw: str | None) -> str | None:
     return _bounded(value, FOREIGN_TAX_ID_LIMIT)
 
 
+def search_term(raw: str) -> str | None:
+    """The query of a customer search (ADR-0002 addendum of EKO-3-04): trimmed, then NFC (G-4
+    A); empty or whitespace only is no query (G-5 A); at most `SEARCH_LIMIT` characters (G-6 A)."""
+    if not raw.strip():
+        return None
+    return _bounded(raw, SEARCH_LIMIT)
+
+
 def contact_value(kind: ContactKind, raw: str) -> str:
     if kind is ContactKind.PHONE:
         return phone_number(raw)
@@ -313,6 +324,16 @@ class Customer:
     contacts: tuple[Contact, ...]
     address: Address = Address()
     tax_id: TaxId = TaxId()
+
+
+@dataclass(frozen=True)
+class CustomerSearch:
+    """What a list request narrows the caller's scope by: a search term and an owner subject,
+    each already judged, `None` when not given. It selects records within the scope and never
+    replaces it (ADR-0003 addendum of EKO-3-04)."""
+
+    term: str | None = None
+    owner: str | None = None
 
 
 @dataclass(frozen=True)
