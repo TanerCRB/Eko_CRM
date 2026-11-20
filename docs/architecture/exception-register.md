@@ -158,3 +158,7 @@ Accepted at gate 2 of EKO-3-01 in [PR #198](https://github.com/TanerCRB/Eko_CRM/
 Accepted at gate 2 of EKO-1-34 in [PR #197](https://github.com/TanerCRB/Eko_CRM/pull/197) (weakening-1 decided by the human on 2026-11-18, recorded on #192); the boundary exception EKO-1-34/boundary-1 (the transient probe workflow `.github/workflows/eko134-probe.yml`, present only in branch commits `58ab4aa` through `5685e32`, and the throwaway branch `EKO-1-34-probe-r1`, now kept only as tag `EKO-1-34-probe-r2`) was authorized at gate 1 on 2026-11-17 (Q-2 A) and is recorded here as a note, as in the PR, because nothing of it remains in the tree:
 
 - Exception EKO-1-34/weakening-1 — owner: @TanerCRB — reason: the K-02 reproducer module skips itself by a named engine fact only on Docker Desktop or a non-Linux host, where the composition bridges are not in the host namespace and the test cannot be red; on the runner the probe counts any skip as a problem — blocks again: 2027-02-18
+
+Accepted at gate 2 of EKO-1-35 in [PR #211](https://github.com/TanerCRB/Eko_CRM/pull/211) (weakening-1 decided by the human as option A on 2026-11-20, recorded on #161).
+
+- Exception EKO-1-35/weakening-1 — owner: @TanerCRB — reason: the six skip/xfail strings in test_eko135_k04_ci_unconditional.py (lines 85-86, 188-191) are the K-04 forbidden-token list and the mutation fixtures its contrast tests plant into copies of the check modules; none marks or skips a test — blocks again: 2027-05-20
