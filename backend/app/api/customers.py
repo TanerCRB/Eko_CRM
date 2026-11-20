@@ -1,5 +1,5 @@
 """Customers: create, read by identifier, plain list (EKO-3-01; CUS-1, CUS-2, CUS-8, C-1 A to
-C-3 A, Q-L A, Q-O A).
+C-3 A, Q-L A, Q-O A), with the address and tax identifier of EKO-3-02 (CUS-3 to CUS-5).
 
 The handlers pass the caller value inward and decide nothing about ownership (ADR-0003 addendum
 of EKO-3-01, section 2). The request models hold the value rules of `app.domain.customers`, so a
@@ -35,7 +35,15 @@ from app.data.customers import CustomerStore
 from app.data.database import Database
 from app.domain import customers as rules
 from app.domain.caller import Caller
-from app.domain.customers import Contact, ContactKind, Customer, CustomerDraft, CustomerSummary
+from app.domain.customers import (
+    Address,
+    Contact,
+    ContactKind,
+    Customer,
+    CustomerDraft,
+    CustomerSummary,
+    TaxId,
+)
 from app.services import customers as service
 
 router = APIRouter(prefix="/customers", route_class=AccessFirstRoute)
@@ -108,8 +116,19 @@ class ContactIn(RequestModel):
         return rules.contact_note(note)
 
 
+def _judged(info: ValidationInfo, *fields: str) -> bool:
+    """Whether the fields a country-dependent rule needs passed their own rules. When one did
+    not, the request is already refused for it, so the dependent value is not judged."""
+    return all(field in info.data for field in fields)
+
+
 class CustomerCreate(RequestModel):
-    """A new customer. The owner is never part of the request: an unknown field is a 422."""
+    """A new customer. The owner is never part of the request: an unknown field is a 422.
+
+    The address and the tax ID are optional; omitted, `null`, `""` or whitespace only is not
+    given (G-2 A). The country decides their rules (C-3 A); `tax_id` is a NIP for Poland and
+    free text for any other country, stored apart by `TaxId.placed`.
+    """
 
     name: Annotated[StrictStr, Field(max_length=rules.NAME_RAW_LIMIT)]
     # Omitted: Poland. `null`, `""` or a code outside the closed list: rejected (G-2 A, G-3 A).
@@ -118,6 +137,13 @@ class CustomerCreate(RequestModel):
     country: Annotated[
         StrictStr, Field(max_length=2, json_schema_extra={"enum": sorted(rules.COUNTRY_CODES)})
     ] = rules.DEFAULT_COUNTRY
+    street: Annotated[StrictStr, Field(max_length=rules.STREET_RAW_LIMIT)] | None = None
+    postal_code: Annotated[StrictStr, Field(max_length=rules.POSTAL_CODE_RAW_LIMIT)] | None = None
+    town: Annotated[StrictStr, Field(max_length=rules.TOWN_RAW_LIMIT)] | None = None
+    # Declared after `country` and before `county`: a validator sees only the fields before it.
+    voivodeship: Annotated[StrictStr, Field(max_length=rules.REGION_RAW_LIMIT)] | None = None
+    county: Annotated[StrictStr, Field(max_length=rules.REGION_RAW_LIMIT)] | None = None
+    tax_id: Annotated[StrictStr, Field(max_length=rules.TAX_ID_RAW_LIMIT)] | None = None
     contacts: list[ContactIn] = Field(default_factory=list, max_length=rules.CONTACT_LIMIT)
 
     @field_validator("name")
@@ -130,6 +156,49 @@ class CustomerCreate(RequestModel):
     def _country(cls, country: str) -> str:
         return rules.country_code(country)
 
+    @field_validator("street")
+    @classmethod
+    def _street(cls, street: str | None) -> str | None:
+        return rules.street(street)
+
+    @field_validator("town")
+    @classmethod
+    def _town(cls, town: str | None) -> str | None:
+        return rules.town(town)
+
+    @field_validator("postal_code")
+    @classmethod
+    def _postal_code(cls, code: str | None, info: ValidationInfo) -> str | None:
+        if not _judged(info, "country"):
+            return code
+        return rules.postal_code(info.data["country"], code)
+
+    @field_validator("voivodeship")
+    @classmethod
+    def _voivodeship(cls, voivodeship: str | None, info: ValidationInfo) -> str | None:
+        if not _judged(info, "country"):
+            return voivodeship
+        return rules.voivodeship(info.data["country"], voivodeship)
+
+    @field_validator("county")
+    @classmethod
+    def _county(cls, county: str | None, info: ValidationInfo) -> str | None:
+        if not _judged(info, "country"):
+            return county
+        country = info.data["country"]
+        # A foreign county is refused whatever its voivodeship; an invalid Polish voivodeship
+        # leaves the county unjudged, so only the voivodeship's error is given (G-5 A).
+        if rules.is_polish(country) and not _judged(info, "voivodeship"):
+            return county
+        return rules.county(country, info.data.get("voivodeship"), county)
+
+    @field_validator("tax_id")
+    @classmethod
+    def _tax_id(cls, tax_id: str | None, info: ValidationInfo) -> str | None:
+        if not _judged(info, "country"):
+            return tax_id
+        return rules.tax_id(info.data["country"], tax_id)
+
     @model_validator(mode="after")
     def _contacts(self) -> "CustomerCreate":
         rules.check_contacts([_contact(c) for c in self.contacts])
@@ -140,6 +209,10 @@ class CustomerCreate(RequestModel):
             name=self.name,
             country=self.country,
             contacts=tuple(_contact(c) for c in self.contacts),
+            address=Address(
+                self.street, self.postal_code, self.town, self.voivodeship, self.county
+            ),
+            tax_id=TaxId.placed(self.country, self.tax_id),
         )
 
 
@@ -147,11 +220,19 @@ class CustomerCreate(RequestModel):
 # (an astral character written as two `\uXXXX` escapes), plus the keys, quotes and separators of
 # the object and of each contact, generously. Insignificant JSON whitespace is not counted.
 _ESCAPED_BYTES_PER_CODE_POINT = 12
-_OBJECT_FRAMING = 128
+# The keys of the address and the tax ID (EKO-3-02) added to the object's own framing.
+_OBJECT_FRAMING = 256
 _CONTACT_FRAMING = 128
+_ADDRESS_AND_TAX_ID_RAW = (
+    rules.STREET_RAW_LIMIT
+    + rules.POSTAL_CODE_RAW_LIMIT
+    + rules.TOWN_RAW_LIMIT
+    + 2 * rules.REGION_RAW_LIMIT
+    + rules.TAX_ID_RAW_LIMIT
+)
 LARGEST_CREATE_BODY = (
     _OBJECT_FRAMING
-    + _ESCAPED_BYTES_PER_CODE_POINT * rules.NAME_RAW_LIMIT
+    + _ESCAPED_BYTES_PER_CODE_POINT * (rules.NAME_RAW_LIMIT + _ADDRESS_AND_TAX_ID_RAW)
     + rules.CONTACT_LIMIT
     * (
         _CONTACT_FRAMING
@@ -174,19 +255,35 @@ class ContactOut(BaseModel):
 
 
 class CustomerOut(BaseModel):
+    """The customer as stored; every address part and the tax ID is `null` when not given. The
+    tax ID is the Polish customer's canonical NIP or the foreign customer's text."""
+
     model_config = ConfigDict(extra="forbid")
 
     id: UUID
     name: str
     country: str
+    street: str | None
+    postal_code: str | None
+    town: str | None
+    voivodeship: str | None
+    county: str | None
+    tax_id: str | None
     contacts: list[ContactOut]
 
     @classmethod
     def of(cls, customer: Customer) -> "CustomerOut":
+        address = customer.address
         return cls(
             id=customer.id,
             name=customer.name,
             country=customer.country,
+            street=address.street,
+            postal_code=address.postal_code,
+            town=address.town,
+            voivodeship=address.voivodeship,
+            county=address.county,
+            tax_id=customer.tax_id.value,
             contacts=[
                 ContactOut(kind=c.kind.value, value=c.value, note=c.note, primary=c.primary)
                 for c in customer.contacts

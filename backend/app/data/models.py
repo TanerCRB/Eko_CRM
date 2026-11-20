@@ -78,6 +78,11 @@ class CustomerRow(Base):
     """
 
     __tablename__ = "customer"
+    __table_args__ = (
+        # Only the canonical ten digits (ADR-0002 *NIP uniqueness*); the unique constraint is
+        # EKO-3-03's (ADR-0002 addendum of EKO-3-02, a declared deviation until then).
+        CheckConstraint("nip ~ '^[0-9]{10}$'", name="nip"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
     # NFC, trimmed, at most 120 characters (ADR-0002, G-1 A); PD-C1.
@@ -86,6 +91,17 @@ class CustomerRow(Base):
     country: Mapped[str] = mapped_column(Text(collation="C"))
     # The creating rep's subject, stored as received and compared exactly (ADR-0003).
     owner_subject: Mapped[str] = mapped_column(Text(collation="C"), index=True)
+    # Revision 0005 (EKO-3-02): the address and the tax identifier, NULL when not given (G-2 A).
+    street: Mapped[str | None] = mapped_column(Text)
+    postal_code: Mapped[str | None] = mapped_column(Text)
+    town: Mapped[str | None] = mapped_column(Text)
+    # Exactly as the dated TERYT file names them, Polish customers only (Q-4 A, C-3 A).
+    voivodeship: Mapped[str | None] = mapped_column(Text)
+    county: Mapped[str | None] = mapped_column(Text)
+    # A Polish customer's NIP, ten digits; never a foreign value.
+    nip: Mapped[str | None] = mapped_column(Text(collation="C"))
+    # Any other customer's tax identifier as entered, trimmed and NFC.
+    foreign_tax_id: Mapped[str | None] = mapped_column(Text)
 
 
 class CustomerContactRow(Base):

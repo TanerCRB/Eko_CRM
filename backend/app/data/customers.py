@@ -19,7 +19,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.data.database import Database
 from app.data.models import CustomerContactRow, CustomerRow
 from app.data.sessions import StorageUnavailable
-from app.domain.customers import Contact, ContactKind, Customer, CustomerDraft, CustomerSummary
+from app.domain.customers import (
+    Address,
+    Contact,
+    ContactKind,
+    Customer,
+    CustomerDraft,
+    CustomerSummary,
+    TaxId,
+)
 from app.domain.ownership import AllRecords, OwnedBy, VisibilityScope
 
 logger = logging.getLogger(__name__)
@@ -28,6 +36,10 @@ logger = logging.getLogger(__name__)
 def new_identifier() -> uuid.UUID:
     """A random (version 4) identifier: no state a restore could rewind."""
     return uuid.uuid4()
+
+
+# The customer's own columns at the head of a `find` row; the contact's follow.
+CUSTOMER_COLUMNS = 10
 
 
 def _visible(scope: VisibilityScope) -> ColumnElement[bool]:
@@ -60,6 +72,13 @@ class CustomerStore:
                     name=draft.name,
                     country=draft.country,
                     owner_subject=scope.subject,
+                    street=draft.address.street,
+                    postal_code=draft.address.postal_code,
+                    town=draft.address.town,
+                    voivodeship=draft.address.voivodeship,
+                    county=draft.address.county,
+                    nip=draft.tax_id.nip,
+                    foreign_tax_id=draft.tax_id.foreign,
                 )
             )
             if draft.contacts:
@@ -79,7 +98,9 @@ class CustomerStore:
                     ],
                 )
             connection.commit()
-        return Customer(customer_id, draft.name, draft.country, draft.contacts)
+        return Customer(
+            customer_id, draft.name, draft.country, draft.contacts, draft.address, draft.tax_id
+        )
 
     def find(self, scope: VisibilityScope, customer_id: uuid.UUID) -> Customer | None:
         """One statement: the customer by identifier and scope, with its contacts in order."""
@@ -88,6 +109,13 @@ class CustomerStore:
                 CustomerRow.id,
                 CustomerRow.name,
                 CustomerRow.country,
+                CustomerRow.street,
+                CustomerRow.postal_code,
+                CustomerRow.town,
+                CustomerRow.voivodeship,
+                CustomerRow.county,
+                CustomerRow.nip,
+                CustomerRow.foreign_tax_id,
                 CustomerContactRow.kind,
                 CustomerContactRow.value,
                 CustomerContactRow.note,
@@ -101,13 +129,13 @@ class CustomerStore:
             rows = connection.execute(statement).all()
         if not rows:
             return None
-        found_id, name, country = rows[0][:3]
+        found_id, name, country, *place, nip, foreign = rows[0][:CUSTOMER_COLUMNS]
         contacts = tuple(
             Contact(ContactKind(kind), value, note, primary)
-            for _, _, _, kind, value, note, primary in rows
+            for kind, value, note, primary in (row[CUSTOMER_COLUMNS:] for row in rows)
             if kind is not None
         )
-        return Customer(found_id, name, country, contacts)
+        return Customer(found_id, name, country, contacts, Address(*place), TaxId(nip, foreign))
 
     def find_all(self, scope: VisibilityScope) -> list[CustomerSummary]:
         """Every customer in the scope; ordered by identifier only so the answer is stable."""

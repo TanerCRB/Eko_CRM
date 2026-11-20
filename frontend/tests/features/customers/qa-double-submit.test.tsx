@@ -21,6 +21,12 @@ const saved: CustomerRecord = {
   name: NAME,
   country: "PL",
   contacts: [],
+  street: null,
+  postal_code: null,
+  town: null,
+  voivodeship: null,
+  county: null,
+  tax_id: null,
 };
 
 beforeAll(async () => {
