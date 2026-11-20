@@ -12,7 +12,8 @@ previous release older than 0004 has no customer operations; that fails, since Q
 release to be published before this task's CI runs.
 
 The dev profile (`running`) supplies Keycloak, so each rep request carries a real session made by
-a real login through the proxy. Every customer value is synthetic (ADR-0005).
+a real login through the proxy, as a rep account of the test's own; the shared composition is left
+on its own head images, never rebuilt. Every customer value is synthetic (ADR-0005).
 """
 
 import json
@@ -26,6 +27,7 @@ import httpx
 import pytest
 
 from tests.runtime import eko201_login as app
+from tests.runtime import eko202_live as live
 from tests.runtime.conftest import Started
 from tests.runtime.keycloak_client import RealmClient
 from tests.runtime.lab import Lab, PsqlSession, docker
@@ -36,8 +38,6 @@ from tests.runtime.test_adr0004_c26_lock_timeout import (
     granted,
     waits_for_a_table_lock,
 )
-from tests.support import eko112_fixtures as eko112
-from tests.support import eko201_keycloak as accounts
 from tests.support.releases import (
     CannotTell,
     c13_previous_backend,
@@ -143,8 +143,12 @@ def expand_lab(
 
 
 def head_backend(lab: Lab) -> None:
-    lab.composition.compose("up", "-d", "--no-deps", "--force-recreate", "backend")
+    """The session's own head image back on `backend`, never a rebuild of it: `backend` has
+    `pull_policy: build`, so a plain `up` rebuilds the tag the session's worker and migrate run."""
+    composition = lab.composition
+    composition.compose("up", "-d", "--no-deps", "--no-build", "--force-recreate", "backend")
     lab.wait_for_health("200", 90)
+    assert composition.inspect("backend")["Image"] == composition.inspect("worker")["Image"]
 
 
 def previous_on_0004(lab: Lab, previous: str) -> None:
@@ -160,20 +164,17 @@ def previous_on_0004(lab: Lab, previous: str) -> None:
 
 
 def rep_session(lab: Lab) -> str:
+    """A real login as a rep account of this call's own. A shared account (`login`) may hold an
+    OTP credential a browser enrolled earlier in the session, whose secret this process never
+    saw; Keycloak then stops on its code page."""
     composition = lab.composition
-    env = composition.env
-    master = RealmClient(composition, "master")
+    username, password = f"eko302-k06-{secrets.token_hex(4)}", live.new_password()
+    live.Realm(composition).create_account(username, password, ["rep"])
     browser = RealmClient(composition, "eko", listener="auth")
     try:
-        token = master.direct_master_token(
-            eko112.ACCOUNTS["breakglass_one"], env[eko112.PASSWORD_VARIABLES["breakglass_one"]]
-        )
-        password = "synthetic-" + secrets.token_urlsafe(24)
-        app.ensure_staff_account(master, token, "login", password)
-        return app.login(composition, browser, accounts.ACCOUNTS["login"], password)
+        return app.login(composition, browser, username, password)
     finally:
         browser.close()
-        master.close()
 
 
 def call(lab: Lab, session: str, method: str, path: str, body: Any = None) -> httpx.Response:
