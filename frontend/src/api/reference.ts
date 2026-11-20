@@ -1,7 +1,8 @@
 import { apiRequest } from "./client";
 
 // Shape of backend/app/api/reference.py (`voivodeship_list`, VoivodeshipList), written by hand
-// and not checked against the OpenAPI document (#161). The lists come only from this answer, so
+// and checked against the OpenAPI document by the EKO-1-35 check
+// (backend/tests/support/frontend_contract.py). The lists come only from this answer, so
 // the form offers exactly the names the server validates with (Q-3 A, Q-4 A).
 
 export interface VoivodeshipEntry {

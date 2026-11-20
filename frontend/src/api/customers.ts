@@ -25,14 +25,21 @@ export const ADDRESS_PARTS = [
   "tax_id",
 ] as const;
 
-export type AddressPart = (typeof ADDRESS_PARTS)[number];
+// Not exported: the backend's contract check (EKO-1-35) fails an exported type it does not compare.
+type AddressPart = (typeof ADDRESS_PARTS)[number];
 
-export type AddressInput = Partial<Record<AddressPart, string>>;
-
-export interface CustomerInput extends AddressInput {
+// Written out field by field, not composed, so the contract check can read it; `null` mirrors the
+// document, the form never sends it (a part left empty is left out).
+export interface CustomerInput {
   name: string;
   country: string;
   contacts: ContactInput[];
+  street?: string | null;
+  postal_code?: string | null;
+  town?: string | null;
+  voivodeship?: string | null;
+  county?: string | null;
+  tax_id?: string | null;
 }
 
 export interface ContactRecord {
@@ -42,13 +49,19 @@ export interface ContactRecord {
   primary: boolean;
 }
 
-// The address parts are optional here because a backend from before EKO-3-02 sends none of them
-// during a rolling deployment; `parseCustomer` always fills them, `null` meaning not given.
-export interface CustomerRecord extends Partial<Record<AddressPart, string | null>> {
+// A backend from before EKO-3-02 sends no address parts during a rolling deployment;
+// `parseCustomer` reads a missing part as `null` (not given), so the parsed record always has them.
+export interface CustomerRecord {
   id: string;
   name: string;
   country: string;
   contacts: ContactRecord[];
+  street: string | null;
+  postal_code: string | null;
+  town: string | null;
+  voivodeship: string | null;
+  county: string | null;
+  tax_id: string | null;
 }
 
 export interface CustomerSummary {

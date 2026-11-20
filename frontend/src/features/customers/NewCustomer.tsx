@@ -3,8 +3,7 @@ import { countryOptions, DEFAULT_COUNTRY, POLAND } from "../../api/countries";
 import {
   ADDRESS_PARTS,
   createCustomer,
-  type AddressInput,
-  type AddressPart,
+  type CustomerInput,
   type CustomerRecord,
   type RejectedField,
 } from "../../api/customers";
@@ -31,6 +30,9 @@ type Outcome =
   | { kind: "refused" }
   | { kind: "failed" };
 
+type AddressPart = (typeof ADDRESS_PARTS)[number];
+// Picked from the checked request type, so a part missing from it fails to compile here.
+type AddressInput = Pick<CustomerInput, AddressPart>;
 type AddressDraft = Record<AddressPart, string>;
 
 const emptyAddress: AddressDraft = {
