@@ -2,8 +2,8 @@
 import { describe, expect, it } from "vitest";
 import { COUNTRY_CODES, countryName, countryOptions, DEFAULT_COUNTRY } from "../../src/api/countries";
 
-// The list is a hand copy of the backend's closed list (G-3 A), like every customer type here
-// (#161): these checks hold the copy's own shape, not its agreement with the backend.
+// The list is a hand copy of the backend's closed list (G-3 A); its agreement with the OpenAPI
+// document is the backend's contract check (EKO-1-35), so these checks hold only its shape.
 describe("K-07 support: the form's country list", () => {
   it("holds 249 distinct two-letter codes, Poland among them as the default", () => {
     expect(COUNTRY_CODES).toHaveLength(249);
