@@ -549,6 +549,11 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** choosing generation vs comparison; backend schema changes; runtime response validation; types for endpoints not yet built (they must join the check in their own Story).
   After EKO-3-01.
 
+- [ ] **EKO-1-36** — Prove the two gate-2 behaviors of the frontend contract check with tests (#214).
+  *Done when:* a test shows an unknown schema keyword on a checked component failing the contract check naming the type (contrast: each ignored keyword passes; removing the fail-closed branch fails it); the K-05, K-06 and K-07 live base comparisons are shown inert against a base that already contains `backend/tests/support/frontend_contract.py` and live against one without it, neither reading the moving `origin/main`.
+  **Out of scope (explicit):** changing the ignored keywords or relaxing the fail-closed reader (A-07); changes to `frontend_contract.py` or to the existing EKO-1-35 tests; types for endpoints not yet built.
+  After EKO-1-35.
+
 ## EKO-2 — Access
 
 - [x] **EKO-2-01** — Require login for the whole application.
