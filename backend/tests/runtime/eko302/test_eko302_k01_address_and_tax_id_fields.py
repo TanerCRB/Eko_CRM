@@ -142,14 +142,20 @@ def test_k01_the_raw_cap_is_checked_before_trimming(crm: Crm, field: str) -> Non
 NOT_GIVEN: dict[str, Any] = {"null": None, "empty": "", "whitespace": " \t\n "}
 
 
-@pytest.mark.parametrize("country", ["PL", "DE"])
+# DE x voivodeship/county is K-02's C-3 refusal: test_eko302_assumptions.py::test_a10_* (A-07).
+COUNTRY_FIELDS = [
+    pytest.param(country, field, id=f"{country}-{field}")
+    for country in ("PL", "DE")
+    for field in NEW_FIELDS
+    if not (country == "DE" and field in ("voivodeship", "county"))
+]
+
+
 @pytest.mark.parametrize("variant", ["omitted", *sorted(NOT_GIVEN)])
-@pytest.mark.parametrize("field", NEW_FIELDS)
+@pytest.mark.parametrize(("country", "field"), COUNTRY_FIELDS)
 def test_k01_omitted_null_empty_and_whitespace_read_back_as_not_given(
     crm: Crm, field: str, variant: str, country: str
 ) -> None:
-    if country != "PL" and field in ("voivodeship", "county"):
-        pytest.skip("a foreign voivodeship or county is K-02's C-3 refusal")
     rep = crm.login(REP_A, ["rep"])
     body: dict[str, Any] = {"name": NAME, "country": country}
     if variant != "omitted":
