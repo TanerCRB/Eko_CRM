@@ -550,6 +550,11 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   After EKO-3-01.
   **Done 2026-11-20:** merged in [PR #211](https://github.com/TanerCRB/Eko_CRM/pull/211) as `be0c5f7` by the human on 2026-11-20; verified at `92235e3` (QA's checkpoint; the PR head `2c05d89` differs from it only by cost-register rows). Mechanism (gate-1 G-1 A comparison, G-A..G-D A): a backend pytest contract check, `backend/tests/support/frontend_contract.py` (architecture-sensitive path, class pipeline, ADR-0001; G-ARCH-1 A), generates the OpenAPI document in-process from the app at the tested commit with every `APP_*` unset and reads `frontend/src/api/**/*.ts` as text through a fail-closed TypeScript-subset reader, so nothing crosses between `backend/` and `frontend/` (rule 7, ADR-0001 Constraint 3). It compares `SessionInfo` and the customer types field by field (K-01; new response fields the frontend does not declare pass, every other drift fails), the country list as a set with its 249 count and its default against `CustomerCreate.country` (K-02), and requires every exported type under `frontend/src/api/` to be checked or on the closed frontend-only list keyed by file (K-03); it runs in the unconditional `backend` CI job (K-04). The one allowed change of shape (K-05 *Domain*): the check found `ValidationProblem.detail` required in the frontend but optional in `HTTPValidationError`, fixed on the frontend side (`detail?:`), runtime behaviour held by the new `frontend/tests/customers.rejection.test.ts`; no file under `backend/app/` or `backend/migrations/` changed and no runtime dependency was added (K-05, K-07). Evidence: `backend/tests/static/test_eko135_k01_frontend_types.py` (D-2 via `::test_eko135_k01_backend_only_rename_fails_on_the_generated_document`), `test_eko135_k02_country_list.py`, `test_eko135_k03_export_coverage.py`, `test_eko135_k04_ci_unconditional.py`, the K-05..K-07 modules and QA's `test_eko135_qa_contrasts.py`; in CI at `2c05d89` the `backend` job ran 151 `test_eko135_*` tests, all passed, none skipped; the throwaway PR #212 with only the backend rename of `SessionInfo.name` was red in that job at `2c4247d` with 29 failures, all `test_eko135_*` (closed unmerged). Verdicts: QA PROOF HOLDS at `f08936b` (M-13..M-15 survived the developer's suite and are killed by QA's contrasts, checkpoint `92235e3`); Invariant Guardian, Reviewer and Security Auditor PASS at `92235e3`, the Reviewer's two Low findings are #209 (R-01) and #210 (R-02). Gate 2: every developer assumption accepted by the human on 2026-11-20 (backend A-01..A-07, frontend A-01), recorded as amendment lines under the criteria of #161 (scope re-locked, fingerprint `43f2b177`); no UNDECIDABLE; A-05 (an unknown schema keyword fails) and A-06 (the live base comparisons are inert once the check is in the base) were accepted with a test to be added before merge, and the PR was merged before those tests existed, so both are carried by #214. One recorded exception, EKO-1-35/weakening-1 (the six skip/xfail strings in the K-04 test; blocks again 2027-05-20), is entered in `docs/architecture/exception-register.md`. CI on `main`: [run 44720037337](https://github.com/TanerCRB/Eko_CRM/actions/runs/44720037337) at `be0c5f7` fully green, both runtime jobs included. Mutation patches: [PR #211](https://github.com/TanerCRB/Eko_CRM/pull/211) description.
 
+- [ ] **EKO-1-36** — Prove the two gate-2 behaviors of the frontend contract check with tests (#214).
+  *Done when:* a test shows an unknown schema keyword on a checked component failing the contract check naming the type (contrast: each ignored keyword passes; removing the fail-closed branch fails it); the K-05, K-06 and K-07 live base comparisons are shown inert against a base that already contains `backend/tests/support/frontend_contract.py` and live against one without it, neither reading the moving `origin/main`.
+  **Out of scope (explicit):** changing the ignored keywords or relaxing the fail-closed reader (A-07); changes to `frontend_contract.py` or to the existing EKO-1-35 tests; types for endpoints not yet built.
+  After EKO-1-35.
+
 ## EKO-2 — Access
 
 - [x] **EKO-2-01** — Require login for the whole application.
@@ -682,7 +687,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   request-body limit and timeout at the proxy), #161 (frontend API types, now including the customer
   types and the hand-copied country list, checked against the OpenAPI document).
 
-- [ ] **EKO-3-02** — Validate Polish addresses and tax IDs on the customer (#208).
+- [x] **EKO-3-02** — Validate Polish addresses and tax IDs on the customer (#208).
   *Done when:* server tests prove: a customer holds an optional address and tax ID; a Polish postal code
   must match `00-000`; a Polish voivodeship is one of the 16; a county outside the chosen voivodeship is
   rejected (same county with its own voivodeship accepted); voivodeship and county optional but valid when
@@ -693,6 +698,68 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** duplicate-NIP blocking and its messages (EKO-3-03); duplicate warnings
   (EKO-3-03); editing (until customer edit exists); postal-code lookup; list search (EKO-3-04); real data.
   After EKO-3-01.
+  **Done 2026-11-21:** merged in [PR #218](https://github.com/TanerCRB/Eko_CRM/pull/218) as `de4471e` by the human on 2026-11-21; code verified at
+  `8f48a9a` (QA's checkpoint of fix round 3, test code only; QA PROOF HOLDS at `b82114d`, `ac6bc1e`, `d56fb08`
+  and `8f48a9a`; Invariant Guardian, Reviewer and Security Auditor PASS at `8f48a9a`, 0 findings). Mechanism:
+  revision `0005_customer_address_and_tax_id`, an expand step on `customer`, adds seven nullable columns with
+  no default and no backfill (`street`, `postal_code`, `town`, `voivodeship`, `county`, `nip`,
+  `foreign_tax_id`), `nip` `COLLATE "C"` with the ten-digit check `ck_customer_nip` and no unique constraint,
+  each column's ADR-0005 category in the revision's docstring (`nip`, `foreign_tax_id` PD-C1; the address
+  PD-C2); `POST /api/customers` takes six optional fields (`street`, `postal_code`, `town`, `voivodeship`,
+  `county`, `tax_id`) and its create and by-id answers carry all six; the country decides the rules: for `PL`,
+  sent or defaulted, the postal code is `00-000` in ASCII digits, the voivodeship one of the 16 and the county
+  one of the chosen voivodeship's, both checked against the dated GUS TERYT (TERC) file
+  `backend/app/domain/teryt_terc_2026-01-01.json` (16 voivodeships, 380 counties, source and both dates
+  inside), a county without a voivodeship refused, and a NIP trimmed, stripped of one `PL` prefix, spaces and
+  hyphens and checksum-checked (weights 6, 5, 7, 2, 3, 4, 5, 6, 7, modulo 11, remainder 10 refused); for any
+  other country the postal code and tax ID are bounded free text and a voivodeship or county is refused;
+  the read-only `GET /api/reference/voivodeships` (Q-3 A) serves the same mapping; the SPA create form and
+  customer view carry the address and tax ID (`frontend/src/api/reference.ts`, `useVoivodeships.ts`,
+  `NewCustomer.tsx`, `CustomerDetail.tsx`). Tests: `backend/tests/runtime/eko302/`,
+  `backend/tests/static/test_eko302_k03_teryt_file.py`, `test_eko302_k06_expand_revision.py`,
+  `backend/tests/unit/test_eko302_k04_nip_checksum.py`, `test_eko302_k01_body_bound.py`,
+  `test_eko302_k06_step_both_bases.py`, the composition test
+  `backend/tests/runtime/test_eko302_k06_expand_on_customer.py` against the published previous release
+  v0.1.2 (Q-2 B, published by the human on 2026-11-20 from `be0c5f7`, schema head `0004`), and
+  `frontend/tests/features/customers/NewCustomer.address.test.tsx`, `CustomerDetail.address.test.tsx`,
+  `qa-a08-missing-part.test.tsx` (rows in `architecture/capabilities.md`). Gate 1 (2026-11-19, every
+  recommendation accepted): Q-1 A (`nip` without its unique constraint until EKO-3-03, a declared ADR-0002
+  deviation), N-2 A, Q-2 B, Q-3 A, Q-4 A (Polish names, exact match), Q-5 A, G-1..G-7 A; the ADR-0002
+  addendum of 2026-11-19 is appended in this commit to
+  [`ADR-0002-database-and-migrations.md`](architecture/decisions/ADR-0002-database-and-migrations.md) from
+  [`EKO-3-02-adr0002-nip-column-before-uniqueness-addendum-draft-2026-11-19.md`](architecture/decisions/EKO-3-02-adr0002-nip-column-before-uniqueness-addendum-draft-2026-11-19.md).
+  **No release that contains EKO-3-02 and not EKO-3-03 is deployed to an environment holding real customer
+  data:** until EKO-3-03 merges, two customers may hold the same `nip`. Three fix rounds: round 1 (human
+  decision, 2026-11-20, on Invariant Guardian S-01 / Reviewer R-01, Low) made the K-06 `step` fixture fail
+  instead of skip on a non-numeric previous-release head; round 2, after the merge of `main` brought in
+  EKO-1-35 (#211), registered `reference.ts` in the frontend-vs-OpenAPI check and made the six answer parts
+  required `string | null` (human decisions A and B, 2026-11-20); round 3, after the PR's first CI run (both
+  runtime jobs red on the first K-06 run against v0.1.2), gave the K-06 test its own synthetic rep account
+  (the shared `login` account had been OTP-enrolled by an earlier browser test) and `--no-build` on its
+  backend replacement, asserting the backend and worker images equal. Gate 2 (2026-11-21, the human accepted
+  every recommendation): backend A-01..A-09 and frontend A-01..A-09 (A-08 in its fix-round-2 form) accepted
+  as built and recorded as amendment lines under the criteria of #208 (scope re-locked, fingerprint
+  `937b9628`); M06b (the county half of the C-3
+  refusal, shadowed by C-2) kept as an equivalent survivor, as defence in depth; M15a (a NIP stored as sent
+  is refused by `ck_customer_nip` with EKO-3-01's 503, not a field error) accepted as a backstop; whether the
+  TERYT file matches GUS as of 2026-01-01 rests on its recorded source and hashes and is not proven by any
+  test (a human spot-check is recommended; none is recorded here). Forwarded by Q-5 A: EKO-1-11's "first
+  expand → contract" moves to EKO-3-03, whose unique constraint on `nip` is the first contract migration on a
+  product table (it ships a release after the code that stops writing duplicates); ADR-0002-C9's unique half
+  and ADR-0005-C3's duplicate-save log case wait for EKO-3-03. One recorded exception, EKO-3-02/weakening-2
+  (the K-06 expand-step test skips once the previous release's head is `0005` or later; blocks again
+  2026-12-31), is entered in `docs/architecture/exception-register.md`. CI, stated plainly: at the PR head
+  `4ed7885` (only cost-register rows after verification) all nine checks were green in
+  [run 44890914161](https://github.com/TanerCRB/Eko_CRM/actions/runs/44890914161), the three K-06 runtime
+  tests passed in both "runtime tests on the composition" and "runtime tests on the checked images (release
+  mode)"; that run started before `main` gained EKO-1-36 (#223), and the merge result was checked locally
+  only by the EKO-1-35 and EKO-1-36 checker tests (248 passed). CI on `main` at `de4471e` when this entry was
+  written: [run 44906079047](https://github.com/TanerCRB/Eko_CRM/actions/runs/44906079047) (`process-ci`)
+  green; [run 44906079018](https://github.com/TanerCRB/Eko_CRM/actions/runs/44906079018) (`ci`) still
+  pending, so no result of it is claimed here. Mutation patches: the *Mutation* section of the
+  [PR #218](https://github.com/TanerCRB/Eko_CRM/pull/218) description (round 0, fix rounds 1-3).
+  Follow-ups: EKO-3-03 (the unique constraint, CUS-6 and the contract step), #161 (frontend API types, now
+  including `reference.ts`), #219 (the `eko131` static tests flaky on a Windows host).
 
 - [ ] **EKO-3-04** — Let users find customers in a list (#215).
   *Done when:* server tests prove: one text query matches a customer's name, town or contact value
