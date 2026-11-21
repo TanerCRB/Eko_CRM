@@ -22,16 +22,7 @@ bash scripts/exception-check.sh docs/architecture/exception-register.md
 
 ## Exceptions
 
-Accepted at gate 2 of EKO-1-01 in [PR #30](https://github.com/TanerCRB/Eko_CRM/pull/30); fixed
-by #29:
-
-- Exception EKO-1-01/EC-K-01 — owner: @TanerCRB — reason: the K-01 document check is a QA scratch script, not a tracked test file (K-07 forbids adding files; follow-up #29) — blocks again: 2026-11-23
-- Exception EKO-1-01/EC-K-02 — owner: @TanerCRB — reason: the K-02 document check is a QA scratch script, not a tracked test file (K-07 forbids adding files; follow-up #29) — blocks again: 2026-11-23
-- Exception EKO-1-01/EC-K-03 — owner: @TanerCRB — reason: the K-03 document check is a QA scratch script, not a tracked test file (K-07 forbids adding files; follow-up #29) — blocks again: 2026-11-23
-- Exception EKO-1-01/EC-K-04 — owner: @TanerCRB — reason: the K-04 document checks are QA scratch scripts, not a tracked test file (K-07 forbids adding files; follow-up #29) — blocks again: 2026-11-23
-- Exception EKO-1-01/EC-K-05 — owner: @TanerCRB — reason: the K-05 document checks are QA scratch scripts, not a tracked test file (K-07 forbids adding files; follow-up #29) — blocks again: 2026-11-23
-- Exception EKO-1-01/EC-K-06 — owner: @TanerCRB — reason: the K-06 document checks are QA scratch scripts, not a tracked test file (K-07 forbids adding files; follow-up #29) — blocks again: 2026-11-23
-- Exception EKO-1-01/EC-K-07 — owner: @TanerCRB — reason: the K-07 document check is a QA scratch script, not a tracked test file (K-07 forbids adding files; follow-up #29) — blocks again: 2026-11-23
+The seven EKO-1-01/EC-K-01..07 entries (accepted at gate 2 of EKO-1-01 in [PR #30](https://github.com/TanerCRB/Eko_CRM/pull/30)) were removed at gate 3 of EKO-1-37 (#226): their document check is tracked as `tests/doc-checks/EKO-1-01.sh` ([PR #231](https://github.com/TanerCRB/Eko_CRM/pull/231)).
 
 Accepted at gate 2 of EKO-1-03 in [PR #39](https://github.com/TanerCRB/Eko_CRM/pull/39); fixes are
 entry conditions of EKO-1-08 (#36) and, for R-22, EKO-1-12 (#53):
@@ -166,3 +157,8 @@ Accepted at gate 2 of EKO-1-35 in [PR #211](https://github.com/TanerCRB/Eko_CRM/
 Accepted at gate 2 of EKO-3-02 in [PR #218](https://github.com/TanerCRB/Eko_CRM/pull/218) (W2 decided by the human at step 10b on 2026-11-20, narrowed in fix round 1 after Invariant Guardian S-01 / Reviewer R-01; the owner and the date given at gate 2 on 2026-11-21, recorded on #208); the skip is the `step` fixture's `int(head) >= int(HEAD)` in `backend/tests/runtime/test_eko302_k06_expand_on_customer.py`, both bases tested by `backend/tests/unit/test_eko302_k06_step_both_bases.py`:
 
 - Exception EKO-3-02/weakening-2 — owner: @TanerCRB — reason: the K-06 expand step test skips when the previous release's head is already 0005 or later, because then there is no 0004 base to step from — blocks again: 2026-12-31
+
+Accepted at gate 2 of EKO-1-37 in [PR #231](https://github.com/TanerCRB/Eko_CRM/pull/231) (decided by the human on 2026-11-21, recorded on #226).
+
+- Exception EKO-1-37/M-07 — owner: @TanerCRB — reason: fe_case survives at the label level because the fe-time row comparison of K-05-4f fails every register mutation it would catch; the sub-check still flips — blocks again: 2027-05-21
+- Exception EKO-1-37/M-11 — owner: @TanerCRB — reason: the fatal exit of pinned() survives because the second-parent check and resolve() still end a depth-1 run with exit 2 — blocks again: 2027-05-21
