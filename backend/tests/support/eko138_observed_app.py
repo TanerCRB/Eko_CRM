@@ -12,6 +12,9 @@ name in `tests/support/eko201_fixture_app.py` serve, plus one test path answered
   `held` / `waited` after), its non-retried checkouts (`SessionStore.find`,
   `SessionStore.refresh_holder`) with start, end and outcome, its status and when it answered.
 
+`create_with_late_refresh` is `create_with_blockers` whose refresh holder waits
+`REFRESH_LAG_SECONDS`, holding the lock, before it refreshes (Reviewer R-01's late refresh).
+
 The shipped `Authenticator` and `SessionStore` do the work; the subclasses only record around it.
 """
 
@@ -37,6 +40,9 @@ from tests.support import eko201_fixture_app
 
 STATE_PATH = "/__eko201/state"
 TAG_HEADER = "x-eko201-tag"
+# `create_with_late_refresh`: how much later than usual the holder's refresh reaches the identity
+# server, so the gap between the test's sends and that refresh grows by a known amount (EKO-1-38).
+REFRESH_LAG_SECONDS = 0.4
 
 _tag: ContextVar[str | None] = ContextVar("eko201_tag", default=None)
 
@@ -190,13 +196,23 @@ class Observer:
             self.phases.answered(tag.decode("ascii"), status[0] if status else None)
 
 
-def _observed(app: FastAPI) -> FastAPI:
+class LateRefreshAuthenticator(ObservedAuthenticator):
+    """The holder starts its refresh `REFRESH_LAG_SECONDS` late, holding the lock meanwhile."""
+
+    def _hold(self, holder: RefreshHolder, seen: StoredSession) -> Caller:
+        time.sleep(REFRESH_LAG_SECONDS)
+        return super()._hold(holder, seen)
+
+
+def _observed(
+    app: FastAPI, authenticator: type[ObservedAuthenticator] = ObservedAuthenticator
+) -> FastAPI:
     phases = Phases()
     database: Database = app.state.database
     shipped: Authenticator = app.state.auth
     fields = {f.name: getattr(shipped, f.name) for f in dataclasses.fields(shipped)}
     fields["store"] = ObservedStore(database, phases)
-    observed = ObservedAuthenticator(**fields)
+    observed = authenticator(**fields)
     observed.phases = phases
     app.state.auth = observed
     # Added last, so it is outermost: it sees `block` answer and `release` arrive.
@@ -210,3 +226,7 @@ def create_with_blockers() -> FastAPI:
 
 def create_unbounded_with_blockers() -> FastAPI:
     return _observed(eko201_fixture_app.create_unbounded_with_blockers())
+
+
+def create_with_late_refresh() -> FastAPI:
+    return _observed(eko201_fixture_app.create_with_blockers(), LateRefreshAuthenticator)

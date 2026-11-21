@@ -5,6 +5,9 @@ Two uvicorn processes, each its own pool of 2, against real PostgreSQL and the O
 is measured from each request's own send time. Timing holds for this test host only.
 """
 
+import dataclasses
+import json
+import logging
 import threading
 import time
 from collections.abc import Callable
@@ -16,6 +19,7 @@ from typing import Any
 import httpx
 import pytest
 
+from app.data.database import POOL_TIMEOUT_SECONDS
 from tests.runtime.eko201.conftest import SESSION_COOKIE, session_count
 from tests.runtime.eko201.processes import Backend, backends, expired_login, expired_logins
 from tests.support import eko138_observed_app, oidc_stub
@@ -23,15 +27,23 @@ from tests.support.pg_instance import Postgres
 
 pytestmark = pytest.mark.runtime
 
+logger = logging.getLogger(__name__)
+# The run record is INFO; pytest's captured-log section shows it with a failing test only.
+logger.setLevel(logging.INFO)
+
 BOUND = 6.0
 BLOCKERS = "tests.support.eko201_fixture_app:create_with_blockers"
 UNBOUNDED = "tests.support.eko201_fixture_app:create_unbounded_with_blockers"
 OBSERVED = "tests.support.eko138_observed_app:create_with_blockers"
-# EKO-1-38: the one late request of the pool-exhausted carrier, sent this long after the holder's
-# refresh reached the identity server: past the old 0.2-s settle and its blockers, and early
-# enough that a bounded checkout started then times out before the 1.5-s hold ends.
+# EKO-1-38: the one late request of the pool-exhausted carrier, sent at the later of
+# `LATE_AFTER_START` after the ten sends began and `LATE_SECONDS` after the holder's refresh
+# reached the identity server: past the old 0.2-s settle and its blockers, and, unless that
+# refresh starts late, early enough that a bounded checkout started then times out before the
+# hold ends 1.5 s after the sends began (Reviewer R-01). Tests relying on that timeout ending
+# inside the hold assert it.
 LATE_INDEX = 6
-LATE_SECONDS = 0.6
+LATE_SECONDS = 0.35
+LATE_AFTER_START = 0.5
 WAITERS = 9
 
 
@@ -166,14 +178,21 @@ def observed(target: Backend) -> dict[str, Any]:
 
 
 def send_tagged(
-    target: Backend, session: str, tag: int, stub: oidc_stub.Stub, late: float | None
+    target: Backend,
+    session: str,
+    tag: int,
+    stub: oidc_stub.Stub,
+    late: float | None,
+    not_before: float | None = None,
 ) -> Outcome:
     """`send`, tagged for the process's record; a late one is sent `late` seconds after the
-    first refresh reached the identity server (EKO-1-38): anchored on the refresh, never on the
-    blockers, which under the observed settle wait for this request."""
+    first refresh reached the identity server, and not before the instant `not_before` (EKO-1-38):
+    anchored on the refresh and the sends, never on the blockers, which under the observed settle
+    wait for this request."""
     if late is not None:
         wait_for_refresh(stub)
-        time.sleep(max(0.0, stub.refreshes()[0].started + late - time.monotonic()))
+        at = max(stub.refreshes()[0].started + late, not_before or 0.0)
+        time.sleep(max(0.0, at - time.monotonic()))
     started = time.monotonic()
     headers = {"cookie": f"{SESSION_COOKIE}={session}", eko138_observed_app.TAG_HEADER: str(tag)}
     try:
@@ -249,8 +268,11 @@ def pool_exhausted_responsive(
         stub.refresh_delay_seconds = 2.0
         with ThreadPoolExecutor(max_workers=10) as pool:
             started = time.monotonic()
+            not_before = started + LATE_AFTER_START
             futures = [
-                pool.submit(send_tagged, t, session, i, stub, late if i == LATE_INDEX else None)
+                pool.submit(send_tagged, t, session, i, stub, late, not_before)
+                if i == LATE_INDEX
+                else pool.submit(send_tagged, t, session, i, stub, None)
                 for i, t in enumerate((a, b) * 5)
             ]
             holder, other = settle(stub, sid, a, b)
@@ -265,7 +287,23 @@ def pool_exhausted_responsive(
             release(b)
             outcomes = [f.result() for f in futures]
         final = {"a": observed(a), "b": observed(b)}
-    return Run(outcomes, sid, refresh_at_block, at_block, final, marks)
+    run = Run(outcomes, sid, refresh_at_block, at_block, final, marks)
+    # Shown with a failing test's report, so a red run can be attributed (Reviewer R-02).
+    logger.info("pool-exhausted run record: %s", json.dumps(dataclasses.asdict(run)))
+    return run
+
+
+def hold_after(run: Run, checkout: dict[str, Any]) -> float:
+    """Seconds the late request's process still held its blockers after the checkout started."""
+    process = "a" if LATE_INDEX % 2 == 0 else "b"
+    released: float = run.final[process]["released_at"]
+    return released - float(checkout["started"])
+
+
+def late_request(run: Run) -> dict[str, Any]:
+    process = "a" if LATE_INDEX % 2 == 0 else "b"
+    found: dict[str, Any] = run.final[process]["requests"][str(LATE_INDEX)]
+    return found
 
 
 def pools_full(run: Run) -> dict[str, tuple[int, int, int]]:
@@ -282,6 +320,11 @@ def test_k04_pool_exhausted_responsive_identity_server_serves_every_request(
     pg: Postgres, stub: oidc_stub.Stub, late: float | None
 ) -> None:
     run = pool_exhausted_responsive(pg, stub, all_waiting, late)
+    if late is not None:
+        # Precondition: a bounded checkout started when the late request did would have timed
+        # out inside the hold, so this run could tell a waited-for request from a blocked one.
+        first = late_request(run)["checkouts"][0]
+        assert hold_after(run, first) >= POOL_TIMEOUT_SECONDS, (run.final, run.marks)
     outcomes, sid = run.outcomes, run.sid
     assert [o.status for o in outcomes] == [200] * 10, outcomes
     assert len(stub.refreshes(sid)) == 1

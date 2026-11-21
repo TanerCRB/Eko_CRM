@@ -11,6 +11,7 @@ the waiting phase keeps the ten answers 200.
 
 import pytest
 
+from app.data.database import POOL_TIMEOUT_SECONDS
 from tests.runtime.eko201 import test_eko201_k04_refresh_concurrency as k04
 from tests.runtime.eko201.conftest import session_count
 from tests.support import oidc_stub, qa138_slow_lock_app
@@ -32,6 +33,9 @@ def test_k02_late_request_paused_between_its_checkouts_is_waited_for_before_the_
     process = "a" if k04.LATE_INDEX % 2 == 0 else "b"
     late = run.final[process]["requests"][str(k04.LATE_INDEX)]
     find, lock = late["checkouts"][:2]
+    # Precondition: blockers placed during the pause would make the second checkout time out
+    # inside the hold, so this run can tell the waiting phase from "reached the server" (R-01).
+    assert k04.hold_after(run, lock) >= POOL_TIMEOUT_SECONDS, (run.final, run.marks)
     # The pause sat between the two checkouts, whatever the outcome (less the clock's ~16-ms tick).
     assert lock["started"] - find["ended"] >= qa138_slow_lock_app.GAP_SECONDS - CLOCK_TICK, late
     assert [o.status for o in run.outcomes] == [200] * 10, (run.outcomes, late)

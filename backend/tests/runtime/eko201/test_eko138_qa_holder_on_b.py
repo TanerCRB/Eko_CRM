@@ -28,7 +28,12 @@ def test_k03_holder_on_process_b_still_exhausts_both_pools_while_the_refresh_is_
     send = k04.send_tagged
 
     def b_first(
-        target: Backend, session: str, tag: int, at: oidc_stub.Stub, late: float | None
+        target: Backend,
+        session: str,
+        tag: int,
+        at: oidc_stub.Stub,
+        late: float | None,
+        not_before: float | None = None,
     ) -> k04.Outcome:
         return send(target, session, tag, at, None if tag == FIRST else 0.0)
 
