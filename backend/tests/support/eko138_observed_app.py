@@ -42,7 +42,7 @@ STATE_PATH = "/__eko201/state"
 TAG_HEADER = "x-eko201-tag"
 # `create_with_late_refresh`: how much later than usual the holder's refresh reaches the identity
 # server, so the gap between the test's sends and that refresh grows by a known amount (EKO-1-38).
-REFRESH_LAG_SECONDS = 0.4
+REFRESH_LAG_SECONDS = 0.2
 
 _tag: ContextVar[str | None] = ContextVar("eko201_tag", default=None)
 

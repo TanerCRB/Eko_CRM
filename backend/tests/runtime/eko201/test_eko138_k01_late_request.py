@@ -1,14 +1,16 @@
 """EKO-1-38 K-01: the pool-exhausted carrier's fixed 0.2-s settle, with one request late.
 
-The late request is sent at the later of `k04.LATE_AFTER_START` after the ten sends began and
-`k04.LATE_SECONDS` after the holder's refresh reached the identity server (`k04.send_tagged`);
-under the fixed settle the blockers are in place by then, so its first checkout, a non-retried
-one, waits the pool timeout and the request answers 503. Every instant compared within the
-backend's record is read from the same backend process (`tests/support/eko138_observed_app.py`).
+The late request is sent `k04.LATE_SECONDS` after the midpoint of the instant the ten sends began
+and the instant the holder's refresh reached the identity server (`k04.send_tagged`); under the
+fixed settle the blockers are in place by then, so its first checkout, a non-retried one, waits
+the pool timeout and the request answers 503. Every instant compared within the backend's record
+is read from the same backend process (`tests/support/eko138_observed_app.py`).
 
 `refresh-late` repeats the run with the holder's refresh reaching the identity server
-`REFRESH_LAG_SECONDS` later than usual: the hold still ends 1.5 s after the sends began (a K-04
-guarded line), so the late request's timing must not depend on when the refresh started (R-01).
+`REFRESH_LAG_SECONDS` later than usual. The hold still ends 1.5 s after the sends began (a K-04
+guarded line) while the blockers follow the refresh, so the window the late request must land in
+narrows as the refresh starts later; the midpoint rule keeps it inside, and the preconditions
+below name the edge it missed if it does not (Reviewer R-01, R-03).
 """
 
 import pytest

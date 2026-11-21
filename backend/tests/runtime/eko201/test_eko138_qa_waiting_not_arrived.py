@@ -20,6 +20,10 @@ from tests.support.pg_instance import Postgres
 pytestmark = pytest.mark.runtime
 
 SLOW_LOCK = "tests.support.qa138_slow_lock_app:create_with_blockers"
+# The late request is sent this long after the midpoint of the sends' start and the refresh's
+# (`k04.send_tagged`), earlier than the carrier's `k04.LATE_SECONDS`: its second checkout starts
+# `GAP_SECONDS` later still and must time out inside the hold that ends 1.5 s after the sends.
+LATE_SECONDS = 0.4
 # `time.monotonic()` advances in ticks of about 16 ms on the Windows test host.
 CLOCK_TICK = 0.05
 
@@ -27,9 +31,7 @@ CLOCK_TICK = 0.05
 def test_k02_late_request_paused_between_its_checkouts_is_waited_for_before_the_blockers(
     pg: Postgres, stub: oidc_stub.Stub
 ) -> None:
-    run = k04.pool_exhausted_responsive(
-        pg, stub, k04.all_waiting, k04.LATE_SECONDS, factory=SLOW_LOCK
-    )
+    run = k04.pool_exhausted_responsive(pg, stub, k04.all_waiting, LATE_SECONDS, factory=SLOW_LOCK)
     process = "a" if k04.LATE_INDEX % 2 == 0 else "b"
     late = run.final[process]["requests"][str(k04.LATE_INDEX)]
     find, lock = late["checkouts"][:2]

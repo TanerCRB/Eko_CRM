@@ -35,15 +35,14 @@ BOUND = 6.0
 BLOCKERS = "tests.support.eko201_fixture_app:create_with_blockers"
 UNBOUNDED = "tests.support.eko201_fixture_app:create_unbounded_with_blockers"
 OBSERVED = "tests.support.eko138_observed_app:create_with_blockers"
-# EKO-1-38: the one late request of the pool-exhausted carrier, sent at the later of
-# `LATE_AFTER_START` after the ten sends began and `LATE_SECONDS` after the holder's refresh
-# reached the identity server: past the old 0.2-s settle and its blockers, and, unless that
-# refresh starts late, early enough that a bounded checkout started then times out before the
-# hold ends 1.5 s after the sends began (Reviewer R-01). Tests relying on that timeout ending
-# inside the hold assert it.
+# EKO-1-38: the one late request of the pool-exhausted carrier, sent `LATE_SECONDS` after the
+# midpoint of the instant the ten sends began (S) and the instant the holder's refresh reached the
+# identity server (R). Under the old fixed settle its first checkout must start after the blockers,
+# placed about R + 0.3, and time out before the hold ends at S + 1.5, so by S + 1.0: the midpoint
+# rule keeps it near the middle of that window as R moves away from S (Reviewer R-01, R-03).
+# Tests relying on either edge assert it.
 LATE_INDEX = 6
-LATE_SECONDS = 0.35
-LATE_AFTER_START = 0.5
+LATE_SECONDS = 0.7
 WAITERS = 9
 
 
@@ -183,16 +182,17 @@ def send_tagged(
     tag: int,
     stub: oidc_stub.Stub,
     late: float | None,
-    not_before: float | None = None,
+    sends_started: float | None = None,
 ) -> Outcome:
     """`send`, tagged for the process's record; a late one is sent `late` seconds after the
-    first refresh reached the identity server, and not before the instant `not_before` (EKO-1-38):
-    anchored on the refresh and the sends, never on the blockers, which under the observed settle
-    wait for this request."""
+    midpoint of `sends_started` and the first refresh reaching the identity server, or after that
+    refresh alone without `sends_started` (EKO-1-38): anchored on the sends and the refresh, never
+    on the blockers, which under the observed settle wait for this request."""
     if late is not None:
         wait_for_refresh(stub)
-        at = max(stub.refreshes()[0].started + late, not_before or 0.0)
-        time.sleep(max(0.0, at - time.monotonic()))
+        refresh = stub.refreshes()[0].started
+        anchor = refresh if sends_started is None else (sends_started + refresh) / 2
+        time.sleep(max(0.0, anchor + late - time.monotonic()))
     started = time.monotonic()
     headers = {"cookie": f"{SESSION_COOKIE}={session}", eko138_observed_app.TAG_HEADER: str(tag)}
     try:
@@ -268,9 +268,8 @@ def pool_exhausted_responsive(
         stub.refresh_delay_seconds = 2.0
         with ThreadPoolExecutor(max_workers=10) as pool:
             started = time.monotonic()
-            not_before = started + LATE_AFTER_START
             futures = [
-                pool.submit(send_tagged, t, session, i, stub, late, not_before)
+                pool.submit(send_tagged, t, session, i, stub, late, started)
                 if i == LATE_INDEX
                 else pool.submit(send_tagged, t, session, i, stub, None)
                 for i, t in enumerate((a, b) * 5)
