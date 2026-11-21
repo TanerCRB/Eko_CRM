@@ -5,7 +5,8 @@ log content): a rep's search sent through `proxy` with a marker in `q`, and a re
 does not repeat the marker.
 
 The dev profile (`running`) supplies Keycloak, so the rep's requests carry a real session made by
-a real login through the proxy. Every value is synthetic (ADR-0005).
+a real login through the proxy, as a rep account of the test's own. Every value is synthetic
+(ADR-0005).
 """
 
 import json
@@ -16,11 +17,10 @@ import httpx
 import pytest
 
 from tests.runtime import eko201_login as app
+from tests.runtime import eko202_live as live
 from tests.runtime.conftest import Started
 from tests.runtime.eko113 import window
 from tests.runtime.keycloak_client import RealmClient
-from tests.support import eko112_fixtures as eko112
-from tests.support import eko201_keycloak as accounts
 from tests.support import log_lines as ll
 
 pytestmark = pytest.mark.runtime
@@ -31,20 +31,17 @@ CUSTOMERS = "/api/customers"
 
 
 def rep_session(started: Started) -> str:
+    """A real login as a rep account of this call's own. A shared account (`login`) may hold an
+    OTP credential a browser enrolled earlier in the session, whose secret this process never
+    saw; Keycloak then stops on its code page."""
     composition = started.composition
-    env = composition.env
-    master = RealmClient(composition, "master")
+    username, password = f"eko304-k06-{secrets.token_hex(4)}", live.new_password()
+    live.Realm(composition).create_account(username, password, ["rep"])
     browser = RealmClient(composition, "eko", listener="auth")
     try:
-        token = master.direct_master_token(
-            eko112.ACCOUNTS["breakglass_one"], env[eko112.PASSWORD_VARIABLES["breakglass_one"]]
-        )
-        password = "synthetic-" + secrets.token_urlsafe(24)
-        app.ensure_staff_account(master, token, "login", password)
-        return app.login(composition, browser, accounts.ACCOUNTS["login"], password)
+        return app.login(composition, browser, username, password)
     finally:
         browser.close()
-        master.close()
 
 
 def call(
