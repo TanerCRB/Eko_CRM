@@ -24,9 +24,14 @@
 # that printed no "ok" line, so a name kept only in a comment proves nothing.
 # There is no "skip": every check runs on every run, and the summary always reports 0 skipped.
 # Exit codes: 0 = every check passed, 1 = at least one failed, 2 = the script could not run (a bad
-# argument, a pinned commit that is absent, as in a depth-1 clone) — never read 2 as a pass.
-# A helper script of this repository (risk-check.sh, layer-check.sh) that exits 2 on a register is
-# reported as a FAIL of that sub-check, so a damaged register is a failure here and never a pass.
+# argument or revision, a pinned commit that is absent, as in a depth-1 clone, or today's
+# risk-check.sh / layer-check.sh unable to read the registers of the pinned commits) — never read 2
+# as a pass.
+# Helper scripts (#226 K-03). Before any check, today's layer-check.sh and risk-check.sh are run over
+# the 2026-10-23 registers, read from the pinned base and head; an exit 2 there is tooling that can
+# no longer parse that format, and the run exits 2. Once that holds, a helper exit 2 on a register
+# of another --head or --base is that register's damage (e.g. a deleted cell separator), reported
+# as a FAIL of the sub-check that ran the helper, next to the script's own predicates (K-05-4, ...).
 #
 # Non-default head (--head). The documents, the changed files (K-07) and the history base..head
 # (K-04) come from that head. K-04(3) judges that history generically — for each ADR, the commit
@@ -89,8 +94,14 @@ for i in 0 1 2; do
 done
 [ "$(git rev-parse "$PIN_MERGE^2" 2>/dev/null)" = "$PIN_HEAD" ] || die "pinned merge commit $PIN_MERGE does not have $PIN_HEAD as its second parent"
 
-resolve() { git rev-parse --verify --quiet "$1^{commit}" 2>/dev/null || die "$2 '$1' is not a commit in this repository"; }
-BASE="$(resolve "$BASE" base)"; HEAD_REV="$(resolve "$HEAD_REV" head)"; MERGE="$(resolve "$MERGE" merge)"
+# resolve <variable> <what> — the variable's revision as a full commit id; runs in this shell, not in
+# $(...), so a bad revision exits 2 here instead of leaving the variable empty.
+resolve() {
+  local id
+  id="$(git rev-parse --verify --quiet "${!1}^{commit}" 2>/dev/null)" && [ -n "$id" ] || die "$2 '${!1}' is not a commit in this repository"
+  printf -v "$1" '%s' "$id"
+}
+resolve BASE base; resolve HEAD_REV head; resolve MERGE merge
 git merge-base --is-ancestor "$BASE" "$HEAD_REV" || die "base $BASE is not an ancestor of head $HEAD_REV"
 SCRIPTS="$REPO/scripts"
 for f in risk-check.sh layer-check.sh; do [ -r "$SCRIPTS/$f" ] || die "cannot read scripts/$f"; done
@@ -138,6 +149,25 @@ ADR2_P="$(printf '%s\n' "$ADR2" | paras)"
 ADR1_DEC_P="$(printf '%s\n' "$ADR1" | section '^## Decision' | paras)"
 ADR2_DEC_P="$(printf '%s\n' "$ADR2" | section '^## Decision' | paras)"
 
+# ---- today's helpers can read the pinned registers ------------------------------------------
+
+# Only exit 2 ("cannot run") stops here; a finding (exit 1) on the pinned registers is left to K-05(5).
+preflight() {
+  local out code f mode
+  doc "$PIN_HEAD" "$LAYERS" > "$TMP/pin-layers-head.md"
+  doc "$PIN_BASE" "$PATHS" > "$TMP/pin-paths-base.md"
+  doc "$PIN_HEAD" "$PATHS" > "$TMP/pin-paths-head.md"
+  out="$(bash "$SCRIPTS/layer-check.sh" --register "$TMP/pin-layers-head.md" "$PIN_BASE" "$PIN_HEAD" 2>&1)"; code=$?
+  [ "$code" -ne 2 ] || die "scripts/layer-check.sh exited 2 on the layer register of pinned head $PIN_HEAD, so today's tool cannot read the 2026-10-23 format: $(printf '%s' "$out" | tail -n 1 | cut -c1-140)"
+  for f in pin-paths-base.md pin-paths-head.md; do
+    for mode in classes explain; do
+      out="$(bash "$SCRIPTS/risk-check.sh" --register "$TMP/$f" "$mode" --paths - <<< 'backend/app/api/sample.py' 2>&1)"; code=$?
+      [ "$code" -ne 2 ] || die "scripts/risk-check.sh $mode exited 2 on the sensitive-paths register $f, so today's tool cannot read the 2026-10-23 format: $(printf '%s' "$out" | tail -n 1 | cut -c1-140)"
+    done
+  done
+}
+preflight
+
 # ---- the check runner ----------------------------------------------------------------------
 
 passed=0; failed=0; skipped=0
@@ -153,9 +183,13 @@ check() {
     echo "FAIL $label — $detail: ${WHY:-check failed}"; failed=$((failed + 1))
   fi
 }
+# A grep -q never reads from a pipe here: it exits on the first match, the writer then dies of
+# SIGPIPE, and pipefail turns a match into a miss (Q-01). It reads a here-string or a file instead.
 # has <text> <ERE> — case-insensitive match; hasc — case-sensitive.
-has() { printf '%s\n' "$1" | grep -Eiq -- "$2"; }
-hasc() { printf '%s\n' "$1" | grep -Eq -- "$2"; }
+has() { grep -Eiq -- "$2" <<< "$1"; }
+hasc() { grep -Eq -- "$2" <<< "$1"; }
+# sel_has <text> <line ERE> <ERE> — some line matching the first ERE also matches the second (no case).
+sel_has() { local sel; sel="$(grep -E -- "$2" <<< "$1")"; grep -Eiq -- "$3" <<< "$sel"; }
 need() { has "$1" "$2" || { WHY="missing: /$2/"; return 1; }; }
 # forbid <text> <ERE> [case-sensitive] — fails when a line of the text matches.
 forbid() {
@@ -224,25 +258,24 @@ k01_d_layering() {
   local r
   for r in '| domain | services, data, api, integrations |' '| services | api |' '| data | services, api, integrations |' \
            '| integrations | services, data, api |' '| core | domain, services, data, api, integrations |' '| api | — |'; do
-    printf '%s\n' "$ADR1_DEC_P" | grep -Fxq -- "$r" || { WHY="the layer rules table lacks the row: $r"; return 1; }
+    grep -Fxq -- "$r" <<< "$ADR1_DEC_P" || { WHY="the layer rules table lacks the row: $r"; return 1; }
   done
   need "$ADR1_DEC_P" 'keep every rule of the provisional table' || return 1
 }
 check "$L01" "(d) backend layering fixed: the six layer rules and their relation to the provisional table" k01_d_layering
 
 k01_e_forward() {
-  local fw r
+  local fw r hit
   part "$ADR1_DEC_P" '^### Forward references' || return 1; fw="$PART"
-  printf '%s\n' "$fw" | grep -E '^- ADR-0003' | grep -Eiq 'identity server product' || { WHY="no forward reference to ADR-0003 for the identity server product"; return 1; }
-  printf '%s\n' "$fw" | grep -E '^- ADR-0004' | grep -Eiq 'container runtime' || { WHY="no forward reference to ADR-0004 for the container runtime"; return 1; }
-  printf '%s\n' "$fw" | grep -E '^- ADR-0004' | grep -Eiq 'backup' || { WHY="no forward reference to ADR-0004 for backup"; return 1; }
-  printf '%s\n' "$fw" | grep -E '^- ADR-0005' | grep -Eiq 'personal data' || { WHY="no forward reference to ADR-0005 for personal data"; return 1; }
-  printf '%s\n' "$fw" | grep -E '^- ADR-0006' | grep -Eiq 'Google Calendar' || { WHY="no forward reference to ADR-0006 for Google Calendar"; return 1; }
+  sel_has "$fw" '^- ADR-0003' 'identity server product' || { WHY="no forward reference to ADR-0003 for the identity server product"; return 1; }
+  sel_has "$fw" '^- ADR-0004' 'container runtime' || { WHY="no forward reference to ADR-0004 for the container runtime"; return 1; }
+  sel_has "$fw" '^- ADR-0004' 'backup' || { WHY="no forward reference to ADR-0004 for backup"; return 1; }
+  sel_has "$fw" '^- ADR-0005' 'personal data' || { WHY="no forward reference to ADR-0005 for personal data"; return 1; }
+  sel_has "$fw" '^- ADR-0006' 'Google Calendar' || { WHY="no forward reference to ADR-0006 for Google Calendar"; return 1; }
   # A topic named outside a forward reference must still cite the decision that owns it.
   for r in 'Google Calendar' 'backup' 'personal.data'; do
-    if printf '%s\n' "$ADR1_P" | grep -Ei -- "$r" | grep -Eqv 'ADR-000[3-6]'; then
-      WHY="a paragraph names '$r' without citing ADR-0003..0006: $(printf '%s\n' "$ADR1_P" | grep -Ei -- "$r" | grep -Ev 'ADR-000[3-6]' | head -n 1 | cut -c1-120)"; return 1
-    fi
+    hit="$(grep -Ei -- "$r" <<< "$ADR1_P" | grep -Ev 'ADR-000[3-6]' | head -n 1)"
+    [ -z "$hit" ] || { WHY="a paragraph names '$r' without citing ADR-0003..0006: $(cut -c1-120 <<< "$hit")"; return 1; }
   done
 }
 check "$L01" "(e) identity server, container runtime, backup, personal data, Google Calendar only as forward references" k01_e_forward
@@ -284,9 +317,8 @@ k02_b_on_prem() {
   need "$ADR2_DEC_P" 'runs as an ordinary container on the company.s server' || return 1
   need "$ADR2_DEC_P" 'nothing in this decision depends on a managed database service' || return 1
   forbid "$ADR2_DEC_P" '\b(AWS|Azure|Google Cloud|GCP|Amazon RDS|Cloud SQL|Aurora|Supabase)\b' || return 1
-  if printf '%s\n' "$ADR2_DEC_P" | grep -Ei 'managed' | grep -Eiqv '(nothing|not assumed|no managed|stays possible)'; then
-    WHY="a managed-service statement: $(printf '%s\n' "$ADR2_DEC_P" | grep -Ei 'managed' | grep -Eiv '(nothing|not assumed|no managed|stays possible)' | head -n 1 | cut -c1-120)"; return 1
-  fi
+  local hit; hit="$(grep -Ei 'managed' <<< "$ADR2_DEC_P" | grep -Eiv '(nothing|not assumed|no managed|stays possible)' | head -n 1)"
+  [ -z "$hit" ] || { WHY="a managed-service statement: $(cut -c1-120 <<< "$hit")"; return 1; }
 }
 check "$L02" "(b) container, on-premises, not tied to one cloud vendor" k02_b_on_prem
 
@@ -315,15 +347,14 @@ k02_d_time_text() {
 check "$L02" "(d) points in time, Europe/Warsaw days and DST, Polish text, case-insensitive match and NIP uniqueness" k02_d_time_text
 
 k02_e_forward() {
-  local fw
+  local fw hit
   part "$ADR2_DEC_P" '^### Forward references' || return 1; fw="$PART"
-  printf '%s\n' "$fw" | grep -E '^- ADR-0003' | grep -Eiq 'identity server stores its own data' || { WHY="no forward reference to ADR-0003 for the identity server's storage"; return 1; }
-  printf '%s\n' "$fw" | grep -E '^- ADR-0004' | grep -Eiq 'backup' || { WHY="no forward reference to ADR-0004 for backup"; return 1; }
-  printf '%s\n' "$fw" | grep -E '^- ADR-0004' | grep -Eiq 'encryption at rest' || { WHY="no forward reference to ADR-0004 for encryption at rest"; return 1; }
-  printf '%s\n' "$fw" | grep -E '^- ADR-0005' | grep -Eiq 'retention' || { WHY="no forward reference to ADR-0005 for personal-data retention"; return 1; }
-  if printf '%s\n' "$ADR2_P" | grep -Ei 'backup|encryption at rest|retention|identity server.s own data' | grep -Eqv 'ADR-000[3-6]'; then
-    WHY="a paragraph names a forwarded topic without citing ADR-0003..0006: $(printf '%s\n' "$ADR2_P" | grep -Ei 'backup|encryption at rest|retention|identity server.s own data' | grep -Ev 'ADR-000[3-6]' | head -n 1 | cut -c1-120)"; return 1
-  fi
+  sel_has "$fw" '^- ADR-0003' 'identity server stores its own data' || { WHY="no forward reference to ADR-0003 for the identity server's storage"; return 1; }
+  sel_has "$fw" '^- ADR-0004' 'backup' || { WHY="no forward reference to ADR-0004 for backup"; return 1; }
+  sel_has "$fw" '^- ADR-0004' 'encryption at rest' || { WHY="no forward reference to ADR-0004 for encryption at rest"; return 1; }
+  sel_has "$fw" '^- ADR-0005' 'retention' || { WHY="no forward reference to ADR-0005 for personal-data retention"; return 1; }
+  hit="$(grep -Ei 'backup|encryption at rest|retention|identity server.s own data' <<< "$ADR2_P" | grep -Ev 'ADR-000[3-6]' | head -n 1)"
+  [ -z "$hit" ] || { WHY="a paragraph names a forwarded topic without citing ADR-0003..0006: $(cut -c1-120 <<< "$hit")"; return 1; }
   forbid "$ADR2_DEC_P" '\b(pg_dump|pgBackRest|WAL-G|Barman|restic|LUKS|dm-crypt|pgcrypto|Keycloak)\b'
 }
 check "$L02" "(e) backup, encryption at rest, identity server storage, retention only as forward references" k02_e_forward
@@ -360,7 +391,7 @@ k03_one_adr() {
   while IFS=$'\t' read -r cells id crit; do
     [ -n "$id" ] || continue
     [ "$cells" = 2 ] && [ -n "$crit" ] || { WHY="ADR-000$num: control '$id' is not an identifier and a criterion"; return 1; }
-    printf '%s\n' "$id" | grep -Eq "^ADR-000$num-C[0-9]+\$" || { WHY="ADR-000$num: control id '$id' is malformed"; return 1; }
+    grep -Eq "^ADR-000$num-C[0-9]+\$" <<< "$id" || { WHY="ADR-000$num: control id '$id' is malformed"; return 1; }
     # A proxy for "checkable by a test or command": a test, a command or a code span in the criterion.
     has "$crit" '(\btests?\b|\bgrep\b|\bexits?\b|\bruns?\b|\bstarts\b|\bSHOW\b|\bSELECT\b|\.(json|toml|ya?ml|py|ts)\b|[`]|\bfails?\b|\breturns?\b|\blists?\b|\bexists?\b|\bbuilds?\b|\bgets\b|--[a-z]+)' || { WHY="ADR-000$num: control $id names no test or command: $(printf '%s' "$crit" | cut -c1-100)"; return 1; }
   done <<< "$ctl"
@@ -399,9 +430,9 @@ k03_numbers() {
   names="$(git ls-tree --name-only "$HEAD_REV" "$DECISIONS/" | sed 's|.*/||' | grep -E '^ADR-[0-9]{4}-.*\.md$')"
   nums="$(printf '%s\n' "$names" | cut -c5-8)"
   [ "$(printf '%s\n' "$nums" | sort | uniq -d | head -n 1)" = "" ] || { WHY="duplicate ADR number $(printf '%s\n' "$nums" | sort | uniq -d | head -n 1)"; return 1; }
-  for n in 0001 0002; do printf '%s\n' "$nums" | grep -qx "$n" || { WHY="no ADR-$n in $DECISIONS"; return 1; }; done
+  for n in 0001 0002; do grep -qx "$n" <<< "$nums" || { WHY="no ADR-$n in $DECISIONS"; return 1; }; done
   for n in 0003 0004 0005 0006; do
-    ! printf '%s\n' "$nums" | grep -qx "$n" || { WHY="ADR-$n exists in $DECISIONS at the head"; return 1; }
+    ! grep -qx "$n" <<< "$nums" || { WHY="ADR-$n exists in $DECISIONS at the head"; return 1; }
   done
 }
 check "$L03" "no duplicate ADR number, and none of ADR-0003..0006, in the decisions directory" k03_numbers
@@ -432,7 +463,7 @@ k04_1_format() {
   local f line
   for f in "$ADR1_PATH" "$ADR2_PATH"; do
     line="$(status_at "$HEAD_REV" "$f")"
-    printf '%s\n' "$line" | grep -Eq '^\*\*Status:\*\* Accepted [0-9]{4}-[0-9]{2}-[0-9]{2}$' || { WHY="$f status line reads '$line'"; return 1; }
+    grep -Eq '^\*\*Status:\*\* Accepted [0-9]{4}-[0-9]{2}-[0-9]{2}$' <<< "$line" || { WHY="$f status line reads '$line'"; return 1; }
     valid_date "${line##* }" || { WHY="$f date '${line##* }' is not a calendar date"; return 1; }
   done
 }
@@ -543,7 +574,7 @@ k05_2_citations() {
   cites="$(cat "$LAYERS_HEAD" "$PATHS_HEAD" | grep -Eo 'ADR-000[12]' | sort -u)"
   [ -n "$cites" ] || { WHY="neither register cites ADR-0001 or ADR-0002"; return 1; }
   for n in 1 2; do
-    printf '%s\n' "$cites" | grep -qx "ADR-000$n" || continue
+    grep -qx "ADR-000$n" <<< "$cites" || continue
     file="$(adr_file "$n")"
     [ -n "$file" ] || { WHY="a register cites ADR-000$n, which does not exist at the head"; return 1; }
     is_accepted "$(status_at "$HEAD_REV" "$file")" || { WHY="a register cites ADR-000$n, whose status is '$(status_at "$HEAD_REV" "$file")'"; return 1; }
@@ -552,11 +583,12 @@ k05_2_citations() {
 check "$L05" "(2) every ADR-0001/0002 citation points at an existing Accepted file" k05_2_citations
 
 k05_3_provisional() {
-  local f
+  local f above
   for f in "$LAYERS_HEAD" "$PATHS_HEAD"; do
     ! grep -Eiq 'Provisional' "$f" || { WHY="a register still has a Provisional paragraph: $(grep -Ei 'Provisional' "$f" | head -n 1 | cut -c1-100)"; return 1; }
-    sed -n '1,/^[|]/p' "$f" | grep -Eq 'ADR-0001' || { WHY="the paragraph above a register's table does not cite ADR-0001"; return 1; }
-    sed -n '1,/^[|]/p' "$f" | grep -Eq 'ADR-0002' || { WHY="the paragraph above a register's table does not cite ADR-0002"; return 1; }
+    above="$(sed -n '1,/^[|]/p' "$f")"
+    grep -Eq 'ADR-0001' <<< "$above" || { WHY="the paragraph above a register's table does not cite ADR-0001"; return 1; }
+    grep -Eq 'ADR-0002' <<< "$above" || { WHY="the paragraph above a register's table does not cite ADR-0002"; return 1; }
   done
 }
 check "$L05" "(3) the two Provisional paragraphs are rewritten to cite the ADRs" k05_3_provisional
@@ -564,7 +596,7 @@ check "$L05" "(3) the two Provisional paragraphs are rewritten to cite the ADRs"
 k05_6_still_pending() {
   local n
   for n in 3 4 5 6; do
-    cat "$LAYERS_HEAD" "$PATHS_HEAD" | grep -Eq "pending[^|]*ADR-000$n" || { WHY="no row keeps 'pending ADR-000$n'"; return 1; }
+    grep -Eq "pending[^|]*ADR-000$n" "$LAYERS_HEAD" "$PATHS_HEAD" || { WHY="no row keeps 'pending ADR-000$n'"; return 1; }
   done
 }
 check "$L05" "rows governed by ADR-0003..0006 keep their pending reference" k05_6_still_pending
@@ -573,7 +605,7 @@ k05_5_tools() {
   local out code
   out="$(bash "$SCRIPTS/layer-check.sh" --register "$LAYERS_HEAD" "$BASE" "$HEAD_REV" 2>&1)"; code=$?
   [ "$code" -eq 0 ] || { WHY="layer-check.sh exited $code on the layer register: $(printf '%s' "$out" | tail -n 1 | cut -c1-140)"; return 1; }
-  out="$(printf 'backend/app/api/sample.py\n' | bash "$SCRIPTS/risk-check.sh" --register "$PATHS_HEAD" classes --paths - 2>&1)"; code=$?
+  out="$(bash "$SCRIPTS/risk-check.sh" --register "$PATHS_HEAD" classes --paths - <<< 'backend/app/api/sample.py' 2>&1)"; code=$?
   [ "$code" -eq 0 ] || { WHY="risk-check.sh exited $code on the sensitive-paths register: $(printf '%s' "$out" | tail -n 1 | cut -c1-140)"; return 1; }
 }
 check "$L05" "(5) layer-check.sh and risk-check.sh read the two registers without exit 2" k05_5_tools
@@ -623,20 +655,21 @@ k05_4_path_globs() {
   done <<< "$globs"
   for g in 'backend/app/data/**' 'backend/migrations/**' 'backend/app/auth/**' 'backend/app/api/**' 'backend/app/main.py' \
            'backend/app/domain/**' 'backend/app/services/**' 'backend/app/core/**' 'backend/app/integrations/**' 'frontend/src/**'; do
-    printf '%s\n' "$globs" | grep -Fxq -- "$g" || { WHY="no sensitive-paths row for the layout place '$g'"; return 1; }
+    grep -Fxq -- "$g" <<< "$globs" || { WHY="no sensitive-paths row for the layout place '$g'"; return 1; }
   done
 }
 check "$L05" "(4) sensitive-path globs lie inside the ADR-0001/0002 layout, and every layout place has a row" k05_4_path_globs
 
 k05_4f_frontend() {
-  local r
+  local r forb
   expect_row fe-api 'frontend/src/api/**' '@/api' 'fe-components, fe-features' || return 1
   expect_row fe-components 'frontend/src/components/**' '@/components' 'fe-api, fe-features' || return 1
   expect_row fe-features 'frontend/src/features/**' '@/features' '—' || return 1
   # ADR-0001, Constraint 3: the date helper imports none of the frontend layers, each may use it.
   expect_row fe-time 'frontend/src/time/**' '@/time' 'fe-api, fe-components, fe-features' || return 1
   for r in fe-api fe-components fe-features; do
-    ! norm_list "$(printf '%s\n' "$LAYER_ROWS" | awk -F'\t' -v l="$r" '$2 == l { print $5 }')" | tr ',' '\n' | grep -qx 'fe-time' || { WHY="the '$r' row forbids fe-time, which every frontend layer may use"; return 1; }
+    forb="$(norm_list "$(printf '%s\n' "$LAYER_ROWS" | awk -F'\t' -v l="$r" '$2 == l { print $5 }')" | tr ',' '\n')"
+    ! grep -qx 'fe-time' <<< "$forb" || { WHY="the '$r' row forbids fe-time, which every frontend layer may use"; return 1; }
   done
 }
 check "$L05" "(4) frontend layer rows, including fe-time: path, prefix and rules" k05_4f_frontend
@@ -702,12 +735,13 @@ k06_1_classes() {
 check "$L06" "(1) every sample path of the base register keeps all its risk classes in the edited register" k06_1_classes
 
 k06_2_layer_rules() {
-  local name forb f row
+  local name forb f row items
   while IFS=$'\t' read -r _ name _ _ forb; do
     for f in $(printf '%s\n' "$forb" | tr ',' ' '); do
       [ "$f" != "—" ] || continue
       row="$(printf '%s\n' "$LAYER_ROWS" | awk -F'\t' -v l="$name" '$2 == l { print $5 }' | head -n 1)"
-      printf '%s\n' "$row" | tr ',' '\n' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' | grep -qx -- "$f" \
+      items="$(printf '%s\n' "$row" | tr ',' '\n' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+      grep -qx -- "$f" <<< "$items" \
         || { WHY="the '$name' row no longer forbids '$f' (a replacement stated by ADR-0001 is not recognised; none is needed for EKO-1-01)"; return 1; }
     done
   done < <(layer_tsv < "$LAYERS_BASE")
@@ -715,10 +749,11 @@ k06_2_layer_rules() {
 check "$L06" "(2) every 'Must not depend on' entry of the base layer register is still in the edited one" k06_2_layer_rules
 
 k06_new_rows() {
-  local g n=0
+  local g n=0 base_globs
+  base_globs="$(globs_of < "$PATHS_BASE")"
   : > "$TMP/samples-new"
   while IFS= read -r g; do
-    globs_of < "$PATHS_BASE" | grep -Fxq -- "$g" && continue
+    grep -Fxq -- "$g" <<< "$base_globs" && continue
     sample_of "$g" >> "$TMP/samples-new"; n=$((n + 1))
   done < <(globs_of < "$PATHS_PIN")
   [ "$n" -gt 0 ] || { WHY="the pinned register has no row that the base register lacks"; return 1; }
@@ -735,7 +770,7 @@ ALLOWED_RE="^($DECISIONS/ADR-0001-[^/]*\.md|$DECISIONS/ADR-0002-[^/]*\.md|$LAYER
 k07_1_allowed() {
   local extra; extra="$(printf '%s\n' "$CHANGED" | grep . | grep -Ev "$ALLOWED_RE" | head -n 3 | tr '\n' ' ')"
   [ -z "$extra" ] || { WHY="outside the allowed set: $extra"; return 1; }
-  printf '%s\n' "$CHANGED" | grep -Eq "^$ADR1_PATH\$" || { WHY="the change set does not include ADR-0001"; return 1; }
+  grep -Eq "^$ADR1_PATH\$" <<< "$CHANGED" || { WHY="the change set does not include ADR-0001"; return 1; }
 }
 check "$L07" "(1) the change set lists only the two ADRs, the two registers and the cost register" k07_1_allowed
 
@@ -757,7 +792,7 @@ check "$L07" "(3) capabilities.md is byte-identical between the base and the hea
 # ---- every label printed an ok line -----------------------------------------------------------
 
 for label in "$L01" "$L02" "$L03" "$L04" "$L05" "$L06" "$L07"; do
-  if ! printf '%s\n' "$OKS" | grep -Fxq -- "$label"; then
+  if ! grep -Fxq -- "$label" <<< "$OKS"; then
     echo "FAIL $label — no check printed an ok line under this label"; failed=$((failed + 1))
   fi
 done
