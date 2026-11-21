@@ -1,7 +1,9 @@
 import { useId, useRef, useState } from "react";
-import { countryOptions, DEFAULT_COUNTRY } from "../../api/countries";
+import { countryOptions, DEFAULT_COUNTRY, POLAND } from "../../api/countries";
 import {
+  ADDRESS_PARTS,
   createCustomer,
+  type CustomerInput,
   type CustomerRecord,
   type RejectedField,
 } from "../../api/customers";
@@ -13,13 +15,65 @@ import { useMountFocus } from "../../components/useMountFocus";
 import { messages } from "../../i18n/pl";
 import { followLink } from "../../routing/location";
 import { CUSTOMERS_PATH } from "./paths";
+import { useVoivodeships } from "./useVoivodeships";
 
 type Outcome =
   | { kind: "editing" }
   | { kind: "saving" }
-  | { kind: "rejected"; fields: RejectedField[]; sent: readonly ContactDraft[] }
+  | {
+      kind: "rejected";
+      fields: RejectedField[];
+      sent: readonly ContactDraft[];
+      // The country the rejected request was judged under, which decides the message.
+      sentCountry: string;
+    }
   | { kind: "refused" }
   | { kind: "failed" };
+
+type AddressPart = (typeof ADDRESS_PARTS)[number];
+// Picked from the checked request type, so a part missing from it fails to compile here.
+type AddressInput = Pick<CustomerInput, AddressPart>;
+type AddressDraft = Record<AddressPart, string>;
+
+const emptyAddress: AddressDraft = {
+  street: "",
+  postal_code: "",
+  town: "",
+  voivodeship: "",
+  county: "",
+  tax_id: "",
+};
+
+const REGION_PARTS: readonly AddressPart[] = ["voivodeship", "county"];
+
+// A part left empty is not sent; voivodeship and county are never sent for another country,
+// where the server refuses them on fields the rep cannot see (C-3 A).
+function addressInput(draft: AddressDraft, polish: boolean): AddressInput {
+  const input: AddressInput = {};
+  for (const part of ADDRESS_PARTS) {
+    if (draft[part] !== "" && (polish || !REGION_PARTS.includes(part))) {
+      input[part] = draft[part];
+    }
+  }
+  return input;
+}
+
+function addressError(part: AddressPart, polish: boolean): string {
+  switch (part) {
+    case "street":
+      return messages.customer.streetInvalid;
+    case "postal_code":
+      return polish ? messages.customer.postalCodeInvalid : messages.customer.foreignPostalCodeInvalid;
+    case "town":
+      return messages.customer.townInvalid;
+    case "voivodeship":
+      return messages.customer.voivodeshipInvalid;
+    case "county":
+      return messages.customer.countyInvalid;
+    case "tax_id":
+      return polish ? messages.customer.nipInvalid : messages.customer.foreignTaxIdInvalid;
+  }
+}
 
 interface NewCustomerProps {
   onCreated: (customer: CustomerRecord) => void;
@@ -64,10 +118,13 @@ export function NewCustomer({ onCreated }: NewCustomerProps) {
   const [name, setName] = useState("");
   const [nameMissing, setNameMissing] = useState(false);
   const [country, setCountry] = useState(DEFAULT_COUNTRY);
+  const [address, setAddress] = useState<AddressDraft>(emptyAddress);
   const [contacts, setContacts] = useState<ContactDraft[]>([]);
   const [primaryKey, setPrimaryKey] = useState<number | null>(null);
   const [outcome, setOutcome] = useState<Outcome>({ kind: "editing" });
+  const voivodeships = useVoivodeships();
 
+  const polish = country === POLAND;
   const rejected = outcome.kind === "rejected" ? outcome.fields : [];
   const isRejected = (field: RejectedField["field"]) => rejected.some((r) => r.field === field);
   const nameError = nameMissing
@@ -75,7 +132,30 @@ export function NewCustomer({ onCreated }: NewCustomerProps) {
     : isRejected("name")
       ? messages.customer.nameInvalid
       : undefined;
+  const fieldError = (part: AddressPart) =>
+    outcome.kind === "rejected" && isRejected(part)
+      ? addressError(part, outcome.sentCountry === POLAND)
+      : undefined;
+  // A rejected part whose field this country hides is told in the form alert instead.
+  const hiddenRegionRejected = !polish && REGION_PARTS.some((part) => isRejected(part));
   const saving = outcome.kind === "saving";
+
+  const listed = voivodeships.kind === "listed" ? voivodeships.voivodeships : [];
+  const voivodeshipOptions = [
+    { value: "", label: messages.customer.notSelected },
+    ...listed.map((entry) => ({ value: entry.name, label: entry.name })),
+  ];
+  const counties = listed.find((entry) => entry.name === address.voivodeship)?.counties ?? [];
+  const countyOptions =
+    address.voivodeship === ""
+      ? [{ value: "", label: messages.customer.countyFirst }]
+      : [
+          { value: "", label: messages.customer.notSelected },
+          ...counties.map((county) => ({ value: county, label: county })),
+        ];
+  const setPart = (part: AddressPart, value: string) => {
+    setAddress((current) => ({ ...current, [part]: value }));
+  };
 
   const submit = async () => {
     // A double click or a second submit while the first is in flight sends nothing more.
@@ -89,9 +169,11 @@ export function NewCustomer({ onCreated }: NewCustomerProps) {
     inFlight.current = true;
     const sent = contacts;
     setOutcome({ kind: "saving" });
+    const sentCountry = country;
     const result = await createCustomer({
       name,
       country,
+      ...addressInput(address, polish),
       contacts: sent.map((contact) => ({
         kind: contact.kind,
         value: contact.value,
@@ -104,7 +186,7 @@ export function NewCustomer({ onCreated }: NewCustomerProps) {
       return;
     }
     inFlight.current = false;
-    setOutcome(result.kind === "rejected" ? { ...result, sent } : result);
+    setOutcome(result.kind === "rejected" ? { ...result, sent, sentCountry } : result);
   };
 
   return (
@@ -133,6 +215,7 @@ export function NewCustomer({ onCreated }: NewCustomerProps) {
                 : messages.customer.saveFailed}
           </p>
           {isRejected("contacts") ? <p>{messages.customer.tooManyContacts}</p> : null}
+          {hiddenRegionRejected ? <p>{messages.customer.regionHidden}</p> : null}
         </div>
       ) : null}
       <fieldset className="form-section" disabled={saving}>
@@ -156,6 +239,79 @@ export function NewCustomer({ onCreated }: NewCustomerProps) {
             setCountry(event.target.value);
           }}
         />
+        <Field
+          label={polish ? messages.customer.nip : messages.customer.foreignTaxId}
+          value={address.tax_id}
+          error={fieldError("tax_id")}
+          onChange={(event) => {
+            setPart("tax_id", event.target.value);
+          }}
+        />
+      </fieldset>
+      <h2>{messages.customer.addressTitle}</h2>
+      <fieldset className="form-section" disabled={saving}>
+        <Field
+          label={messages.customer.street}
+          value={address.street}
+          error={fieldError("street")}
+          onChange={(event) => {
+            setPart("street", event.target.value);
+          }}
+        />
+        <div className="form-grid">
+          <Field
+            label={messages.customer.postalCode}
+            value={address.postal_code}
+            error={fieldError("postal_code")}
+            onChange={(event) => {
+              setPart("postal_code", event.target.value);
+            }}
+          />
+          <Field
+            label={messages.customer.town}
+            value={address.town}
+            error={fieldError("town")}
+            onChange={(event) => {
+              setPart("town", event.target.value);
+            }}
+          />
+        </div>
+        {polish ? (
+          <>
+            <div className="form-grid">
+              <SelectField
+                label={messages.customer.voivodeship}
+                options={voivodeshipOptions}
+                value={address.voivodeship}
+                disabled={voivodeships.kind !== "listed"}
+                error={fieldError("voivodeship")}
+                onChange={(event) => {
+                  const picked = event.target.value;
+                  // A county belongs to one voivodeship, so another voivodeship clears it.
+                  setAddress((current) => ({ ...current, voivodeship: picked, county: "" }));
+                }}
+              />
+              <SelectField
+                label={messages.customer.county}
+                options={countyOptions}
+                value={address.county}
+                disabled={voivodeships.kind !== "listed" || address.voivodeship === ""}
+                error={fieldError("county")}
+                onChange={(event) => {
+                  setPart("county", event.target.value);
+                }}
+              />
+            </div>
+            {voivodeships.kind === "loading" ? (
+              <p className="field-hint">{messages.customer.voivodeshipsLoading}</p>
+            ) : null}
+            {voivodeships.kind === "failed" ? (
+              <p className="field-error" role="alert">
+                {messages.customer.voivodeshipsFailed}
+              </p>
+            ) : null}
+          </>
+        ) : null}
       </fieldset>
       <h2>{messages.customer.contacts}</h2>
       <ContactEditor

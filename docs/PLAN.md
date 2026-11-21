@@ -686,3 +686,15 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   [PR #198](https://github.com/TanerCRB/Eko_CRM/pull/198) (round 0; fix rounds 1-3). Follow-ups: #196 (a
   request-body limit and timeout at the proxy), #161 (frontend API types, now including the customer
   types and the hand-copied country list, checked against the OpenAPI document).
+
+- [ ] **EKO-3-02** — Validate Polish addresses and tax IDs on the customer (#208).
+  *Done when:* server tests prove: a customer holds an optional address and tax ID; a Polish postal code
+  must match `00-000`; a Polish voivodeship is one of the 16; a county outside the chosen voivodeship is
+  rejected (same county with its own voivodeship accepted); voivodeship and county optional but valid when
+  given; a foreign customer needs neither and its postal code and tax ID are free text; a Polish NIP is
+  normalised (hyphens, spaces, `PL`) and checksum-validated; all enforced by the server; a rejected request
+  stores nothing and repeats no value; existing customers read back unchanged; the by-id read and list
+  scoping of EKO-3-01 still hold; the SPA create form and view carry the fields.
+  **Out of scope (explicit):** duplicate-NIP blocking and its messages (EKO-3-03); duplicate warnings
+  (EKO-3-03); editing (until customer edit exists); postal-code lookup; list search (EKO-3-04); real data.
+  After EKO-3-01.

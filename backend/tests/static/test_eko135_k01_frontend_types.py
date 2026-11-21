@@ -20,6 +20,7 @@ from tests.support.contract_tree import copied_tree, run_check
 
 AUTH = "frontend/src/api/auth.ts"
 CUSTOMERS = "frontend/src/api/customers.ts"
+REFERENCE = "frontend/src/api/reference.ts"
 Document = dict[str, Any]
 Plant = Callable[[Document], None]
 
@@ -113,6 +114,9 @@ def test_eko135_k01_checked_set_is_g_c() -> None:
         (CUSTOMERS, "CustomerSummary", "CustomerItem"),
         (CUSTOMERS, "CustomerList", "CustomerList"),
         (CUSTOMERS, "ValidationProblem", "POST /api/customers 422"),
+        # EKO-3-02 (Issue #161): the voivodeship reference client.
+        (REFERENCE, "VoivodeshipList", "VoivodeshipList"),
+        (REFERENCE, "VoivodeshipEntry", "VoivodeshipOut"),
     }
 
 

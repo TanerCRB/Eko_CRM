@@ -32,6 +32,7 @@ AUTH = "frontend/src/api/auth.ts"
 CUSTOMERS = "frontend/src/api/customers.ts"
 CLIENT = "frontend/src/api/client.ts"
 COUNTRY_FILE = "frontend/src/api/countries.ts"
+REFERENCE = "frontend/src/api/reference.ts"
 REQUEST, RESPONSE = "request", "response"
 
 
@@ -60,6 +61,9 @@ CHECKED: tuple[Pair, ...] = (
     Pair(CUSTOMERS, "CustomerSummary", "CustomerItem", RESPONSE),
     Pair(CUSTOMERS, "CustomerList", "CustomerList", RESPONSE),
     Pair(CUSTOMERS, "ValidationProblem", "POST /api/customers 422", RESPONSE),
+    # EKO-3-02 (Issue #161): the voivodeship reference client.
+    Pair(REFERENCE, "VoivodeshipList", "VoivodeshipList", RESPONSE),
+    Pair(REFERENCE, "VoivodeshipEntry", "VoivodeshipOut", RESPONSE),
 )
 
 # K-03: exported types with no schema behind them, keyed by file and name. Adding one is an edit
@@ -74,6 +78,8 @@ FRONTEND_ONLY: frozenset[tuple[str, str]] = frozenset(
         (CUSTOMERS, "ListResult"),
         (CLIENT, "ApiResponse"),
         (CLIENT, "RequestOptions"),
+        # EKO-3-02 (Issue #161): frontend-only result union of the reference client.
+        (REFERENCE, "VoivodeshipsResult"),
     }
 )
 
