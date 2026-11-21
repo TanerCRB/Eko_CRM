@@ -162,3 +162,7 @@ Accepted at gate 2 of EKO-1-34 in [PR #197](https://github.com/TanerCRB/Eko_CRM/
 Accepted at gate 2 of EKO-1-35 in [PR #211](https://github.com/TanerCRB/Eko_CRM/pull/211) (weakening-1 decided by the human as option A on 2026-11-20, recorded on #161).
 
 - Exception EKO-1-35/weakening-1 — owner: @TanerCRB — reason: the six skip/xfail strings in test_eko135_k04_ci_unconditional.py (lines 85-86, 188-191) are the K-04 forbidden-token list and the mutation fixtures its contrast tests plant into copies of the check modules; none marks or skips a test — blocks again: 2027-05-20
+
+Accepted at gate 2 of EKO-3-02 in [PR #218](https://github.com/TanerCRB/Eko_CRM/pull/218) (W2 decided by the human at step 10b on 2026-11-20, narrowed in fix round 1 after Invariant Guardian S-01 / Reviewer R-01; the owner and the date given at gate 2 on 2026-11-21, recorded on #208); the skip is the `step` fixture's `int(head) >= int(HEAD)` in `backend/tests/runtime/test_eko302_k06_expand_on_customer.py`, both bases tested by `backend/tests/unit/test_eko302_k06_step_both_bases.py`:
+
+- Exception EKO-3-02/weakening-2 — owner: @TanerCRB — reason: the K-06 expand step test skips when the previous release's head is already 0005 or later, because then there is no 0004 base to step from — blocks again: 2026-12-31

@@ -402,3 +402,44 @@ control supplies its pool-exhausted carrier, opposite case and mutation for EKO-
 availability deadline. The Issue's forwarded entry condition makes this a declared deviation from
 the synchronous-data-layer addendum's stated cost, not a silent configuration change. The human
 approved the 0.5-second bound at gate 1 of EKO-2-01 on 2026-11-02 (G-6 A, Issue #21).
+
+### 2026-11-19 — The `nip` column before its unique constraint; the foreign tax identifier's rules
+
+**Status:** Accepted 2026-11-19, as a declared deviation (gate 1 of EKO-3-02, Issue #208).
+
+**What it changes.** *Polish text, case-insensitive comparison, NIP uniqueness* requires a unique
+constraint on `nip`, and ADR-0002-C9 a unique violation for a second customer with an existing
+`nip`. EKO-3-02 creates the column and EKO-3-03 (CUS-6) decides the answer to a duplicate. From
+this date:
+
+- EKO-3-02 creates `nip` with `COLLATE "C"`, the ten-digit check constraint and `NULL` for a
+  customer without a Polish NIP, separate from `foreign_tax_id`, and **without** the unique
+  constraint. EKO-3-03 creates the unique constraint. From EKO-3-03's merge, the rule and
+  ADR-0002-C9 hold as written.
+- Until then two customers may hold the same `nip`. No release containing EKO-3-02 without
+  EKO-3-03 is deployed to an environment holding real customer data (ADR-0005). No `data`
+  function reads the customer table across owners to detect a duplicate (ADR-0003-C35).
+- EKO-3-03's unique constraint is a contract migration (ADR-0004, *Expand → deploy → contract*):
+  it ships in a later release than the code that stops writing duplicates. Its treatment of
+  duplicate rows already stored in a shared environment is decided at EKO-3-03's gate 1.
+- A customer holds at most one tax identifier, placed by its country: for `PL`, sent or
+  defaulted, the canonical NIP in `nip`; otherwise the value in `foreign_tax_id`, the other
+  column `NULL`. A foreign tax identifier is trimmed, stored as NFC and bounded in length, with no
+  checksum and no unique constraint. This decides the two rules this decision forwarded to
+  EKO-3-03 for `foreign_tax_id`; EKO-3-03 keeps the duplicate rules.
+- **ADR-0002-C9 restated** (table below) for the interval.
+
+**ADR-0002-C9 restated.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0002-C9 (restated for the interval) | Until EKO-3-03 merges: a test inserting directly through SQL, bypassing the services, finds that `nip` value `PL1234567890` or `DE123456789` fails with a check violation (SQLSTATE `23514`); two customers with `nip` `NULL` are both stored; two customers with the same `foreign_tax_id` are both stored; and a second customer with an existing `nip` is stored. From EKO-3-03's merge, ADR-0002-C9 as written. |
+
+Every other rule and control of this decision is unchanged.
+
+**Why.** The Product Owner placed CUS-6 in EKO-3-03 (C-4 A). With the constraint in place,
+EKO-3-02 would have to answer a duplicate NIP, and any answer other than the one for an unused NIP
+tells a rep that another customer holds it (PRH-4, ACC-8). Leaving the constraint out for one
+task's span, while only synthetic data exists, is a deviation from this decision's text, so it is
+declared here with its end condition rather than left as a silent gap between the schema and this
+decision. Approved by the human at gate 1 of EKO-3-02 on 2026-11-19 (Issue #208).
