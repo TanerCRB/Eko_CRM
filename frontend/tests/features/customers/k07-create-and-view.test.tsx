@@ -36,6 +36,12 @@ const saved: CustomerRecord = {
     { kind: "phone", value: STORED_SECOND_PHONE, note: NOTE_OFFICE, primary: false },
     { kind: "email", value: EMAIL, note: NOTE_EMAIL, primary: false },
   ],
+  street: null,
+  postal_code: null,
+  town: null,
+  voivodeship: null,
+  county: null,
+  tax_id: null,
 };
 
 const emptyList: CustomerReply = { status: 200, body: { items: [] } };
@@ -279,6 +285,12 @@ describe("K-07: in the SPA a rep creates a customer with contacts and sees the s
           name: markupName,
           country: "PL",
           contacts: [{ kind: "email", value: EMAIL, note: markupNote, primary: false }],
+          street: null,
+          postal_code: null,
+          town: null,
+          voivodeship: null,
+          county: null,
+          tax_id: null,
         },
       },
     });

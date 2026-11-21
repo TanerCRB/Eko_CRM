@@ -29,6 +29,7 @@ from app.api.auth import router as auth_router
 from app.api.customers import LARGEST_CREATE_BODY
 from app.api.customers import router as customers_router
 from app.api.health import router as health_router
+from app.api.reference import router as reference_router
 from app.auth.crypto import Sealer
 from app.auth.gate import (
     AccessFirstRoute,
@@ -65,7 +66,7 @@ UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 ROUTE_LIMIT = 256
 CORRELATION_HEADER = b"eko-correlation-id"
 # The most bytes an `/api/` request body may carry (fix round 1, R-01 A): the largest create body
-# whose fields pass their raw caps is `LARGEST_CREATE_BODY` (1 821 888 bytes), rounded up to
+# whose fields pass their raw caps is `LARGEST_CREATE_BODY` (1 842 656 bytes), rounded up to
 # 2 MiB; `create_app()` refuses to build if a body route ever needs more.
 REQUEST_BODY_LIMIT = 2 * 1024 * 1024
 BODY_TOO_LARGE = "request body too large"
@@ -375,6 +376,7 @@ def create_app() -> FastAPI:
         app.include_router(health_router, prefix="/api")
         app.include_router(auth_router, prefix="/api")
         app.include_router(customers_router, prefix="/api")
+        app.include_router(reference_router, prefix="/api")
         _check_access_first(app)
         if LARGEST_CREATE_BODY > REQUEST_BODY_LIMIT:
             raise RuntimeError("the request body limit refuses a valid customer")

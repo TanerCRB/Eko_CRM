@@ -19,6 +19,9 @@ export const COUNTRY_CODES = `
 // What the backend stores when the country is omitted (CUS-2).
 export const DEFAULT_COUNTRY = "PL";
 
+// The country whose address rules (voivodeship, county, `00-000`, NIP) the server applies.
+export const POLAND = "PL";
+
 const regionNames = new Intl.DisplayNames(["pl"], { type: "region", fallback: "code" });
 const collator = new Intl.Collator("pl");
 

@@ -22,3 +22,6 @@ docs/architecture/decisions/EKO-2-02-adr0003-roles-addendum-draft-2026-11-16.md
 docs/architecture/decisions/EKO-3-01-adr0003-record-ownership-addendum-draft-2026-11-17.md
 # EKO-3-01: "backup" is the service's name, not a draft marker
 backend/tests/runtime/test_eko301_backup_customers.py
+# EKO-3-02: the ADR-0002 nip-column addendum keeps "draft" in its name deliberately -
+# its path is quoted in the gate-1 decision on #208 and the impact map; same convention as EKO-2-02.
+docs/architecture/decisions/EKO-3-02-adr0002-nip-column-before-uniqueness-addendum-draft-2026-11-19.md
