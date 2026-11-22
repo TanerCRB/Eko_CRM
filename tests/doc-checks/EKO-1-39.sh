@@ -4,7 +4,8 @@
 # (Issue #230, criteria K-01..K-07).
 #
 #   bash tests/doc-checks/EKO-1-39.sh                      # judge the EKO-1-01.sh of this tree
-#   bash tests/doc-checks/EKO-1-39.sh --pr-body <file>     # also compare the names with a saved PR #30 body
+#   bash tests/doc-checks/EKO-1-39.sh --pr-body <file>     # also compare the names with a saved PR #30 body;
+#                                                          # only this run prints K-02's PR #30 name
 #   bash tests/doc-checks/EKO-1-39.sh --self-test          # built-in contrasts in throwaway clones
 #
 #   gh pr view 30 --json body --jq .body > pr-30.md        # the body --pr-body expects
@@ -44,6 +45,7 @@ REF_NAMES=(
 S_K01='EKO-1-39 K-01 every PR #30 name labels an ok line'
 S_K01X='EKO-1-39 K-01 no ok label outside PR #30'"'"'s seven'
 S_K02='EKO-1-39 K-02 reference list is PR #30'"'"'s seven names'
+S_K02S='EKO-1-39 K-02 reference list shape (no PR body)'
 S_K03='EKO-1-39 K-03 EKO-1-01.sh exits 0'
 S_K04='EKO-1-39 K-04 depth-1 clone exits 2'
 S_K04U='EKO-1-39 K-04 unshallowed clone exits 0'
@@ -221,14 +223,17 @@ k04_unshallow() {
   [ "$code" -eq 0 ] || { WHY="$DOC0101 exited $code on the unshallowed clone: $(tail -n 1 "$1/out-full" | cut -c1-160)"; return 1; }
 }
 
-# snapshot <file> — the repository state K-07 compares: status, refs, worktrees, stash, EKO-1-01.sh.
+# snapshot <file> [top] — the repository state K-07 compares: status, refs, worktrees, stash,
+# EKO-1-01.sh; top defaults to this repository (the self-test passes a throwaway clone).
 snapshot() {
+  local top="${2:-$TOP}"
   {
-    echo '## status'; git -C "$TOP" --no-optional-locks status --porcelain --untracked-files=all
-    echo '## refs'; git -C "$TOP" for-each-ref --format='%(objectname) %(refname)'
-    echo '## worktrees'; git -C "$TOP" worktree list --porcelain
-    echo '## stash'; git -C "$TOP" stash list
-    echo '## EKO-1-01.sh'; git -C "$TOP" hash-object -- "$TOP/$DOC0101" 2>&1
+    echo '## status'; git -C "$top" --no-optional-locks status --porcelain --untracked-files=all
+    echo '## refs'; git -C "$top" for-each-ref --format='%(objectname) %(refname)'
+    echo '## worktrees'; git -C "$top" worktree list --porcelain
+    echo '## stash'; git -C "$top" stash list
+    # --no-filters: the eol=lf clean filter would hash a CRLF rewrite as the same blob.
+    echo '## EKO-1-01.sh'; git -C "$top" hash-object --no-filters -- "$top/$DOC0101" 2>&1
   } > "$1" 2>&1
 }
 
@@ -250,7 +255,7 @@ main_run() {
   run_0101 "$target" "$WORK/run"
   sub "$S_K01" "the ok labels of a run of $DOC0101 include each of the seven names, compared as exact strings" k01_names "$WORK/run/out"
   sub "$S_K01X" "every ok label of that run is one of the seven names" k01_extra "$WORK/run/out"
-  sub "$S_K02" "seven distinct names for K-01..K-07${PR_BODY:+, byte-equal to the test lines of $PR_BODY}" k02_reference "$PR_BODY"
+  k02_sub
   sub "$S_K03" "that run of $DOC0101 exited 0" k03_exit
   sub "$S_K04" "in a throwaway clone verified shallow, $DOC0101 exits exactly 2 and its stderr ends with '$STOP_TEXT'" k04_depth1 "$target" "$WORK/k04"
   sub "$S_K04U" "the same clone after git fetch --unshallow: $DOC0101 exits 0" k04_unshallow "$WORK/k04"
@@ -258,6 +263,16 @@ main_run() {
   sub "$S_K07" "status, refs, worktrees, stash and the bytes of $DOC0101 are the same after the run" same_snapshot "$WORK/before" "$WORK/after"
   echo "EKO-1-39 doc-check: $passed passed, $failed failed"
   [ "$failed" -eq 0 ]
+}
+
+# Only a run given --pr-body compares the list with PR #30, so only it prints the K-02 name that a
+# "test:" line quotes; a plain run prints its shape check under a name that says what it checked.
+k02_sub() {
+  if [ -n "$PR_BODY" ]; then
+    sub "$S_K02" "seven distinct names for K-01..K-07, byte-equal to the test lines of $PR_BODY" k02_reference "$PR_BODY"
+  else
+    sub "$S_K02S" "seven distinct names for K-01..K-07, not compared with PR #30 (run with --pr-body for that)" k02_reference ""
+  fi
 }
 
 same_snapshot() {
@@ -341,6 +356,18 @@ self_test() {
   mutate "$f" 'template sections' 'template headings'
   expect "K-02 a body with one word changed fails on that name only" fail 'template headings' "$n1" k02_reference "$f"
   expect "K-02 no body: the list itself is seven distinct names" pass - - k02_reference ""
+  # Reviewer R-01: only a run that compares with a PR #30 body may print the name K-02's "test:"
+  # line quotes; a plain run checks the list's shape only and must say so in its name.
+  f="$st/body-equal"
+  { echo '## Definition of done — proof'; for i in 0 1 2 3 4 5 6; do printf -- '- %s — test: %s\n' "${REF_IDS[$i]}" "${REF_NAMES[$i]}"; done; } > "$f"
+  k02_printed() {
+    local saved="$PR_BODY"
+    PR_BODY="$1"; k02_sub > "$st/k02.out"; PR_BODY="$saved"
+    WHY="$(cut -c1-300 "$st/k02.out")"
+    grep -qF -- "ok   $2 — " "$st/k02.out" && ! grep -qF -- " $3 — " "$st/k02.out"
+  }
+  expect "R-01 no body: K-02 is printed as the shape check, not under PR #30's name" pass - - k02_printed "" "$S_K02S" "$S_K02"
+  expect "R-01 with a body: K-02 is printed under PR #30's name" pass - - k02_printed "$f" "$S_K02" "$S_K02S"
 
   # Real runs in a throwaway clone.
   clone="$st/clone"
@@ -379,6 +406,11 @@ self_test() {
     [ "$code" -eq 0 ]
   }
   expect "M-EC-a whole run: the reference list does not follow the renamed L03 (K-02)" fail "'$n3'" - whole_run
+  plain_k02() {
+    WHY="$(grep -F -- ' EKO-1-39 K-02 ' "$st/whole.out" | cut -c1-300)"
+    grep -qF -- "ok   $S_K02S — " "$st/whole.out" && ! grep -qF -- " $S_K02 — " "$st/whole.out"
+  }
+  expect "R-01 that whole run had no body: K-02 is the shape check only" pass - - plain_k02
   restore
 
   mutate "$p" '    file="$(adr_file "$n")"' '    file="$(adr_file "$n")"; [ "$n" != 2 ] || file=""'
@@ -407,6 +439,22 @@ self_test() {
   mutate "$p" "$STOP_TEXT\" >&2; exit 2; }" "$STOP_TEXT\" >&2; exit 1; }"
   expect "die exits 1: K-04 fails (exactly 2)" fail 'exited 1' - k04_depth1 "$clone" "$st/k04"
   restore
+
+  # Reviewer R-02: a rewrite of EKO-1-01.sh that changes only its line endings changes its bytes, so
+  # the snapshot's byte section must see it on its own; git's eol=lf clean filter would hide it.
+  # Only that section is compared, as status may or may not show the rewrite. Clone's copy only.
+  crlf_rewrite() {
+    snapshot "$st/crlf-before" "$clone"
+    awk '{ printf "%s\r\n", $0 }' "$st/pristine" > "$p" || die "self-test: cannot rewrite $p"
+    # Not grep: Git for Windows' grep drops a CR before it matches.
+    [[ "$(cat "$p"; printf x)" == *$'\r\n'* ]] || die "self-test: the CRLF rewrite of $p wrote no carriage return"
+    snapshot "$st/crlf-after" "$clone"
+    restore
+    sed -n '/^## EKO-1-01.sh$/,$p' "$st/crlf-before" > "$st/crlf-before.bytes"
+    sed -n '/^## EKO-1-01.sh$/,$p' "$st/crlf-after" > "$st/crlf-after.bytes"
+    same_snapshot "$st/crlf-before.bytes" "$st/crlf-after.bytes"
+  }
+  expect "R-02 a CRLF-only rewrite of the clone's EKO-1-01.sh changes the snapshot's byte section" fail - - crlf_rewrite
 
   rm -f -- "$p"
   case_run
