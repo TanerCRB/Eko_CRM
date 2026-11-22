@@ -100,7 +100,17 @@ export type ReadResult =
   | { kind: "notFound" }
   | { kind: "failed" };
 
-export type ListResult = { kind: "listed"; customers: CustomerSummary[] } | { kind: "failed" };
+// The list operation's query parameters (EKO-3-04, Q-6): the list request's query string is built
+// from this type alone. The server's `owner` filter is not declared: the SPA never sends it (C-1).
+export interface CustomerListQuery {
+  q?: string;
+}
+
+// "rejected": the server refused the query (422); its body is not read, so no value comes back.
+export type ListResult =
+  | { kind: "listed"; customers: CustomerSummary[] }
+  | { kind: "rejected" }
+  | { kind: "failed" };
 
 const CUSTOMER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -254,8 +264,23 @@ export async function readCustomer(id: string): Promise<ReadResult> {
   return { kind: "failed" };
 }
 
-export async function listCustomers(): Promise<ListResult> {
-  const response = await apiRequest("/api/customers");
+// The term goes into the request's query string only, never into the SPA's location (ADR-0005-C13);
+// a blank term is no term, so the request is the unfiltered list.
+function listPath(query: CustomerListQuery): `/api/${string}` {
+  const params = new URLSearchParams();
+  const term = query.q?.trim() ?? "";
+  if (term !== "") {
+    params.set("q", term);
+  }
+  const search = params.toString();
+  return search === "" ? "/api/customers" : `/api/customers?${search}`;
+}
+
+export async function listCustomers(query: CustomerListQuery = {}): Promise<ListResult> {
+  const response = await apiRequest(listPath(query));
+  if (response.kind === "failed" && response.status === 422) {
+    return { kind: "rejected" };
+  }
   if (response.kind !== "ok") {
     return { kind: "failed" };
   }

@@ -154,3 +154,68 @@ def outside_references(files: Mapping[str, str]) -> list[str]:
             if any(pattern.search(line) for pattern in OUTSIDE_REFERENCES):
                 problems.append(f"{path}:{number}")
     return problems
+
+
+# ADR-0003-C36 (addendum of EKO-3-04, Q-4 A) ------------------------------------------------------
+
+SCOPE_VALUES = frozenset({"OwnedBy", "AllRecords"})
+OWNERSHIP_MODULE = "backend/app/domain/ownership.py"
+TYPE_CHECKS = frozenset({"isinstance", "issubclass"})
+
+
+def _annotations(tree: ast.Module) -> set[int]:
+    """The ids of every node inside a type annotation."""
+    roots: list[ast.AST] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.arg) and node.annotation is not None:
+            roots.append(node.annotation)
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.returns:
+            roots.append(node.returns)
+        elif isinstance(node, ast.AnnAssign):
+            roots.append(node.annotation)
+    return {id(child) for root in roots for child in ast.walk(root)}
+
+
+def _type_checked(tree: ast.Module) -> set[int]:
+    """The ids of the class side of `isinstance`/`issubclass` and of a `case` class pattern."""
+    roots: list[ast.AST] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in TYPE_CHECKS
+            and len(node.args) == 2
+        ):
+            roots.append(node.args[1])
+        elif isinstance(node, ast.MatchClass):
+            roots.append(node.cls)
+    return {id(child) for root in roots for child in ast.walk(root)}
+
+
+def scope_constructions(
+    files: Mapping[str, str], everywhere: bool = False
+) -> list[tuple[str, int]]:
+    """`(path, line)` for every use of `OwnedBy` or `AllRecords` under `backend/app/` that could
+    build a scope value: a call, or the class handed on as a value (an alias, a default, a
+    factory). A type annotation, an import and the class side of `isinstance` or of a `case`
+    pattern only name the type. The ownership module itself is left out unless `everywhere`."""
+    found = []
+    for path, text in sorted(files.items()):
+        if not path.startswith("backend/app/") or not path.endswith(".py"):
+            continue
+        if path == OWNERSHIP_MODULE and not everywhere:
+            continue
+        tree = ast.parse(text)
+        aliases = set(SCOPE_VALUES)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                aliases |= {a.asname for a in node.names if a.name in SCOPE_VALUES and a.asname}
+        named_only = _annotations(tree) | _type_checked(tree)
+        for node in ast.walk(tree):
+            if id(node) in named_only:
+                continue
+            if isinstance(node, ast.Name) and node.id in aliases and isinstance(node.ctx, ast.Load):
+                found.append((path, node.lineno))
+            elif isinstance(node, ast.Attribute) and node.attr in SCOPE_VALUES:
+                found.append((path, node.lineno))
+    return found

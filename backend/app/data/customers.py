@@ -13,7 +13,19 @@ import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from sqlalchemy import ColumnElement, Connection, insert, select, true
+from sqlalchemy import (
+    ColumnElement,
+    Connection,
+    SQLColumnExpression,
+    Text,
+    bindparam,
+    exists,
+    func,
+    insert,
+    or_,
+    select,
+    true,
+)
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.data.database import Database
@@ -25,6 +37,7 @@ from app.domain.customers import (
     ContactKind,
     Customer,
     CustomerDraft,
+    CustomerSearch,
     CustomerSummary,
     TaxId,
 )
@@ -40,6 +53,30 @@ def new_identifier() -> uuid.UUID:
 
 # The customer's own columns at the head of a `find` row; the contact's follow.
 CUSTOMER_COLUMNS = 10
+
+
+# ADR-0002 addendum of EKO-3-04: case is ignored by the builtin provider's folding, the same for
+# every searched column whatever its own collation, never by ICU.
+FOLDING_COLLATION = "pg_unicode_fast"
+LIKE_ESCAPE = "\\"
+
+
+def _folded(value: SQLColumnExpression[str | None]) -> ColumnElement[str]:
+    return func.casefold(value.collate(FOLDING_COLLATION), type_=Text)
+
+
+def _contains(
+    value: SQLColumnExpression[str | None], pattern: SQLColumnExpression[str]
+) -> ColumnElement[bool]:
+    """A NULL value (a customer with no town) is no match, never an error."""
+    return _folded(value).like(_folded(pattern), escape=LIKE_ESCAPE)
+
+
+def like_pattern(term: str) -> str:
+    """`term` anywhere, every pattern character in it taken literally."""
+    for special in (LIKE_ESCAPE, "%", "_"):
+        term = term.replace(special, LIKE_ESCAPE + special)
+    return f"%{term}%"
 
 
 def _visible(scope: VisibilityScope) -> ColumnElement[bool]:
@@ -137,12 +174,31 @@ class CustomerStore:
         )
         return Customer(found_id, name, country, contacts, Address(*place), TaxId(nip, foreign))
 
-    def find_all(self, scope: VisibilityScope) -> list[CustomerSummary]:
-        """Every customer in the scope; ordered by identifier only so the answer is stable."""
+    def find_all(self, scope: VisibilityScope, search: CustomerSearch) -> list[CustomerSummary]:
+        """Every customer in the scope that the search selects, in one statement: the owner
+        filter and the term only add conditions to the scope's, joined by AND (ADR-0003 addendum
+        of EKO-3-04). The term matches the name, the town or a contact value, never a note.
+        Ordered by identifier only so the answer is stable."""
         statement = (
             select(CustomerRow.id, CustomerRow.name, CustomerRow.country)
             .where(_visible(scope))
             .order_by(CustomerRow.id)
         )
+        if search.owner is not None:
+            statement = statement.where(CustomerRow.owner_subject == search.owner)
+        if search.term is not None:
+            pattern = bindparam("pattern", like_pattern(search.term), type_=Text)
+            contact = (
+                exists()
+                .where(CustomerContactRow.customer_id == CustomerRow.id)
+                .where(_contains(CustomerContactRow.value, pattern))
+            )
+            statement = statement.where(
+                or_(
+                    _contains(CustomerRow.name, pattern),
+                    _contains(CustomerRow.town, pattern),
+                    contact,
+                )
+            )
         with self._connection() as connection:
             return [CustomerSummary(*row) for row in connection.execute(statement).all()]
