@@ -834,3 +834,14 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   2026-11-21), and this entry's former wording promised the owner selector (Reviewer R-01; corrected
   above). Follow-ups: #216 (the manager owner selector and the comment fix), EKO-3-05 (the
   active/archived filter).
+
+- [ ] **EKO-3-08** — Let the manager narrow the customer list to one rep (#216).
+  *Done when:* server tests prove: each login stores the caller's display-name copy by subject (updated, not
+  duplicated, no e-mail or username); a manager reads a list of reps and a rep is refused with an answer
+  that discloses nothing; the session read exposes the caller's roles from the verified token; the copy is
+  deleted by the ADR-0005 retention rule; deactivation changes no row; list, search, owner filter, read and
+  create behave as before. SPA tests prove the owner selector is shown to a manager only and sends the
+  EKO-3-04 `owner` parameter; `CustomerListQuery` and `listPath` agree.
+  **Out of scope (explicit):** owner name in customer responses; reassignment (EKO-3-07); dashboard owner
+  selector; Keycloak admin API; deactivation signal; real data.
+  After EKO-3-04.
