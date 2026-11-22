@@ -1160,3 +1160,47 @@ none.
   - When a 422 body cannot be encoded as UTF-8 (a lone surrogate), it is answered as an
     ASCII-escaped 422, not a 500. No current request model reaches this branch; it stays as a guard
     against a library change.
+
+### 2026-11-20 — A list narrowed within the visibility scope; ADR-0003-C33 restated
+
+**Status:** Accepted 2026-11-20, as a declared deviation (gate 1 of EKO-3-04, Issue #215).
+
+**What it adds.** The addendum of 2026-11-17 decides where the visibility scope comes from and
+where it is applied, but not what a request value that narrows a list may do. From this date:
+
+- `OwnedBy` and `AllRecords` are built only by the `domain` function of *Where it is enforced*,
+  from the caller value. A request value never becomes a visibility scope.
+- A list operation may take request values (a search term, an owner filter) that select records
+  within the scope. The `data` function applies them in the same statement as the scope, joined
+  by AND.
+- An owner filter is 1 to 255 characters, each in U+0021..U+007E, compared byte-wise and never
+  trimmed, folded or normalised. Outside that form it is refused (422) on its form alone, never
+  depending on whether that subject exists. A caller holding `rep` without `manager` gets its
+  scope intersected with the filter: another subject, existing or not, gives the answer of a
+  search that matches nothing.
+
+**What it restates.** ADR-0003-C33's clause "every list answers a caller holding `rep` without
+`manager` exactly the records it owns and a caller holding `manager` all of them" reads: "every
+list given no search or filter answers a caller holding `rep` without `manager` exactly the
+records it owns and a caller holding `manager` all of them; a list given a search or filter
+answers exactly the records of that set which the search or filter selects, so a caller holding
+`rep` without `manager` is never answered a record it does not own, and its answer to a search or
+filter that selects only another owner's records equals its answer to one that selects no record
+at all (status, body, and headers other than `Eko-Correlation-Id`)". The rest of C33 is
+unchanged.
+
+**New control ADR-0003-C36** (table below). Every other rule and control of this decision is
+unchanged.
+
+**Why.** C33's letter fails on every searched or filtered list even when the scope holds. A
+filter that replaced the scope would widen a rep's list by a request value (PRH-4). Restating an
+accepted control is a declared deviation. It follows the precedent of the addenda of 2026-10-28
+(C4) and 2026-10-29 (C9). Approved by the human at gate 1 of EKO-3-04 on 2026-11-20
+(Issue #215).
+
+**ADR-0003-C36 and ADR-0003-C33 restated.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0003-C36 | Under `backend/app/`, an `OwnedBy` or `AllRecords` value is constructed only in `backend/app/domain/ownership.py`; a fixture module elsewhere under `backend/app/` that constructs either fails the check. |
+| ADR-0003-C33 (restated) | As in the addendum text above: the unfiltered list as before; a searched or filtered list answers only records of the caller's scope that the search or filter selects, and a rep's answer to a search or filter that selects only another owner's records equals its answer to one that selects nothing (status, body, and headers other than `Eko-Correlation-Id`). |
