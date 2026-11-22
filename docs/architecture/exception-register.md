@@ -162,3 +162,8 @@ Accepted at gate 2 of EKO-1-37 in [PR #231](https://github.com/TanerCRB/Eko_CRM/
 
 - Exception EKO-1-37/M-07 — owner: @TanerCRB — reason: fe_case survives at the label level because the fe-time row comparison of K-05-4f fails every register mutation it would catch; the sub-check still flips — blocks again: 2027-05-21
 - Exception EKO-1-37/M-11 — owner: @TanerCRB — reason: the fatal exit of pinned() survives because the second-parent check and resolve() still end a depth-1 run with exit 2 — blocks again: 2027-05-21
+
+Accepted at gate 2 of EKO-1-38 in [PR #229](https://github.com/TanerCRB/Eko_CRM/pull/229) (decided by the human on 2026-11-22, recorded on #188).
+
+- Exception EKO-1-38/mutation-1 — owner: @TanerCRB — reason: mutation M-R01 (the late send anchored on the refresh start alone, the midpoint rule dropped) survives because the hold end is a guarded line at S + 1.5 and with the refresh lag at 0.2 s no lag separates the two rules with a usable margin; a regression shows as a named hold-margin red under load, attributable from the logged run record; the Reviewer judged it test timing, not a mechanism — blocks again: 2027-05-21
+- Exception EKO-1-38/mutation-2 — owner: @TanerCRB — reason: mutation M-R03 (the round-1 send rule restored, holder on process b) survives because Reviewer R-03 was a margin, not a mechanism; the evidence is the measured minimum blocker-side margin rising from 0.047 s to 0.281 s — blocks again: 2027-05-21
