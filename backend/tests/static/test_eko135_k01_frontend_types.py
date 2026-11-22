@@ -117,6 +117,8 @@ def test_eko135_k01_checked_set_is_g_c() -> None:
         # EKO-3-02 (Issue #161): the voivodeship reference client.
         (REFERENCE, "VoivodeshipList", "VoivodeshipList"),
         (REFERENCE, "VoivodeshipEntry", "VoivodeshipOut"),
+        # EKO-3-04 (Issue #215, Q-6 A): the list's search parameters the SPA sends.
+        (CUSTOMERS, "CustomerListQuery", "GET /api/customers query"),
     }
 
 

@@ -34,12 +34,17 @@ CLIENT = "frontend/src/api/client.ts"
 COUNTRY_FILE = "frontend/src/api/countries.ts"
 REFERENCE = "frontend/src/api/reference.ts"
 REQUEST, RESPONSE = "request", "response"
+# EKO-3-04 (Q-6 A): the query parameters a frontend type says it sends. Judged as a request, except
+# that an optional parameter it does not send passes: a query parameter left out is just absent.
+QUERY = "query"
+QUERY_TARGET = "query"
 
 
 @dataclass(frozen=True)
 class Pair:
-    """A frontend type and what it mirrors: a component, `Component.property`, or
-    `METHOD /path status` (that response's JSON schema)."""
+    """A frontend type and what it mirrors: a component, `Component.property`,
+    `METHOD /path status` (that response's JSON schema), or `METHOD /path query` (that
+    operation's query parameters, as an object whose properties are the parameters)."""
 
     file: str
     name: str
@@ -64,6 +69,8 @@ CHECKED: tuple[Pair, ...] = (
     # EKO-3-02 (Issue #161): the voivodeship reference client.
     Pair(REFERENCE, "VoivodeshipList", "VoivodeshipList", RESPONSE),
     Pair(REFERENCE, "VoivodeshipEntry", "VoivodeshipOut", RESPONSE),
+    # EKO-3-04 (Issue #215, Q-6 A): the list's search parameters the SPA sends.
+    Pair(CUSTOMERS, "CustomerListQuery", "GET /api/customers query", QUERY),
 )
 
 # K-03: exported types with no schema behind them, keyed by file and name. Adding one is an edit
@@ -536,12 +543,34 @@ def target_schema(document: Document, target: str) -> Any:
     if " " in target:
         method, path, status = target.split(" ")
         operation = ((document.get("paths") or {}).get(path) or {}).get(method.lower()) or {}
+        if status == QUERY_TARGET:
+            return query_schema(operation)
         response = (operation.get("responses") or {}).get(status) or {}
         return ((response.get("content") or {}).get("application/json") or {}).get("schema")
     component, _, field = target.partition(".")
     if not field:
         return schemas.get(component)
     return ((schemas.get(component) or {}).get("properties") or {}).get(field)
+
+
+def query_schema(operation: Any) -> Any:
+    """An operation's query parameters as one object schema; None when it has none or is absent.
+    A parameter `in` anything but the query (a header, a path, a cookie) is not one of them."""
+    parameters = [
+        p
+        for p in operation.get("parameters") or []
+        if isinstance(p, dict) and p.get("in") == "query"
+    ]
+    if not parameters:
+        return None
+    for parameter in parameters:
+        if set(parameter) - {"name", "in", "required", "schema", "description"}:
+            raise Unreadable(f"a query parameter the check does not read: {parameter.get('name')}")
+    return {
+        "type": "object",
+        "properties": {p["name"]: p.get("schema", {}) for p in parameters},
+        "required": [p["name"] for p in parameters if p.get("required")],
+    }
 
 
 # The comparison --------------------------------------------------------------------------------
@@ -633,7 +662,7 @@ class Comparison:
         missing = [show(f) for f in fronts if not covered(f, backs, True)]
         extra = [show(b) for b in backs if not covered(b, fronts, False)]
         # G-A A: a request enum gaining a value passes, since the frontend never sends it.
-        if self.direction == REQUEST and all(isinstance(b, Lit) for b in backs):
+        if self.direction in (REQUEST, QUERY) and all(isinstance(b, Lit) for b in backs):
             extra = []
         problems = []
         if missing:
@@ -660,7 +689,10 @@ class Comparison:
             problems += self.compare(field.type, other.type, where, depth + 1)
         for name, other in backs.items():
             # G-A A: a response field the frontend does not declare passes; a request one fails.
-            if name not in fronts and self.direction == REQUEST:
+            # A query parameter the frontend does not send fails only when it is required.
+            if name not in fronts and self.direction == QUERY and other.optional:
+                continue
+            if name not in fronts and self.direction in (REQUEST, QUERY):
                 state = "optional" if other.optional else "required"
                 problems.append(f"{path}.{name}: {state} in the document, not sent by the type")
         return problems

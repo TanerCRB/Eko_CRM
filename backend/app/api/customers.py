@@ -1,5 +1,6 @@
 """Customers: create, read by identifier, plain list (EKO-3-01; CUS-1, CUS-2, CUS-8, C-1 A to
-C-3 A, Q-L A, Q-O A), with the address and tax identifier of EKO-3-02 (CUS-3 to CUS-5).
+C-3 A, Q-L A, Q-O A), with the address and tax identifier of EKO-3-02 (CUS-3 to CUS-5), and the
+list's search `q` and owner filter `owner` (EKO-3-04; ACC-4, PRH-4, ACC-8).
 
 The handlers pass the caller value inward and decide nothing about ownership (ADR-0003 addendum
 of EKO-3-01, section 2). The request models hold the value rules of `app.domain.customers`, so a
@@ -10,10 +11,13 @@ all of `/api/` in `main.py` (ADR-0005-C12); path parameters are UUIDs only (ADR-
 """
 
 import re
+from collections.abc import Callable
 from typing import Annotated, Any, Literal
+from urllib.parse import unquote_plus, unquote_to_bytes
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.exceptions import RequestValidationError
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -41,9 +45,11 @@ from app.domain.customers import (
     ContactKind,
     Customer,
     CustomerDraft,
+    CustomerSearch,
     CustomerSummary,
     TaxId,
 )
+from app.domain.ownership import owner_filter
 from app.services import customers as service
 
 router = APIRouter(prefix="/customers", route_class=AccessFirstRoute)
@@ -304,7 +310,8 @@ class CustomerItem(BaseModel):
 
 
 class CustomerList(BaseModel):
-    """The caller's visible customers, with no sort order guaranteed (C-2 A; paging EKO-3-04)."""
+    """The caller's visible customers that the search selects, with no sort order guaranteed
+    (C-2 A) and no paging (EKO-3-04, G-7 A). It carries no count or other field (D-1)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -325,6 +332,72 @@ def customer_store(database: Annotated[Database, Depends(get_database)]) -> Cust
 Store = Annotated[CustomerStore, Depends(customer_store)]
 CurrentCaller = Annotated[Caller, Depends(current_caller)]
 
+LIST_PARAMETERS = ("q", "owner")
+
+
+def _undecodable(query_string: bytes) -> set[str]:
+    """The list parameters whose value as sent is not percent-encoded UTF-8. The framework
+    decodes such a value with replacement characters, so it is judged on the raw query."""
+    found = set()
+    for pair in query_string.split(b"&"):
+        name, _, value = pair.partition(b"=")
+        key = unquote_plus(name.decode("latin-1"))
+        if key not in LIST_PARAMETERS:
+            continue
+        try:
+            unquote_to_bytes(value.replace(b"+", b" ")).decode("utf-8")
+        except UnicodeDecodeError:
+            found.add(key)
+    return found
+
+
+def _query_value(
+    name: str, rule: Callable[[str], str | None], raw: str, errors: list[dict[str, Any]]
+) -> str | None:
+    try:
+        judged: str | None = rule(raw)
+    except ValueError as exc:
+        # A fixed message: the value itself is never repeated (ADR-0005).
+        errors.append(
+            {"type": "value_error", "loc": ("query", name), "msg": f"Value error, {exc}",
+             "ctx": {"error": str(exc)}}
+        )  # fmt: skip
+        return None
+    return judged
+
+
+def customer_search(
+    request: Request,
+    q: Annotated[
+        str,
+        Query(
+            max_length=rules.SEARCH_RAW_LIMIT,
+            description="Text matched in the name, the town or a contact value, ignoring case.",
+        ),
+    ] = "",
+    owner: Annotated[
+        str,
+        Query(description="An owner subject; it narrows the caller's visible customers only."),
+    ] = "",
+) -> CustomerSearch:
+    """The list's query parameters, judged before any service runs; a refusal is a 422 naming
+    the parameter and repeating no value (ADR-0005). Empty is not given (G-5 A)."""
+    errors: list[dict[str, Any]] = []
+    undecodable = _undecodable(request.scope.get("query_string", b""))
+    for name in sorted(undecodable, key=LIST_PARAMETERS.index):
+        errors.append(
+            {"type": "string_unicode", "loc": ("query", name),
+             "msg": "Input should be a valid string"}
+        )  # fmt: skip
+    term = None if "q" in undecodable else _query_value("q", rules.search_term, q, errors)
+    subject = None if "owner" in undecodable else _query_value("owner", owner_filter, owner, errors)
+    if errors:
+        raise RequestValidationError(errors)
+    return CustomerSearch(term=term, owner=subject)
+
+
+Search = Annotated[CustomerSearch, Depends(customer_search)]
+
 
 @router.post(
     "",
@@ -343,8 +416,9 @@ def create_customer(body: CustomerCreate, caller: CurrentCaller, store: Store) -
     response_model=CustomerList,
     responses=_REFUSALS,
 )
-def list_customers(caller: CurrentCaller, store: Store) -> CustomerList:
-    return CustomerList(items=[CustomerItem.of(c) for c in service.list_customers(store, caller)])
+def list_customers(caller: CurrentCaller, store: Store, search: Search) -> CustomerList:
+    found = service.list_customers(store, caller, search)
+    return CustomerList(items=[CustomerItem.of(c) for c in found])
 
 
 @router.get(

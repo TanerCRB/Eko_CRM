@@ -6,6 +6,7 @@ argument and applies it in the statement that selects or writes the rows (ADR-00
 record outside the scope is never loaded.
 """
 
+import re
 from dataclasses import dataclass
 
 from app.domain.caller import Caller, Role
@@ -29,6 +30,10 @@ class OwnedBy:
 
 VisibilityScope = AllRecords | OwnedBy
 
+# ADR-0003 addendum of EKO-3-04 (Q-3 A): the OpenID Connect bound on `sub`, printable ASCII only.
+OWNER_LIMIT = 255
+OWNER_SUBJECT = re.compile(rf"[\x21-\x7e]{{1,{OWNER_LIMIT}}}")
+
 
 def visibility_scope(caller: Caller) -> VisibilityScope:
     """`manager` reads every record; `rep` without `manager` reads only its own. Roles combine,
@@ -45,3 +50,14 @@ def creation_scope(caller: Caller) -> OwnedBy:
     if Role.REP not in caller.roles:
         raise NotPermitted
     return OwnedBy(caller.subject)
+
+
+def owner_filter(raw: str) -> str | None:
+    """A request's owner filter: a subject as sent, never trimmed, folded or normalised, so it is
+    compared byte-wise; `""` is no filter (G-5 A). It is judged on its form alone, never on
+    whether anyone holds that subject, and it only narrows a scope: it never becomes one."""
+    if raw == "":
+        return None
+    if not OWNER_SUBJECT.fullmatch(raw):
+        raise ValueError(f"not an owner subject: 1 to {OWNER_LIMIT} printable ASCII characters")
+    return raw
