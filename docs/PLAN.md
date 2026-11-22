@@ -777,14 +777,60 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   Follow-ups: EKO-3-03 (the unique constraint, CUS-6 and the contract step), #161 (frontend API types, now
   including `reference.ts`), #219 (the `eko131` static tests flaky on a Windows host).
 
-- [ ] **EKO-3-04** — Let users find customers in a list (#215).
+- [x] **EKO-3-04** — Let users find customers in a list (#215).
   *Done when:* server tests prove: one text query matches a customer's name, town or contact value
   case-insensitively; a rep's search never returns another rep's customer (by name, town or contact), the
   result being indistinguishable from no match; the manager's list shows all customers and narrows by an
   owner filter that a rep cannot use to widen scope or probe; search and owner filter combine; the
   unfiltered list, by-id read and create behave as EKO-3-01; no response hints at an out-of-scope customer;
-  query input is bound as data; the SPA Customers screen carries the search field and, for the manager
-  only, the owner selector.
+  query input is bound as data; the SPA Customers screen carries the search field; no owner selector is
+  shown to any session (C-1: the manager owner selector follows in #216).
   **Out of scope (explicit):** the active/archived filter (EKO-3-05, which brings archiving); export; search
   by NIP or other address fields; fuzzy search; duplicate warnings (EKO-3-03); real data.
   After EKO-3-02.
+  **Done 2026-11-22:** merged in [PR #227](https://github.com/TanerCRB/Eko_CRM/pull/227) as `5ac1a36` by the human on 2026-11-22; code verified at
+  `bfa6784` (the developer checkpoint of fix round 1, test code only; QA PROOF HOLDS at `2e4e15c` and
+  `bfa6784`; Invariant Guardian and Reviewer PASS at `a91998f` and `bfa6784`, Security Auditor PASS at
+  `a91998f`; no finding above Low). Mechanism: `GET /api/customers` takes two optional query parameters,
+  declared through one typed dependency (`backend/app/api/customers.py` `customer_search`): `q` (raw cap
+  4 x 254, then trimmed, NFC, NUL and lone surrogates refused, at most 254 code points; empty or
+  whitespace-only is no query) and `owner` (1..255 characters in U+0021..U+007E, byte-wise, refused on
+  form alone; empty is no filter); invalid percent-encoded UTF-8 in either is a 422 `string_unicode`
+  judged on the raw query string. `backend/app/data/customers.py` `find_all` applies the caller's
+  scope, the owner filter and the term in one statement joined by AND; the term matches the name, the
+  town or a contact value (correlated `EXISTS`) as a substring with
+  `casefold(x COLLATE pg_unicode_fast) LIKE casefold(:pattern COLLATE pg_unicode_fast) ESCAPE '\'`,
+  the term bound and `\`, `%`, `_` escaped; no index, no extension, no schema change (Q-1 A, Q-2 A).
+  The scope still comes only from `visibility_scope(caller)`; a rep's owner filter intersects its own
+  scope, so another owner, existing or not, gives the byte-equal answer of a search matching nothing
+  (G-3 A). The SPA Customers screen (`frontend/src/features/customers/CustomerList.tsx`) carries a
+  search field that sends after a 300 ms pause or at once on Enter, drops a late answer to an older
+  term, keeps the term out of the location and the history, shows the P2 no-match state, and shows no
+  owner selector; `CustomerListQuery` in `frontend/src/api/customers.ts` is checked against the
+  OpenAPI document by a new QUERY direction of `backend/tests/support/frontend_contract.py` (Q-6 A).
+  Tests: `backend/tests/runtime/eko304/`, `backend/tests/runtime/test_eko304_k06_search_logs_through_proxy.py`,
+  `backend/tests/static/test_eko304_adr0003_c36_scope_built_only_in_ownership.py`,
+  `test_eko304_q6_list_query_parameters.py`, `frontend/tests/features/customers/CustomerSearch.test.tsx`,
+  `frontend/tests/api/customers.list-query.test.ts` (rows in `architecture/capabilities.md`). Gate 1
+  (2026-11-20, every recommendation accepted): C-0/C-0b (code after EKO-3-02, its branch merged in by
+  the human's decision B), C-1 A (the manager owner selector split to #216), Q-1..Q-6 A, G-1, G-3..G-7
+  A, D-1; the ADR-0002 and ADR-0003 addenda of 2026-11-20 are appended in this commit to
+  [`ADR-0002-database-and-migrations.md`](architecture/decisions/ADR-0002-database-and-migrations.md)
+  and [`ADR-0003-identity-and-access.md`](architecture/decisions/ADR-0003-identity-and-access.md) from
+  [`EKO-3-04-list-search-adr0002-adr0003-addendum-draft-2026-11-20.md`](architecture/decisions/EKO-3-04-list-search-adr0002-adr0003-addendum-draft-2026-11-20.md)
+  (ADR-0003-C33 restated, a declared deviation; new controls ADR-0002-C17 and ADR-0003-C36). One fix
+  round: the PR's first CI run turned both runtime jobs red on the K-06 composition test, which logged
+  in as the shared `login` account an earlier browser test OTP-enrols; checkpoint `bfa6784` gives it a
+  rep account of its own (the pattern of EKO-3-02's `8f48a9a`). Gate 2 (2026-11-22, the human accepted
+  every recommendation): backend A-01..A-03 and frontend A-04..A-09 accepted as built and recorded as
+  amendment lines under K-06 and K-07 of #215 (scope re-locked, fingerprint `166393fd`); K-07's visual
+  half, fidelity to the P2 Customers screen including the left-out no-match "Dodaj klienta" button,
+  accepted as built; the survivors M20a/b/c/e (each access-first layer alone, and any two, are
+  redundant) and M23b (`_public_error` strips `input` anyway) kept as defence in depth; the timing
+  residual (another rep's match against no match) and the unindexed manager search accepted at gate 1
+  stand unmeasured. CI, stated plainly: at the PR head `a04777a` (only cost-register rows after
+  verification) all nine checks were green. Two Low findings carried on: the comment above
+  `CustomerListQuery` overstates how the query string is built (QA; moved to #216 by the human on
+  2026-11-21), and this entry's former wording promised the owner selector (Reviewer R-01; corrected
+  above). Follow-ups: #216 (the manager owner selector and the comment fix), EKO-3-05 (the
+  active/archived filter).
