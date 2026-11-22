@@ -307,6 +307,18 @@ mutate() {
   text="$(cat "$1"; printf x)"; text="${text%x}"
   [[ "$text" == *"$2"* ]] || die "self-test: the text to mutate is not in $1: $2"
   printf '%s' "${text/"$2"/"$3"}" > "$1" || die "self-test: cannot write $1"
+  # QA contrast (EKO-1-39/M-17): the repository is compared with its start right after each write,
+  # so one case whose mutate, run and restore all aim at this repository fails, as do they all.
+  local saved="$WHY"
+  MUTATES=$((MUTATES + 1)); snapshot "$WORK/at-mutate"
+  same_snapshot "$WORK/before" "$WORK/at-mutate" || MUTATE_DIRTY="${MUTATE_DIRTY:-$1: $WHY}"
+  WHY="$saved"
+}
+MUTATES=0; MUTATE_DIRTY=""
+at_mutates() {
+  WHY="$MUTATES writes checked"
+  [ "$MUTATES" -gt 0 ] || { WHY="no write was checked"; return 1; }
+  [ -z "$MUTATE_DIRTY" ] || { WHY="changed after a write to $MUTATE_DIRTY"; return 1; }
 }
 
 # synthetic <file> <line>... — an EKO-1-01.sh output made of the given lines.
@@ -462,6 +474,7 @@ self_test() {
   expect "missing EKO-1-01.sh: K-03 fails" fail 'missing' - k03_exit
   restore
 
+  expect "K-07 the repository is untouched right after each mutation" pass - - at_mutates
   snapshot "$WORK/after"
   expect "K-07 the repository is untouched by the self-test" pass - - same_snapshot "$WORK/before" "$WORK/after"
   echo "EKO-1-39 self-test: $((st_total - st_fail)) of $st_total passed"
