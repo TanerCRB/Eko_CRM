@@ -368,6 +368,17 @@ self_test() {
   mutate "$p" "L03='QA document check K-03 (template sections" "L03='QA document check K-03 (template headings"
   case_run
   expect "M-EC-a (one word of L03) K-01 fails naming PR #30's L03 name" fail "$n3" - k01_names "$st/run/out"
+  # QA contrast (EKO-1-39/M-4): this file, run whole beside the renamed L03, must still compare
+  # against PR #30's name; a reference list read from EKO-1-01.sh at load time would follow the
+  # rename and pass. The functions above cannot see that, as they share this run's list.
+  whole_run() {
+    local code
+    cp -- "${BASH_SOURCE[0]}" "$clone/tests/doc-checks/EKO-1-39.sh" || die "self-test: cannot copy this file into the clone"
+    bash "$clone/tests/doc-checks/EKO-1-39.sh" > "$st/whole.out" 2>&1 < /dev/null; code=$?
+    WHY="exit $code; $(grep -F -- "FAIL $S_K01 — " "$st/whole.out" | cut -c1-400)"
+    [ "$code" -eq 0 ]
+  }
+  expect "M-EC-a whole run: the reference list does not follow the renamed L03 (K-02)" fail "'$n3'" - whole_run
   restore
 
   mutate "$p" '    file="$(adr_file "$n")"' '    file="$(adr_file "$n")"; [ "$n" != 2 ] || file=""'
@@ -387,6 +398,10 @@ self_test() {
   expect "M-14 (die exits 0) K-01 passes on the full clone" pass - - k01_names "$st/run/out"
   expect "M-14 K-03 passes on the full clone" pass - - k03_exit
   expect "M-14 K-04 fails on its own" fail 'exited 0' - k04_depth1 "$clone" "$st/k04"
+  # QA contrast (EKO-1-39/M-11b): taken while the mutation is applied, so a mutation written into
+  # this repository and restored before the end, which the closing K-07 case cannot see, fails here.
+  snapshot "$WORK/mid"
+  expect "K-07 the repository is untouched while the M-14 copy is mutated" pass - - same_snapshot "$WORK/before" "$WORK/mid"
   restore
 
   mutate "$p" "$STOP_TEXT\" >&2; exit 2; }" "$STOP_TEXT\" >&2; exit 1; }"
