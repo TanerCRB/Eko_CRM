@@ -443,3 +443,41 @@ tells a rep that another customer holds it (PRH-4, ACC-8). Leaving the constrain
 task's span, while only synthetic data exists, is a deviation from this decision's text, so it is
 declared here with its end condition rather than left as a silent gap between the schema and this
 decision. Approved by the human at gate 1 of EKO-3-02 on 2026-11-19 (Issue #208).
+
+### 2026-11-20 — Case-insensitive substring search
+
+**Status:** Accepted 2026-11-20 (gate 1 of EKO-3-04, Issue #215).
+
+**What it adds.** *Polish text, case-insensitive comparison, NIP uniqueness* decides
+case-insensitive equality only. From this date, a search that matches text by substring
+ignoring case:
+
+- takes a search term made by one `domain` function: the query trimmed of leading and trailing
+  whitespace, in NFC; a term holding U+0000 or a lone surrogate is refused on its form, with a
+  message that never repeats it;
+- folds both the searched value and the term in the statement with `casefold()` under the
+  builtin-provider collation `pg_unicode_fast`, never through ICU or a column's own collation;
+  a value matches when its folded form contains the folded term;
+- binds the term as a parameter, escapes `%`, `_` and the escape character before binding, and
+  names its escape character in the statement;
+- adds no index, no extension and no stored key; one is added by a later addendum when a measured
+  list requires it.
+
+If the pinned image provides neither `casefold()` nor `pg_unicode_fast`, the implementing task
+stops and the change returns here. Case-insensitive equality (CUS-7) and its `_match_key`
+mechanism are unchanged. Every other rule and control of this decision is unchanged.
+
+**New control ADR-0002-C17** (table below).
+
+**Why.** The searched columns have different collations (ICU `pl-PL` for name and town,
+`COLLATE "C"` for contact values), so folding through them would give one rule per field and
+would follow the ICU library this decision keeps case-insensitivity away from. The builtin
+provider's folding is the same for every column and moves only with a major version. This adds a
+rule and restates none, so it is not a deviation. Approved by the human at gate 1 of EKO-3-04 on
+2026-11-20 (Issue #215).
+
+**ADR-0002-C17.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0002-C17 | A test against the pinned PostgreSQL stores a customer named `ŁĄKOWA` with town `ŻÓŁTE` and an e-mail contact `ŁUKASZ.KOS@example.com`, and gets that customer for each of the queries `łąk`, `żół` and `łukasz.kos` (the last matching a `COLLATE "C"` column on a non-ASCII letter), and for `ŁĄK` given in NFD; a customer named `100% _a\b` is returned for `%`, `_` and `\` and a customer without those characters is not; a query consisting of `%` alone does not return every customer; no migration adds an index, an extension or a column for the search. |
