@@ -2,7 +2,7 @@
 application schema whose name ends in `_subject` is in the retention's reference set held in the
 code, and that set equals the list held here. A planted `_subject` column outside the set fails.
 The behavioural half (a copy referred to by each column of the set is kept past 180 days) is
-`tests/runtime/eko308/test_eko308_k05_copy_retention.py`.
+`tests/runtime/eko308/test_eko308_k05_display_name_retention.py`.
 """
 
 from sqlalchemy import Column, MetaData, Table, Text
