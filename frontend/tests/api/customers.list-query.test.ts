@@ -9,7 +9,10 @@ import { CUSTOMERS_URL } from "../support/customers-http";
 // declared type's keys, so a name typed into the request alone cannot drift past both checks.
 
 // Every key of the type, each with a value; an excess or missing key fails type-checking.
-const everyKey: { [K in keyof Required<CustomerListQuery>]: string } = { q: "kowal" };
+const everyKey: { [K in keyof Required<CustomerListQuery>]: string } = {
+  q: "kowal",
+  owner: "synthetic-subject-0002",
+};
 
 function recordLists() {
   const sent: URL[] = [];
@@ -58,5 +61,27 @@ describe("EKO-3-04 Q-6: the list request's query names are the declared query ty
 
     expect(sent).toHaveLength(1);
     expect(sent[0]?.search).toBe("");
+  });
+});
+
+describe("EKO-3-08 K-07: the owner parameter is the chosen subject, exactly", () => {
+  it("a subject holding URL-special characters arrives byte-equal in `owner`", async () => {
+    const subject = "rep+1&x=y%20#z ąż";
+    const sent = recordLists();
+
+    await listCustomers({ owner: subject });
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.searchParams.getAll("owner")).toEqual([subject]);
+    expect([...(sent[0]?.searchParams.keys() ?? [])]).toEqual(["owner"]);
+  });
+
+  it("a term and an owner are both sent", async () => {
+    const sent = recordLists();
+
+    await listCustomers({ q: " kowal ", owner: "synthetic-subject-0002" });
+
+    expect(sent[0]?.searchParams.getAll("q")).toEqual(["kowal"]);
+    expect(sent[0]?.searchParams.getAll("owner")).toEqual(["synthetic-subject-0002"]);
   });
 });

@@ -4,8 +4,9 @@ import { Toast } from "../../components/Toast";
 import { messages } from "../../i18n/pl";
 import { useLogout } from "./useLogout";
 
+// The panel shows the caller's name only; its roles decide nothing here.
 interface AccountPanelProps {
-  session: SessionInfo;
+  session: Pick<SessionInfo, "subject" | "name">;
 }
 
 export function displayName(name: string | null): string {

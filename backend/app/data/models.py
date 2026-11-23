@@ -69,6 +69,25 @@ class LoginTransaction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
+class StaffDisplayNameRow(Base):
+    """The staff display-name copy (ADR-0003 *Staff display name* A, ADR-0003-C37); every column is
+    PD-S3 (ADR-0005, as extended by the EKO-3-08 addendum). Revision 0006. Not an owned table.
+
+    Written only by the login callback, in the transaction that creates the session; deleted only
+    by the retention run. No column default: the instant comes from the application's clock.
+    """
+
+    __tablename__ = "staff_display_name"
+
+    # The identity server's `sub`, stored as received and compared byte-wise.
+    subject: Mapped[str] = mapped_column(Text(collation="C"), primary_key=True)
+    # The verified access token's `name` in NFC, not trimmed; NULL when the token carries none.
+    display_name: Mapped[str | None] = mapped_column(Text)
+    # Whether that login's token held `rep`; it only selects the entries of the list of reps.
+    is_rep: Mapped[bool] = mapped_column(Boolean)
+    last_login_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
 class CustomerRow(Base):
     """A rep's customer (CUS-1, CUS-2); an owned table (ADR-0003 addendum of EKO-3-01). Revision
     0004. Read and changed only through `app.data.customers`, under a visibility scope.
@@ -140,4 +159,5 @@ __all__ = [
     "CustomerRow",
     "LoginTransaction",
     "SchemaRevisionLineage",
+    "StaffDisplayNameRow",
 ]

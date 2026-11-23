@@ -40,6 +40,7 @@ from app.domain.session_policy import (
     SessionTimes,
     login_transaction_valid_at,
 )
+from app.domain.staff import display_name_copy
 
 logger = logging.getLogger(__name__)
 
@@ -181,13 +182,15 @@ class Authenticator:
             raise LoginRefused
         session = new_opaque()
         session_key = digest(session)
+        now = self.clock.now()
         self.store.create_session(
             session_key,
             access.subject,
             self.sealer.seal(tokens.to_bytes(), session_key),
             access.expires_at,
-            self.clock.now(),
+            now,
             digest(presented) if presented is not None and is_opaque(presented) else None,
+            display_name_copy(access.subject, access.name, access.roles, now),
         )
         return LoginDone(session, stored.return_to)
 

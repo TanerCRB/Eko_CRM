@@ -1,9 +1,12 @@
 import { vi } from "vitest";
 import type { LoggedOut, Problem, SessionInfo } from "../../src/api/auth";
 
+// A session read from a backend before EKO-3-08, which sends no `roles`.
+export type OlderSessionInfo = Omit<SessionInfo, "roles">;
+
 // Bodies are typed by the contracts layer, so a contract change breaks the stubs at compile time.
 export type Reply =
-  | { status: 200; body: SessionInfo | LoggedOut }
+  | { status: 200; body: SessionInfo | OlderSessionInfo | LoggedOut }
   | { status: 401 | 403 | 500 | 503; body: Problem }
   | { status: 200; raw: string }
   | "network-error";

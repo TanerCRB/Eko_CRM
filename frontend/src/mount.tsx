@@ -4,6 +4,7 @@ import { App } from "./App";
 import { AccountPanel } from "./features/session/AccountPanel";
 import { LOGIN_FAILED_PATH, LoginFailed } from "./features/session/LoginFailed";
 import { SessionGate } from "./features/session/SessionGate";
+import { SessionContext } from "./features/session/sessionContext";
 
 const ROOT_ID = "root";
 
@@ -18,7 +19,13 @@ export function mount(page: Document): () => void {
       {page.location.pathname === LOGIN_FAILED_PATH ? (
         <LoginFailed />
       ) : (
-        <SessionGate>{(session) => <App account={<AccountPanel session={session} />} />}</SessionGate>
+        <SessionGate>
+          {(session) => (
+            <SessionContext value={session}>
+              <App account={<AccountPanel session={session} />} />
+            </SessionContext>
+          )}
+        </SessionGate>
       )}
     </StrictMode>,
   );

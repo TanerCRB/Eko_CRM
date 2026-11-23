@@ -30,7 +30,7 @@ from tests.runtime import eko201_login as app
 from tests.runtime import eko202_live as live
 from tests.runtime.conftest import Started
 from tests.runtime.keycloak_client import RealmClient
-from tests.runtime.lab import Lab, PsqlSession, docker
+from tests.runtime.lab import SHIPPED_HEAD, Lab, PsqlSession, docker
 from tests.runtime.test_adr0004_c26_lock_timeout import (
     LOCK_TIMEOUT,
     MARGIN,
@@ -229,7 +229,7 @@ def test_k06_existing_customers_read_back_unchanged(expand_lab: Lab, step: str) 
 
     code, logs = lab.run_migrate()
     assert code == 0, logs
-    assert lab.versions() == [HEAD]
+    assert lab.versions() == [SHIPPED_HEAD]
     assert lab.sql(OLD_ROWS) == rows_before
     assert lab.sql(NEW_COLUMNS) == [[""] * 7]
     assert lab.sql("SELECT count(*) FROM customer WHERE nip IS NULL AND street IS NULL") == [["1"]]
@@ -251,7 +251,7 @@ def test_k06_previous_backend_on_expanded_schema(expand_lab: Lab, step: str) -> 
 
     code, logs = lab.run_migrate()
     assert code == 0, logs
-    assert lab.versions() == [HEAD]
+    assert lab.versions() == [SHIPPED_HEAD]
     assert lab.composition.inspect("backend")["Config"]["Image"] == step
 
     # The previous backend, unaware of the new columns, reads and creates on them.

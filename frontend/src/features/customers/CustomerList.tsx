@@ -1,18 +1,23 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { countryName } from "../../api/countries";
 import { listCustomers, type ListResult } from "../../api/customers";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { messages } from "../../i18n/pl";
 import { followLink } from "../../routing/location";
+import { holdsManager, useSession } from "../session/sessionContext";
+import { ownerOptions } from "./ownerOptions";
 import { customerPath, NEW_CUSTOMER_PATH } from "./paths";
+import { useReps } from "./useReps";
 
-// The answer remembers the term it was asked for, so the empty state speaks of that term and not
-// of whatever the field holds while the next answer is on its way.
-type ListState = { kind: "loading" } | (ListResult & { term: string });
+// The answer remembers the term and owner it was asked for, so the empty state speaks of those and
+// not of whatever the controls hold while the next answer is on its way.
+type ListState = { kind: "loading" } | (ListResult & { term: string; owner: string });
 
+// `owner` is a rep's subject, "" for every owner the caller may see.
 interface ListRequest {
   term: string;
+  owner: string;
   attempt: number;
 }
 
@@ -21,22 +26,26 @@ const SEARCH_DELAY_MS = 300;
 // The server's bound after trimming (G-6 A); the field cuts a longer term instead of a 422.
 const SEARCH_MAX_LENGTH = 254;
 
-// The plain list (C-2 A) and its search: what the server answered, in its order; the SPA filters
-// nothing, and the term stays in this component's memory, never in the location (ADR-0005-C13).
+// The plain list (C-2 A), its search and a manager's owner selector (EKO-3-08): what the server
+// answered, in its order; the SPA filters nothing, and the term and owner stay in this component's
+// memory, never in the location (ADR-0005-C13). The selector is a convenience: the server decides
+// whose customers a caller sees.
 export function CustomerList() {
   const [state, setState] = useState<ListState>({ kind: "loading" });
   const [input, setInput] = useState("");
-  const [request, setRequest] = useState<ListRequest>({ term: "", attempt: 0 });
+  const [request, setRequest] = useState<ListRequest>({ term: "", owner: "", attempt: 0 });
+  const reps = useReps(holdsManager(useSession()));
+  const options = useMemo(() => (reps === null ? null : ownerOptions(reps)), [reps]);
   const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Read by the delayed search too, whose closure may predate the last request.
   const requested = useRef("");
 
   useEffect(() => {
     let current = true;
-    void listCustomers({ q: request.term }).then((result) => {
+    void listCustomers({ q: request.term, owner: request.owner }).then((result) => {
       // An answer to a request since replaced is dropped, so a late older answer never wins.
       if (current) {
-        setState({ ...result, term: request.term });
+        setState({ ...result, term: request.term, owner: request.owner });
       }
     });
     return () => {
@@ -59,7 +68,12 @@ export function CustomerList() {
     }
     requested.current = term;
     setState({ kind: "loading" });
-    setRequest({ term, attempt: 0 });
+    setRequest((current) => ({ ...current, term, attempt: 0 }));
+  }
+
+  function chooseOwner(owner: string) {
+    setState({ kind: "loading" });
+    setRequest((current) => ({ ...current, owner, attempt: 0 }));
   }
 
   const rejected = state.kind === "rejected";
@@ -122,6 +136,24 @@ export function CustomerList() {
             }}
           />
         </label>
+        {options === null ? null : (
+          <label>
+            <span className="sr-only">{messages.customer.owner}</span>
+            <select
+              value={request.owner}
+              onChange={(event) => {
+                chooseOwner(event.target.value);
+              }}
+            >
+              <option value="">{messages.customer.allOwners}</option>
+              {options.map((option) => (
+                <option key={option.subject} value={option.subject}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {rejected ? (
           <small id="customer-search-error" className="field-error" role="alert">
             {messages.customer.searchRejected}
@@ -142,7 +174,7 @@ export function CustomerList() {
         </div>
       ) : null}
       {state.kind === "listed" && state.customers.length === 0 ? (
-        state.term === "" ? (
+        state.term === "" && state.owner === "" ? (
           <EmptyState
             title={messages.customer.emptyTitle}
             explanation={messages.customer.emptyExplanation}

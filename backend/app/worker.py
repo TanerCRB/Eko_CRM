@@ -2,7 +2,8 @@
 
 It never runs migrations; at start, in the main process, it refuses a database revision other than
 its code's head or a recorded descendant (ADR-0006-C13, ADR-0004 addendum 2026-10-29). Its one job
-is the retention of sessions and login transactions (ADR-0005 *Retention*, EKO-2-01).
+is retention (ADR-0005 *Retention*): sessions and login transactions (EKO-2-01), and staff
+display-name copies (EKO-3-08).
 """
 
 import logging

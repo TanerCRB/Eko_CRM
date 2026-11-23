@@ -33,6 +33,7 @@ CUSTOMERS = "frontend/src/api/customers.ts"
 CLIENT = "frontend/src/api/client.ts"
 COUNTRY_FILE = "frontend/src/api/countries.ts"
 REFERENCE = "frontend/src/api/reference.ts"
+REPS = "frontend/src/api/reps.ts"
 REQUEST, RESPONSE = "request", "response"
 # EKO-3-04 (Q-6 A): the query parameters a frontend type says it sends. Judged as a request, except
 # that an optional parameter it does not send passes: a query parameter left out is just absent.
@@ -71,6 +72,9 @@ CHECKED: tuple[Pair, ...] = (
     Pair(REFERENCE, "VoivodeshipEntry", "VoivodeshipOut", RESPONSE),
     # EKO-3-04 (Issue #215, Q-6 A): the list's search parameters the SPA sends.
     Pair(CUSTOMERS, "CustomerListQuery", "GET /api/customers query", QUERY),
+    # EKO-3-08 (Issue #216, G-4 A): the manager's list of reps.
+    Pair(REPS, "RepList", "RepList", RESPONSE),
+    Pair(REPS, "RepEntry", "RepEntry", RESPONSE),
 )
 
 # K-03: exported types with no schema behind them, keyed by file and name. Adding one is an edit
@@ -87,6 +91,8 @@ FRONTEND_ONLY: frozenset[tuple[str, str]] = frozenset(
         (CLIENT, "RequestOptions"),
         # EKO-3-02 (Issue #161): frontend-only result union of the reference client.
         (REFERENCE, "VoivodeshipsResult"),
+        # EKO-3-08 (Issue #216): frontend-only result union of the reps client.
+        (REPS, "RepsResult"),
     }
 )
 

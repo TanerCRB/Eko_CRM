@@ -21,6 +21,7 @@ from tests.support.contract_tree import copied_tree, run_check
 AUTH = "frontend/src/api/auth.ts"
 CUSTOMERS = "frontend/src/api/customers.ts"
 REFERENCE = "frontend/src/api/reference.ts"
+REPS = "frontend/src/api/reps.ts"
 Document = dict[str, Any]
 Plant = Callable[[Document], None]
 
@@ -119,6 +120,9 @@ def test_eko135_k01_checked_set_is_g_c() -> None:
         (REFERENCE, "VoivodeshipEntry", "VoivodeshipOut"),
         # EKO-3-04 (Issue #215, Q-6 A): the list's search parameters the SPA sends.
         (CUSTOMERS, "CustomerListQuery", "GET /api/customers query"),
+        # EKO-3-08 (Issue #216, G-4 A): the manager's list of reps.
+        (REPS, "RepList", "RepList"),
+        (REPS, "RepEntry", "RepEntry"),
     }
 
 
@@ -327,7 +331,10 @@ def test_eko135_k01_missing_frontend_declaration_fails_and_says_so() -> None:
     assert named(judged(files), "LoggedOut", AUTH, "not declared")
 
 
-SESSION_INFO = "export interface SessionInfo {\n  subject: string;\n  name: string | null;\n}"
+SESSION_INFO = (
+    "export interface SessionInfo {\n"
+    "  subject: string;\n  name: string | null;\n  roles: Role[];\n}"
+)
 UNREADABLE = {
     "pick": 'export type SessionInfo = Pick<Full, "subject" | "name">;',
     "mapped": 'export type SessionInfo = { [K in "subject" | "name"]: string | null };',
@@ -346,7 +353,7 @@ def test_eko135_k01_unreadable_declaration_fails_naming_the_type(case_id: str) -
 
 
 def test_eko135_k01_same_shape_written_as_a_type_alias_passes() -> None:
-    alias = "export type SessionInfo = { subject: string; name: string | null };"
+    alias = "export type SessionInfo = { subject: string; name: string | null; roles: Role[] };"
     assert judged(planted(AUTH, SESSION_INFO, alias)) == []
 
 
