@@ -43,8 +43,8 @@ REF_NAMES=(
 )
 
 S_K01='EKO-1-39 K-01 every PR #30 name labels an ok line'
-S_K01X='EKO-1-39 K-01 no ok label outside PR #30'"'"'s seven'
-S_K02='EKO-1-39 K-02 reference list is PR #30'"'"'s seven names'
+S_K01X="EKO-1-39 K-01 no ok label outside PR #30's seven"
+S_K02="EKO-1-39 K-02 reference list is PR #30's seven names"
 S_K02S='EKO-1-39 K-02 reference list shape (no PR body)'
 S_K03='EKO-1-39 K-03 EKO-1-01.sh exits 0'
 S_K04='EKO-1-39 K-04 depth-1 clone exits 2'
