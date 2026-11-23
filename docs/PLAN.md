@@ -566,6 +566,11 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** renewing the exception dates (human's own PR); changing ADR-0001/0002 or the registers; changing `scripts/evidence-chain.sh`; re-litigating EKO-1-01's decisions.
   After EKO-1-01.
   **Done 2026-11-21:** merged in [PR #231](https://github.com/TanerCRB/Eko_CRM/pull/231) as `139711b` by the human on 2026-11-21; verified at `ecb8e1f` (fix round 1 checkpoint; the PR head `4357bfd` differs from it only by cost-register rows). `tests/doc-checks/EKO-1-01.sh` judges EKO-1-01's own merged commits (base `34c9071`, head `8398cfc`, merge `adbb152`), never the working tree or `origin/main`, and prints PR #30's seven `K-n — test:` names as the labels of its result lines: on `main` at `139711b` it gives `35 passed, 0 failed, 0 skipped`, and `scripts/evidence-chain.sh chain` for Issue #6 and PR #30 is `clean — 7 criteria` (seven findings with the file removed from the index). Every PR #30 mutation and every #6/PR #30 contrast, applied as a throwaway commit on `8398cfc`, turns its own criterion's check red (41 document mutations and 3 rebuilt histories); a depth-1 clone, a bad `--base`/`--head`/`--merge` and a helper that cannot read the pinned registers exit 2. Verdicts: QA PROOF HOLDS at `137c4fb` and `ecb8e1f`; Invariant Guardian and Reviewer PASS at both; Security Auditor not run (no risk class). Fix round 1 (the human's choice, no STOP): Q-01 pipefail with a pipe into `grep -q` (48/2100 false misses under load before, 0/2100 after), R-01, R-02. Gate 2: K-05 confirmed; K-06 amended to allow the reservation lines in `docs/PLAN.md` and, with K-07, judged by the human; assumptions A-01..A-09 accepted (scope re-locked, fingerprint `627c3d04`). Recorded exceptions EKO-1-37/M-07 and M-11 (redundant mechanisms; block again 2027-05-21) are entered in `docs/architecture/exception-register.md`; the seven `EKO-1-01/EC-K-0n` entries leave it. Follow-up: #230 (QA Q-03). Not run in CI (the pinned commits are absent from a depth-1 checkout) and not run under Linux bash. Mutation patches: [PR #231](https://github.com/TanerCRB/Eko_CRM/pull/231) description.
+- [x] **EKO-1-39** — Make EKO-1-01's document check prove the names PR #30 quotes, not its own constants (#230).
+  *Done when:* a tracked check fails, naming the unmatched name, when an L-label is renamed and PR #30's name for it is left only in a comment (M-EC-b) or loses one word (M-EC-a); it fails when EKO-1-01.sh exits non-zero; it shows EKO-1-01.sh exits exactly 2 on a real depth-1 clone and 0 once that clone is unshallowed, so `die` exiting 0 (M-14) is caught on its own. It passes on unmutated `main`, the PR records each mutation as killed, and Issue #6, PR #30, EKO-1-01.sh's output and every other doc-check and process script are unchanged.
+  **Out of scope (explicit):** changing Issue #6 / PR #30 records; CI execution of doc-checks or checkout depth; applying the guard to other doc-checks (follow-up Issue).
+  After EKO-1-37.
+  **Done 2026-11-22:** merged in [PR #234](https://github.com/TanerCRB/Eko_CRM/pull/234) as `635259d` by the human on 2026-11-22; verified at `fe5b599` (the merge of `main` after fix round 1; the PR head `dadd279` differs from it only by one cost-register row). `tests/doc-checks/EKO-1-39.sh` runs `tests/doc-checks/EKO-1-01.sh` and compares the labels of the `ok` lines it prints with PR #30's seven `K-n — test:` names as exact strings, both ways (gate-1 G-1 A, G-5 A); it fails on a non-zero exit of EKO-1-01.sh and proves that a throwaway `file://` clone verified shallow makes EKO-1-01.sh exit exactly 2, and 0 once unshallowed; `--pr-body <file>` adds the byte comparison of the list with PR #30's body (only that run prints K-02's PR #30 name, Reviewer R-01), and `--self-test` (45 cases) shows each contrast failing in throwaway clones, the repository untouched before, during and after (K-07, raw-byte hash, Reviewer R-02). On `fe5b599`: plain and `--pr-body` runs 7 passed, EKO-1-01.sh 35 passed; self-test 45 of 45 at `78e8428` (tests identical); 20 parallel runs green. M-EC-b names only K-05's PR #30 name; M-14 fails only `EKO-1-39 K-04 depth-1 clone exits 2`. Verdicts: QA PROOF HOLDS at `ba896c7` and `c053ba2` (M-4, M-11b and M-17 survived the developer's suite and are killed by QA's contrasts); Invariant Guardian PASS at `06331b5`, `78e8428` and `fe5b599`; Reviewer PASS at `06331b5` (R-01, R-02, Low, fixed in round 1 on the human's choice) and at `78e8428`; Security Auditor not run (no risk class). Gate 2: K-05 and K-06 amended to be judged by the human on QA's comparisons (G2-1 A); assumptions A-01..A-05 accepted (scope re-locked, fingerprint `9a21b6bb`). G-4 A: the chain no longer catches M-EC-a for EKO-1-01 (note on the mutation row of EKO-1-37). No recorded exception. Follow-up: #235 (sub-check names with an apostrophe are shell-quoted, so the chain cannot link them). Not run in CI (G-2 A) and not run under Linux bash. Mutation patches: [PR #234](https://github.com/TanerCRB/Eko_CRM/pull/234) description.
 - [ ] **EKO-1-40** — Stop the pool-exhausted runtime test answering 503 from its find checkout under host load (#228).
   *Done when:* the cause is settled in the Issue, by a named test under `backend/tests/runtime/eko201/` that applies a controlled per-checkout delay on the refresh holder's process and fails with a 503 from the `find` checkout before any blocker, or by recorded evidence that rules it out and names the real cause (then a new Issue, no test change); if confirmed, `test_k04_pool_exhausted_responsive_identity_server_serves_every_request` passes with that delay applied without loosening any assertion or bound and without a retry, the delay test against the old body stays the red contrast, a local 20-iteration loop under load is green and both runtime CI jobs are green at the PR head; nothing under `backend/app/`, `backend/migrations/` or `frontend/` changes.
   **Out of scope (explicit):** the fixed-settle cause (EKO-1-38); changing `POOL_TIMEOUT_SECONDS`, probe cadence or pool size (needs an Architect decision); retries or loosened bounds in the test; renewing Exception EKO-1-33/K-06a (the human's decision).
@@ -777,14 +782,60 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   Follow-ups: EKO-3-03 (the unique constraint, CUS-6 and the contract step), #161 (frontend API types, now
   including `reference.ts`), #219 (the `eko131` static tests flaky on a Windows host).
 
-- [ ] **EKO-3-04** — Let users find customers in a list (#215).
+- [x] **EKO-3-04** — Let users find customers in a list (#215).
   *Done when:* server tests prove: one text query matches a customer's name, town or contact value
   case-insensitively; a rep's search never returns another rep's customer (by name, town or contact), the
   result being indistinguishable from no match; the manager's list shows all customers and narrows by an
   owner filter that a rep cannot use to widen scope or probe; search and owner filter combine; the
   unfiltered list, by-id read and create behave as EKO-3-01; no response hints at an out-of-scope customer;
-  query input is bound as data; the SPA Customers screen carries the search field and, for the manager
-  only, the owner selector.
+  query input is bound as data; the SPA Customers screen carries the search field; no owner selector is
+  shown to any session (C-1: the manager owner selector follows in #216).
   **Out of scope (explicit):** the active/archived filter (EKO-3-05, which brings archiving); export; search
   by NIP or other address fields; fuzzy search; duplicate warnings (EKO-3-03); real data.
   After EKO-3-02.
+  **Done 2026-11-22:** merged in [PR #227](https://github.com/TanerCRB/Eko_CRM/pull/227) as `5ac1a36` by the human on 2026-11-22; code verified at
+  `bfa6784` (the developer checkpoint of fix round 1, test code only; QA PROOF HOLDS at `2e4e15c` and
+  `bfa6784`; Invariant Guardian and Reviewer PASS at `a91998f` and `bfa6784`, Security Auditor PASS at
+  `a91998f`; no finding above Low). Mechanism: `GET /api/customers` takes two optional query parameters,
+  declared through one typed dependency (`backend/app/api/customers.py` `customer_search`): `q` (raw cap
+  4 x 254, then trimmed, NFC, NUL and lone surrogates refused, at most 254 code points; empty or
+  whitespace-only is no query) and `owner` (1..255 characters in U+0021..U+007E, byte-wise, refused on
+  form alone; empty is no filter); invalid percent-encoded UTF-8 in either is a 422 `string_unicode`
+  judged on the raw query string. `backend/app/data/customers.py` `find_all` applies the caller's
+  scope, the owner filter and the term in one statement joined by AND; the term matches the name, the
+  town or a contact value (correlated `EXISTS`) as a substring with
+  `casefold(x COLLATE pg_unicode_fast) LIKE casefold(:pattern COLLATE pg_unicode_fast) ESCAPE '\'`,
+  the term bound and `\`, `%`, `_` escaped; no index, no extension, no schema change (Q-1 A, Q-2 A).
+  The scope still comes only from `visibility_scope(caller)`; a rep's owner filter intersects its own
+  scope, so another owner, existing or not, gives the byte-equal answer of a search matching nothing
+  (G-3 A). The SPA Customers screen (`frontend/src/features/customers/CustomerList.tsx`) carries a
+  search field that sends after a 300 ms pause or at once on Enter, drops a late answer to an older
+  term, keeps the term out of the location and the history, shows the P2 no-match state, and shows no
+  owner selector; `CustomerListQuery` in `frontend/src/api/customers.ts` is checked against the
+  OpenAPI document by a new QUERY direction of `backend/tests/support/frontend_contract.py` (Q-6 A).
+  Tests: `backend/tests/runtime/eko304/`, `backend/tests/runtime/test_eko304_k06_search_logs_through_proxy.py`,
+  `backend/tests/static/test_eko304_adr0003_c36_scope_built_only_in_ownership.py`,
+  `test_eko304_q6_list_query_parameters.py`, `frontend/tests/features/customers/CustomerSearch.test.tsx`,
+  `frontend/tests/api/customers.list-query.test.ts` (rows in `architecture/capabilities.md`). Gate 1
+  (2026-11-20, every recommendation accepted): C-0/C-0b (code after EKO-3-02, its branch merged in by
+  the human's decision B), C-1 A (the manager owner selector split to #216), Q-1..Q-6 A, G-1, G-3..G-7
+  A, D-1; the ADR-0002 and ADR-0003 addenda of 2026-11-20 are appended in this commit to
+  [`ADR-0002-database-and-migrations.md`](architecture/decisions/ADR-0002-database-and-migrations.md)
+  and [`ADR-0003-identity-and-access.md`](architecture/decisions/ADR-0003-identity-and-access.md) from
+  [`EKO-3-04-list-search-adr0002-adr0003-addendum-draft-2026-11-20.md`](architecture/decisions/EKO-3-04-list-search-adr0002-adr0003-addendum-draft-2026-11-20.md)
+  (ADR-0003-C33 restated, a declared deviation; new controls ADR-0002-C17 and ADR-0003-C36). One fix
+  round: the PR's first CI run turned both runtime jobs red on the K-06 composition test, which logged
+  in as the shared `login` account an earlier browser test OTP-enrols; checkpoint `bfa6784` gives it a
+  rep account of its own (the pattern of EKO-3-02's `8f48a9a`). Gate 2 (2026-11-22, the human accepted
+  every recommendation): backend A-01..A-03 and frontend A-04..A-09 accepted as built and recorded as
+  amendment lines under K-06 and K-07 of #215 (scope re-locked, fingerprint `166393fd`); K-07's visual
+  half, fidelity to the P2 Customers screen including the left-out no-match "Dodaj klienta" button,
+  accepted as built; the survivors M20a/b/c/e (each access-first layer alone, and any two, are
+  redundant) and M23b (`_public_error` strips `input` anyway) kept as defence in depth; the timing
+  residual (another rep's match against no match) and the unindexed manager search accepted at gate 1
+  stand unmeasured. CI, stated plainly: at the PR head `a04777a` (only cost-register rows after
+  verification) all nine checks were green. Two Low findings carried on: the comment above
+  `CustomerListQuery` overstates how the query string is built (QA; moved to #216 by the human on
+  2026-11-21), and this entry's former wording promised the owner selector (Reviewer R-01; corrected
+  above). Follow-ups: #216 (the manager owner selector and the comment fix), EKO-3-05 (the
+  active/archived filter).
