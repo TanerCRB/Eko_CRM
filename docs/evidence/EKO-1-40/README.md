@@ -66,7 +66,9 @@ The recorded runs, but not the named test, came from a temporary pytest module,
 not in the tree. It called the carrier's own functions, kept both processes' `/__eko201/state`
 when `all_waiting` failed, and appended one JSON line per run to a file outside the repository.
 The tables were made from those lines with `backend/tests/support/eko140_signature.py`. The
-module's last version is reproduced here so the runs can be repeated:
+module's last version is reproduced here so the runs can be repeated. The original harness's
+`print` line carried a print-lint suppression (`noqa: T201`), omitted from this copy so that the
+evidence holds no suppression marker:
 
 <details><summary>test_zz_eko140_explore.py (temporary, not in the tree)</summary>
 
@@ -133,7 +135,7 @@ def test_explore(
     if OUT:
         with open(OUT, "a", encoding="utf-8") as f:
             f.write(json.dumps(line) + "\n")
-    print(f"EXPLORE i={i} late={late} error={'yes' if error else 'no'} statuses={statuses} S={len(hits)}")  # noqa: T201
+    print(f"EXPLORE i={i} late={late} error={'yes' if error else 'no'} statuses={statuses} S={len(hits)}")
 
 
 GATED_N = int(os.environ.get("EXPLORE_GATED_N", "0"))
