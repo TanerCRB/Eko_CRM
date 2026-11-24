@@ -26,7 +26,7 @@ from starlette.exceptions import HTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.auth import router as auth_router
-from app.api.customers import LARGEST_CREATE_BODY
+from app.api.customers import LARGEST_CREATE_BODY, NIP_TAKEN, NipTakenProblem
 from app.api.customers import router as customers_router
 from app.api.health import router as health_router
 from app.api.reference import router as reference_router
@@ -46,7 +46,7 @@ from app.core.logs import RequestLine, correlation_id, install_interpreter_hooks
 from app.core.settings import AuthSettings, Settings, load_settings
 from app.data.database import Database
 from app.data.sessions import SessionStore, StorageUnavailable
-from app.domain.customers import CustomerNotFound
+from app.domain.customers import CustomerNotFound, NipTaken
 from app.domain.ownership import NotPermitted
 
 logger = logging.getLogger(__name__)
@@ -284,6 +284,13 @@ async def _not_found(request: Request, exc: Exception) -> Response:
     return _problem(404, "not found")
 
 
+async def _nip_taken(request: Request, exc: Exception) -> Response:
+    # The reference is set only by the service, for an all-records caller (ADR-0003-C38).
+    existing = exc.existing if isinstance(exc, NipTaken) else None
+    answer = NipTakenProblem(detail=NIP_TAKEN, existing_customer_id=existing)
+    return JSONResponse(answer.body(), status_code=409)
+
+
 def _check_access_first(app: FastAPI) -> None:
     if routes_without_access_first(app):
         raise RuntimeError("a route would read its body before the access decision")
@@ -393,6 +400,7 @@ def create_app() -> FastAPI:
         app.add_exception_handler(StorageUnavailable, _unavailable)
         app.add_exception_handler(NotPermitted, _role_refused)
         app.add_exception_handler(CustomerNotFound, _not_found)
+        app.add_exception_handler(NipTaken, _nip_taken)
         install_request_handling(app)
         return app
     except Exception:

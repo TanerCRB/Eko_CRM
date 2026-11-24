@@ -123,6 +123,8 @@ def test_eko135_k01_checked_set_is_g_c() -> None:
         # EKO-3-08 (Issue #216, G-4 A): the manager's list of reps.
         (REPS, "RepList", "RepList"),
         (REPS, "RepEntry", "RepEntry"),
+        # EKO-3-03 (Issue #252, design point 6): the NIP-taken refusal.
+        (CUSTOMERS, "NipTakenProblem", "POST /api/customers 409"),
     }
 
 

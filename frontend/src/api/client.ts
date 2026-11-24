@@ -4,7 +4,7 @@ export type ApiResponse =
   | { kind: "ok"; status: number; body: unknown }
   | { kind: "unauthenticated" }
   | { kind: "unavailable" }
-  // `body` only on 422: the validation answer names fields; no other refusal's body is read.
+  // `body` only on 422 (the fields it names) and 409 (EKO-3-03's NIP refusal); no other is read.
   | { kind: "failed"; status: number; body?: unknown };
 
 export interface RequestOptions {
@@ -49,8 +49,8 @@ export async function apiRequest(
   if (response.status === 503) {
     return { kind: "unavailable" };
   }
-  if (response.status === 422) {
-    return { kind: "failed", status: 422, body: parseJson(text) };
+  if (response.status === 422 || response.status === 409) {
+    return { kind: "failed", status: response.status, body: parseJson(text) };
   }
   if (!response.ok) {
     return { kind: "failed", status: response.status };

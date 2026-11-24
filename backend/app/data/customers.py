@@ -6,6 +6,11 @@ statement that selects or writes the rows, so a customer outside the scope is ne
 "not visible" and "missing" are the same `None`. A create is one transaction: the customer and
 all its contacts are written together or not at all. Identifiers are UUIDv4 values generated
 here, never by a database sequence (ADR-0005-C17).
+
+A taken NIP is decided by the database's unique constraint on `nip`, never by a read before the
+insert (ADR-0002 *NIP uniqueness*; gate 1 of EKO-3-03): its violation, told apart by the
+constraint's name, becomes `NipTaken`, which carries no value. The driver's message names the
+NIP, so it is never read or written anywhere.
 """
 
 import logging
@@ -13,6 +18,7 @@ import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+import psycopg
 from sqlalchemy import (
     ColumnElement,
     Connection,
@@ -26,10 +32,10 @@ from sqlalchemy import (
     select,
     true,
 )
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.data.database import Database
-from app.data.models import CustomerContactRow, CustomerRow
+from app.data.models import NIP_UNIQUE, CustomerContactRow, CustomerRow
 from app.data.sessions import StorageUnavailable
 from app.domain.customers import (
     Address,
@@ -39,6 +45,7 @@ from app.domain.customers import (
     CustomerDraft,
     CustomerSearch,
     CustomerSummary,
+    NipTaken,
     TaxId,
 )
 from app.domain.ownership import AllRecords, OwnedBy, VisibilityScope
@@ -85,6 +92,16 @@ def _visible(scope: VisibilityScope) -> ColumnElement[bool]:
     return CustomerRow.owner_subject == scope.subject
 
 
+def _is_nip_taken(error: IntegrityError) -> bool:
+    """Whether the violated constraint is the one on `nip`, from the driver's diagnostic field:
+    SQLSTATE 23505 alone is not enough, the contact table's one-primary index raises it too."""
+    cause = error.orig
+    return (
+        isinstance(cause, psycopg.errors.UniqueViolation)
+        and cause.diag.constraint_name == NIP_UNIQUE
+    )
+
+
 class CustomerStore:
     def __init__(self, database: Database) -> None:
         self._engine = database.engine
@@ -103,21 +120,27 @@ class CustomerStore:
         """The customer, owned by the scope's subject, and its contacts in the order given."""
         customer_id = new_identifier()
         with self._connection() as connection:
-            connection.execute(
-                insert(CustomerRow).values(
-                    id=customer_id,
-                    name=draft.name,
-                    country=draft.country,
-                    owner_subject=scope.subject,
-                    street=draft.address.street,
-                    postal_code=draft.address.postal_code,
-                    town=draft.address.town,
-                    voivodeship=draft.address.voivodeship,
-                    county=draft.address.county,
-                    nip=draft.tax_id.nip,
-                    foreign_tax_id=draft.tax_id.foreign,
+            try:
+                connection.execute(
+                    insert(CustomerRow).values(
+                        id=customer_id,
+                        name=draft.name,
+                        country=draft.country,
+                        owner_subject=scope.subject,
+                        street=draft.address.street,
+                        postal_code=draft.address.postal_code,
+                        town=draft.address.town,
+                        voivodeship=draft.address.voivodeship,
+                        county=draft.address.county,
+                        nip=draft.tax_id.nip,
+                        foreign_tax_id=draft.tax_id.foreign,
+                    )
                 )
-            )
+            except IntegrityError as error:
+                if _is_nip_taken(error):
+                    # Leaving the block rolls the transaction back: nothing of this create stays.
+                    raise NipTaken from None
+                raise
             if draft.contacts:
                 connection.execute(
                     insert(CustomerContactRow),
@@ -138,6 +161,15 @@ class CustomerStore:
         return Customer(
             customer_id, draft.name, draft.country, draft.contacts, draft.address, draft.tax_id
         )
+
+    def find_by_nip(self, scope: VisibilityScope, nip: str) -> uuid.UUID | None:
+        """The identifier, and nothing else, of the customer in the scope holding `nip`. Read
+        after a create was refused for that NIP, in a transaction of its own, so the stored
+        customer that refused it is committed and seen (gate 1 of EKO-3-03, A-3 A)."""
+        statement = select(CustomerRow.id).where(CustomerRow.nip == nip, _visible(scope))
+        with self._connection() as connection:
+            found: uuid.UUID | None = connection.execute(statement).scalar_one_or_none()
+        return found
 
     def find(self, scope: VisibilityScope, customer_id: uuid.UUID) -> Customer | None:
         """One statement: the customer by identifier and scope, with its contacts in order."""

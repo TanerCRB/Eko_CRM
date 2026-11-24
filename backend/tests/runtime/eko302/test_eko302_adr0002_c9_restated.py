@@ -1,8 +1,9 @@
-"""EKO-3-02, ADR-0002-C9 as restated for the interval until EKO-3-03 (ADR-0002 addendum draft of
-EKO-3-02, accepted at gate 1, Q-1 A): inserting straight through SQL, past the services, a `nip`
-that is not ten digits fails with a check violation (SQLSTATE 23514); two customers without a
-`nip` are both stored; two with the same `foreign_tax_id` are both stored; and a second customer
-with an existing `nip` is stored, because the unique constraint is EKO-3-03's.
+"""EKO-3-02, ADR-0002-C9 (restated for the interval until EKO-3-03 by the ADR-0002 addendum draft
+of EKO-3-02, accepted at gate 1, Q-1 A; as written again since EKO-3-03's revision 0007, G-8 A):
+inserting straight through SQL, past the services, a `nip` that is not ten digits fails with a
+check violation (SQLSTATE 23514); two customers without a `nip` are both stored; two with the
+same `foreign_tax_id` are both stored; and a second customer with an existing `nip` fails with a
+unique violation (SQLSTATE 23505).
 
 Every NIP is synthetic and built at run time (G-7 A).
 """
@@ -69,7 +70,10 @@ def test_c9_two_customers_with_the_same_foreign_tax_id_are_both_stored(crm: Crm)
 
 
 def test_c9_restated_a_second_customer_with_an_existing_nip_is_stored(crm: Crm) -> None:
+    """The interval ended with EKO-3-03 (G-8 A): the second customer is refused, not stored."""
     nip = nips.valid_nip(1)
     insert(crm, "PL", nip, None)
-    insert(crm, "PL", nip, None)
-    assert crm.pg.rows("SELECT count(*) FROM customer WHERE nip = %s", (nip,)) == [(2,)]
+    with pytest.raises(psycopg.errors.UniqueViolation) as raised:
+        insert(crm, "PL", nip, None)
+    assert raised.value.sqlstate == "23505"
+    assert crm.pg.rows("SELECT count(*) FROM customer WHERE nip = %s", (nip,)) == [(1,)]

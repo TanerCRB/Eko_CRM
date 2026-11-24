@@ -89,9 +89,19 @@ export type RejectedField =
   | { field: AddressPart }
   | { field: "request" };
 
+// The 409 answer to a create whose NIP another customer holds (EKO-3-03). `existing_customer_id`
+// comes only to an all-records caller and is absent, never null, otherwise; `detail` is never shown.
+export interface NipTakenProblem {
+  detail: string;
+  existing_customer_id?: string;
+}
+
+// "nipTaken": `existingCustomerId` is the answer's reference when it is a customer id, else null;
+// the answer alone decides it, never the session's roles.
 export type CreateResult =
   | { kind: "created"; customer: CustomerRecord }
   | { kind: "rejected"; fields: RejectedField[] }
+  | { kind: "nipTaken"; existingCustomerId: string | null }
   | { kind: "refused" }
   | { kind: "failed" };
 
@@ -244,10 +254,25 @@ export async function createCustomer(input: CustomerInput): Promise<CreateResult
   if (response.kind === "failed" && response.status === 422) {
     return { kind: "rejected", fields: parseRejection(response.body) };
   }
+  if (response.kind === "failed" && response.status === 409) {
+    return parseNipTaken(response.body);
+  }
   if (response.kind === "failed" && response.status === 403) {
     return { kind: "refused" };
   }
   return { kind: "failed" };
+}
+
+// A reference that is not a customer id gives no link (ADR-0005-C13); a body without the
+// refusal's `detail` is not this refusal at all.
+function parseNipTaken(body: unknown): CreateResult {
+  if (!isRecord(body) || typeof body["detail"] !== "string") {
+    return { kind: "failed" };
+  }
+  const reference = body["existing_customer_id"];
+  const existingCustomerId =
+    typeof reference === "string" && isCustomerId(reference) ? reference : null;
+  return { kind: "nipTaken", existingCustomerId };
 }
 
 export async function readCustomer(id: string): Promise<ReadResult> {

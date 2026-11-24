@@ -19,7 +19,7 @@ STATEMENT_TIMEOUT_VARIABLE = "MIGRATION_STATEMENT_TIMEOUT_SECONDS"
 TIMEOUTS = {LOCK_TIMEOUT_VARIABLE: "5", STATEMENT_TIMEOUT_VARIABLE: "30"}
 VERSIONS_DIR = "backend/migrations/versions/"
 TESTS_DIR = "backend/tests/"
-SHIPPED_REVISIONS = {"0001", "0002", "0003", "0004", "0005", "0006"}
+SHIPPED_REVISIONS = {"0001", "0002", "0003", "0004", "0005", "0006", "0007"}
 VARIANT_DIR = "/app/migrations/versions/"
 TIMEOUT_SETTING = re.compile(r"lock_timeout|statement_timeout|transaction_timeout", re.IGNORECASE)
 
@@ -191,11 +191,13 @@ def history_edges(history_output: str) -> dict[str, str | None]:
 def shipped_tree_violations(
     edges: Mapping[str, str | None], version_files: Iterable[str]
 ) -> list[str]:
-    """K-07: the tree is exactly {0001, 0002, 0003, 0004, 0005, 0006}, each on the one before, and
-    only their six files ship."""
+    """K-07: the tree is exactly {0001, ..., 0007}, each on the one before, and only their seven
+    files ship (0007: EKO-3-03)."""
     problems = []
     if set(edges) != SHIPPED_REVISIONS:
         problems.append(f"revisions {sorted(edges)}, not {sorted(SHIPPED_REVISIONS)}")
+    if edges.get("0007") != "0006":
+        problems.append(f"0007's parent is {edges.get('0007')!r}, not '0006'")
     if edges.get("0006") != "0005":
         problems.append(f"0006's parent is {edges.get('0006')!r}, not '0005'")
     if edges.get("0005") != "0004":

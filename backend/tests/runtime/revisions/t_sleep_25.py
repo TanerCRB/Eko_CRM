@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "t_sleep_25"
-down_revision: str | None = "0006"
+down_revision: str | None = "0007"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

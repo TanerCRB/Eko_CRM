@@ -67,6 +67,8 @@ CHECKED: tuple[Pair, ...] = (
     Pair(CUSTOMERS, "CustomerSummary", "CustomerItem", RESPONSE),
     Pair(CUSTOMERS, "CustomerList", "CustomerList", RESPONSE),
     Pair(CUSTOMERS, "ValidationProblem", "POST /api/customers 422", RESPONSE),
+    # EKO-3-03 (Issue #252): the create's refusal for a NIP another customer holds.
+    Pair(CUSTOMERS, "NipTakenProblem", "POST /api/customers 409", RESPONSE),
     # EKO-3-02 (Issue #161): the voivodeship reference client.
     Pair(REFERENCE, "VoivodeshipList", "VoivodeshipList", RESPONSE),
     Pair(REFERENCE, "VoivodeshipEntry", "VoivodeshipOut", RESPONSE),

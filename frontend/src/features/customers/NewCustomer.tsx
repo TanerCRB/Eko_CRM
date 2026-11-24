@@ -14,7 +14,7 @@ import { SelectField } from "../../components/SelectField";
 import { useMountFocus } from "../../components/useMountFocus";
 import { messages } from "../../i18n/pl";
 import { followLink } from "../../routing/location";
-import { CUSTOMERS_PATH } from "./paths";
+import { customerPath, CUSTOMERS_PATH } from "./paths";
 import { useVoivodeships } from "./useVoivodeships";
 
 type Outcome =
@@ -27,6 +27,7 @@ type Outcome =
       // The country the rejected request was judged under, which decides the message.
       sentCountry: string;
     }
+  | { kind: "nipTaken"; existingCustomerId: string | null }
   | { kind: "refused" }
   | { kind: "failed" };
 
@@ -136,6 +137,17 @@ export function NewCustomer({ onCreated }: NewCustomerProps) {
     outcome.kind === "rejected" && isRejected(part)
       ? addressError(part, outcome.sentCountry === POLAND)
       : undefined;
+  // The answer's reference alone picks the sentence and the link (EKO-3-03), never the session.
+  const existingPath =
+    outcome.kind === "nipTaken" && outcome.existingCustomerId !== null
+      ? customerPath(outcome.existingCustomerId)
+      : null;
+  const taxIdError =
+    outcome.kind !== "nipTaken"
+      ? fieldError("tax_id")
+      : existingPath === null
+        ? messages.customer.nipTaken
+        : messages.customer.nipTakenWithReference;
   // A rejected part whose field this country hides is told in the form alert instead.
   const hiddenRegionRejected = !polish && REGION_PARTS.some((part) => isRejected(part));
   const saving = outcome.kind === "saving";
@@ -242,11 +254,24 @@ export function NewCustomer({ onCreated }: NewCustomerProps) {
         <Field
           label={polish ? messages.customer.nip : messages.customer.foreignTaxId}
           value={address.tax_id}
-          error={fieldError("tax_id")}
+          error={taxIdError}
           onChange={(event) => {
             setPart("tax_id", event.target.value);
           }}
         />
+        {existingPath === null ? null : (
+          <p>
+            <a
+              className="text-link"
+              href={existingPath}
+              onClick={(event) => {
+                followLink(event, existingPath);
+              }}
+            >
+              {messages.customer.openExistingCustomer}
+            </a>
+          </p>
+        )}
       </fieldset>
       <h2>{messages.customer.addressTitle}</h2>
       <fieldset className="form-section" disabled={saving}>
