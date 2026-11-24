@@ -31,3 +31,6 @@ docs/architecture/decisions/EKO-3-02-adr0002-nip-column-before-uniqueness-addend
 # EKO-3-08: the ADR-0003/ADR-0005 staff display-name copy addenda keep "draft" in their name deliberately -
 # the path is quoted in the Issue body and the gate-1 decision on #216 (human, 2026-11-23); same convention as EKO-3-04.
 docs/architecture/decisions/EKO-3-08-staff-display-name-copy-adr0003-adr0005-addendum-draft-2026-11-22.md
+# EKO-3-03: the ADR-0002/0003/0004/0005 NIP-uniqueness addenda keep "draft" in their name deliberately -
+# the path is quoted in the Issue body and the gate-1 decision on #252 (human, 2026-11-24); same convention as EKO-3-08.
+docs/architecture/decisions/EKO-3-03-nip-uniqueness-contract-step-adr0002-adr0003-adr0004-adr0005-addendum-draft-2026-11-24.md
