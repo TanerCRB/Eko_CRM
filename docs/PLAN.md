@@ -893,3 +893,18 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   findings carried on: Reviewer R-01 (a copy deleted up to 60 s late) and R-02 (a failed copy deletion
   loses the count line), #243. Follow-ups: #243, #247 (owner-only no-match wording, A-16), #249 (the
   C20/C21 rename), #242 (the session read's 500 on a lone-surrogate name, pre-existing).
+
+- [ ] **EKO-3-05** — Let users edit, archive and restore customers (#253).
+  *Done when:* server tests prove: a rep edits their own customer and the manager any customer, with
+  CUS-2..CUS-5 and CUS-8 re-validated exactly as on create, the owner unchanged, and a NIP edit
+  accepted without a uniqueness check (as create until EKO-3-03); a rep archives and restores their own
+  customer (hidden from the active list, readable by id, restored with every field unchanged) and the
+  manager any customer; the list filters active/archived/both and combines with search and owner
+  filter; a rep acting on another rep's customer (edit, archive or restore) gets the same answer as for
+  an id that does not exist; editing, archiving or restoring changes no other customer; nothing is
+  deleted; the SPA Customers screen carries edit, archive (with confirmation), restore and the filter.
+  **Out of scope (explicit):** effect on visits and actions (EKO-4-06; Google removal EKO-5-02);
+  duplicate-NIP blocking and warnings on edit (EKO-3-03; no release with real data before it); owner
+  change and reassignment (EKO-3-07); concurrent-edit conflict handling; erasure; duplicate handling of
+  archived customers (EKO-3-03); archived-customer retention period (GDPR impact assessment); real data.
+  After EKO-3-04.
