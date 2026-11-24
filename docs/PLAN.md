@@ -846,7 +846,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   above). Follow-ups: #216 (the manager owner selector and the comment fix), EKO-3-05 (the
   active/archived filter).
 
-- [ ] **EKO-3-08** — Let the manager narrow the customer list to one rep (#216).
+- [x] **EKO-3-08** — Let the manager narrow the customer list to one rep (#216).
   *Done when:* server tests prove: each login stores the caller's display-name copy by subject (updated, not
   duplicated, no e-mail or username); a manager reads a list of reps and a rep is refused with an answer
   that discloses nothing; the session read exposes the caller's roles from the verified token; the copy is
@@ -856,3 +856,40 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** owner name in customer responses; reassignment (EKO-3-07); dashboard owner
   selector; Keycloak admin API; deactivation signal; real data.
   After EKO-3-04.
+  **Done 2026-11-24:** merged in [PR #244](https://github.com/TanerCRB/Eko_CRM/pull/244) as `01de381` on 2026-11-24 by the human, from the
+  operator's account (TanerCRB; the repository has one account); code verified at `5730229` (the merge
+  of `main` into the QA checkpoint `fb43a3c`; QA PROOF HOLDS at `3e28693`; Invariant Guardian, Reviewer
+  and Security Auditor PASS at `fb43a3c`, the Guardian again at `5730229`; no finding above Low).
+  Mechanism: revision `0006_staff_display_name` (expand-only) adds `staff_display_name` (`subject`
+  `COLLATE "C"`, `name`, `is_rep`, `last_login_at`); the login callback writes it in the session's own
+  transaction after every check (`backend/app/auth/sessions.py`, `backend/app/data/sessions.py`,
+  `backend/app/domain/staff.py`), a refresh never does; `GET /api/reps` (`backend/app/api/reps.py`,
+  `manager_caller`) answers a manager the staff whose last login held `rep`; `GET /api/auth/session`
+  adds `roles` from the verified token; the worker's retention run (`backend/app/services/retention.py`,
+  `backend/app/data/staff.py` `delete_unreferenced_copies`, the one entry of the closed system-read
+  list) deletes a copy no `customer.owner_subject` refers to at 180 x 24 h after the last login. The SPA
+  Customers screen (`frontend/src/features/customers/CustomerList.tsx`, `ownerOptions.ts`, `useReps.ts`,
+  `frontend/src/api/reps.ts`, `frontend/src/api/auth.ts`) shows the owner selector to a manager only and
+  sends the EKO-3-04 `owner` parameter. Tests: `backend/tests/runtime/eko308/`,
+  `backend/tests/static/test_eko308_adr0003_c35_system_read_list.py`,
+  `test_eko308_adr0005_c20_reference_set.py`, `frontend/tests/features/customers/OwnerSelector.test.tsx`,
+  `frontend/tests/api/reps.test.ts`, `auth.session-roles.test.ts`, `customers.list-query.test.ts` (rows
+  in `architecture/capabilities.md`). Gate 1 (2026-11-22, every recommendation accepted): G-1..G-8 A,
+  Q-1..Q-5 A; the ADR-0003 and ADR-0005 addenda of 2026-11-22 are appended in this commit to
+  [`ADR-0003-identity-and-access.md`](architecture/decisions/ADR-0003-identity-and-access.md) and
+  [`ADR-0005-personal-data.md`](architecture/decisions/ADR-0005-personal-data.md) from
+  [`EKO-3-08-staff-display-name-copy-adr0003-adr0005-addendum-draft-2026-11-22.md`](architecture/decisions/EKO-3-08-staff-display-name-copy-adr0003-adr0005-addendum-draft-2026-11-22.md)
+  (ADR-0003-C35 restated, a declared deviation; new controls ADR-0003-C37 and ADR-0005-C21, the latter
+  drafted as ADR-0005-C20, which the addendum of 2026-11-12 already holds: renumbered by the human at
+  gate 3 on 2026-11-24, code and test names in #249). Implementation decisions (2026-11-23): A-01
+  `GET /api/reps`, A-11 an unstorable name stored as null with the login succeeding, the EKO-2-01 route
+  walk's "valid" scenario as rep+manager. No fix round. Gate 2 (2026-11-24, every recommendation
+  accepted): backend A-02..A-10 and frontend A-13..A-23 accepted as built and recorded as amendment
+  lines under K-01, K-02, K-04, K-05 and K-07 of #216 (scope re-locked, fingerprint `3ccdf9ba`). QA's
+  first suite let M-25, M-29 and M-33b survive; QA's added tests kill them. CI, stated plainly: the
+  first run at `234ddfb` turned "runtime tests on the composition" red when the Keycloak image build's
+  `mvn dependency:go-offline` failed (environment; the EKO-3-08 runtime tests passed in that run); at the
+  PR head `bb50530` (one cost-register row after verification) all nine checks were green. Two Low
+  findings carried on: Reviewer R-01 (a copy deleted up to 60 s late) and R-02 (a failed copy deletion
+  loses the count line), #243. Follow-ups: #243, #247 (owner-only no-match wording, A-16), #249 (the
+  C20/C21 rename), #242 (the session read's 500 on a lone-surrogate name, pre-existing).
