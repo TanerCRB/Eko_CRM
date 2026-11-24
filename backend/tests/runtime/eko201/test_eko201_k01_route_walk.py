@@ -238,6 +238,10 @@ def test_k01_every_protected_operation_answers_per_session_state(
         stub.refresh_mode = "answer"
         stub.published = [oidc_stub.public_jwk(stub.signing_key, stub.kid)]
         browser = browser_for(make_app())
+        if scenario == "valid":
+            # Roles that grant every operation, the manager-only reps list included (EKO-3-08,
+            # human decision of 2026-11-23 on Issue #216).
+            stub.next_user = oidc_stub.User(client_roles=["rep", "manager"])
         if scenario != "none":
             browser.login()
         before = session_count(pg)

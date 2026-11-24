@@ -13,6 +13,7 @@ AUTH = "frontend/src/api/auth.ts"
 CUSTOMERS = "frontend/src/api/customers.ts"
 CLIENT = "frontend/src/api/client.ts"
 REFERENCE = "frontend/src/api/reference.ts"
+REPS = "frontend/src/api/reps.ts"
 VISITS = "frontend/src/api/visits.ts"
 VISIT_INTERFACE = "export interface VisitRecord {\n  id: string;\n}\n"
 VISIT_ALIAS = "export type VisitRecord = { id: string };\n"
@@ -54,6 +55,8 @@ def test_eko135_k03_frontend_only_list_is_exactly_the_gate_1_list() -> None:
         (CLIENT, "RequestOptions"),
         # EKO-3-02 (Issue #161): frontend-only result union of the reference client.
         (REFERENCE, "VoivodeshipsResult"),
+        # EKO-3-08 (Issue #216): frontend-only result union of the reps client.
+        (REPS, "RepsResult"),
     }
 
 

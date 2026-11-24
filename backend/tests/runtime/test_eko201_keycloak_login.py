@@ -72,7 +72,8 @@ def test_k02_k03_real_login_without_google_stores_tokens_without_email_or_userna
         assert app.session_count(composition) == before + 1
         view = app.session_view(composition, session)
         assert view.status_code == 200, view.status_code
-        assert view.json() == {"subject": user_id, "name": accounts.DISPLAY_NAME}
+        # EKO-3-08 K-04: the session read also names the token's application roles.
+        assert view.json() == {"subject": user_id, "name": accounts.DISPLAY_NAME, "roles": ["rep"]}
     finally:
         browser.close()
 

@@ -16,10 +16,12 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import ColumnElement, Connection, delete, func, insert, select, text, update
+from sqlalchemy.dialects.postgresql import insert as upsert
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.data.database import Database
-from app.data.models import AppSession, LoginTransaction
+from app.data.models import AppSession, LoginTransaction, StaffDisplayNameRow
+from app.domain.staff import DisplayNameCopy
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +82,20 @@ _UNLOCK = text("SELECT pg_advisory_unlock(CAST(:cls AS integer), CAST(:key AS in
 def _session(connection: Connection, where: ColumnElement[bool]) -> StoredSession | None:
     row = connection.execute(select(*_SESSION_COLUMNS).where(where)).one_or_none()
     return None if row is None else StoredSession(*row)
+
+
+def _write_copy(connection: Connection, copy: DisplayNameCopy) -> None:
+    """One copy per subject: a later login replaces every item (ADR-0003-C37)."""
+    items = {
+        "display_name": copy.name,
+        "is_rep": copy.is_rep,
+        "last_login_at": copy.last_login_at,
+    }
+    connection.execute(
+        upsert(StaffDisplayNameRow)
+        .values(subject=copy.subject, **items)
+        .on_conflict_do_update(index_elements=[StaffDisplayNameRow.subject], set_=items)
+    )
 
 
 def _try_lock(connection: Connection, session_id: int) -> bool:
@@ -204,8 +220,11 @@ class SessionStore:
         access_expires_at: datetime,
         now: datetime,
         replaced_hash: str | None,
+        copy: DisplayNameCopy,
     ) -> None:
-        """A new session; the one the browser presented before the login, if any, is deleted."""
+        """A new session; the one the browser presented before the login, if any, is deleted.
+        The caller's display-name copy is written in the same transaction, so a session that is
+        not created leaves the copy as it was."""
         with self._connection() as connection:
             if replaced_hash is not None:
                 connection.execute(
@@ -221,6 +240,7 @@ class SessionStore:
                     last_used_at=now,
                 )
             )
+            _write_copy(connection, copy)
             connection.commit()
 
     def find(self, session_hash: str) -> StoredSession | None:

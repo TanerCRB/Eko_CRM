@@ -1,6 +1,9 @@
-"""ADR-0003-C35 (addendum of EKO-3-01, section 2): every function under `backend/app/data/` that
-reads or changes rows of an owned table takes a visibility scope as a required parameter with no
-default, and no module outside `backend/app/data/` refers to an owned table.
+"""ADR-0003-C35 (addendum of EKO-3-01, section 2; restated by the addendum of EKO-3-08): every
+function under `backend/app/data/` that reads or changes rows of an owned table takes a visibility
+scope as a required parameter with no default, or is on the closed system-read list held here,
+and no module outside `backend/app/data/` refers to an owned table. A listed function returns no
+column of an owned table and is reached from no module under `backend/app/api/` or
+`backend/app/auth/`.
 
 A function refers to an owned table when its body names an owned model or table, or names a
 module-level value or function of its own module that does; the closure is taken to a fixed
@@ -16,6 +19,9 @@ OWNED_MODELS = frozenset({"CustomerRow", "CustomerContactRow"})
 OWNED_TABLES = frozenset({"customer", "customer_contact"})
 SCOPE_TYPES = frozenset({"VisibilityScope", "OwnedBy", "AllRecords"})
 SCOPE_PARAMETER = "scope"
+# ADR-0003 addendum of EKO-3-08 (Q-2 A): the closed system-read list, `path:function`. Adding an
+# entry is a gate-1 decision of the task that adds it, on the Architect's impact map.
+SYSTEM_READS = frozenset({"backend/app/data/staff.py:delete_unreferenced_copies"})
 DATA_PREFIX = "backend/app/data/"
 # The model module defines the owned tables; it holds no function that reads or changes them.
 MODELS_MODULE = "backend/app/data/models.py"
@@ -111,9 +117,11 @@ def _scope_parameter(function: ast.FunctionDef | ast.AsyncFunctionDef) -> str | 
     return None
 
 
-def unscoped_functions(files: Mapping[str, str]) -> list[str]:
+def unscoped_functions(
+    files: Mapping[str, str], system_reads: frozenset[str] = SYSTEM_READS
+) -> list[str]:
     """`path:function: reason` for every function under `data` that reaches an owned table
-    without a required, typed scope parameter."""
+    without a required, typed scope parameter and is not on the system-read list."""
     problems = []
     for path, text in sorted(files.items()):
         if not path.startswith(DATA_PREFIX) or not path.endswith(".py") or path == MODELS_MODULE:
@@ -123,9 +131,122 @@ def unscoped_functions(files: Mapping[str, str]) -> list[str]:
         for function in _functions(tree):
             if not _names(function) & tainted:
                 continue
+            if f"{path}:{function.name}" in system_reads:
+                continue
             reason = _scope_parameter(function)
             if reason is not None:
                 problems.append(f"{path}:{function.name}: {reason}")
+    return problems
+
+
+# Calls whose arguments become the columns a statement returns.
+COLUMN_CALLS = frozenset({"select", "returning", "add_columns", "with_only_columns", "column"})
+LAYERS_THAT_MUST_NOT_REACH = ("backend/app/api/", "backend/app/auth/")
+
+
+def _called(node: ast.Call) -> str:
+    if isinstance(node.func, ast.Name):
+        return node.func.id
+    if isinstance(node.func, ast.Attribute):
+        return node.func.attr
+    return ""
+
+
+def _returned_columns(function: ast.FunctionDef | ast.AsyncFunctionDef, tainted: set[str]) -> str:
+    """Why the listed function may return a column of an owned table, or "" when it does not."""
+    for node in ast.walk(function):
+        if isinstance(node, ast.Call) and _called(node) in COLUMN_CALLS:
+            arguments = [*node.args, *(k.value for k in node.keywords)]
+            if any(_names(a) & tainted for a in arguments):
+                return f"`{_called(node)}` names an owned table"
+        elif isinstance(node, ast.Return) and node.value is not None:
+            if _names(node.value) & tainted:
+                return "it returns a value naming an owned table"
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if SQL_REFERENCE.search(node.value):
+                return "raw SQL names an owned table"
+    return ""
+
+
+def _module_name(path: str) -> str:
+    dotted = path.removeprefix("backend/").removesuffix(".py").removesuffix("/__init__")
+    return dotted.replace("/", ".")
+
+
+def _imported(tree: ast.Module) -> set[str]:
+    """Every module an import statement may bind, `from a import b` read as `a` and `a.b`."""
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found |= {alias.name for alias in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            found.add(node.module)
+            found |= {f"{node.module}.{alias.name}" for alias in node.names}
+    return found
+
+
+def _names_function(tree: ast.Module, name: str) -> bool:
+    for node in ast.walk(tree):
+        if isinstance(node, ast.alias) and name in (node.name.rsplit(".", 1)[-1], node.asname):
+            return True
+        if isinstance(node, ast.Attribute) and node.attr == name:
+            return True
+        if isinstance(node, ast.Name) and node.id == name:
+            return True
+    return False
+
+
+def _reached(
+    start: ast.Module, trees: Mapping[str, ast.Module], modules: Mapping[str, str]
+) -> set[str]:
+    """The paths of every application module `start` imports, directly or through others."""
+    seen: set[str] = set()
+    pending = [m for m in _imported(start) if m in modules]
+    while pending:
+        module = pending.pop()
+        if module in seen:
+            continue
+        seen.add(module)
+        pending += [m for m in _imported(trees[modules[module]]) if m in modules]
+    return {modules[m] for m in seen}
+
+
+def system_read_problems(
+    files: Mapping[str, str], system_reads: frozenset[str] = SYSTEM_READS
+) -> list[str]:
+    """`path: reason` for a listed function that is missing, that may return a column of an
+    owned table, or that a module under `backend/app/api/` or `backend/app/auth/` reaches: by
+    naming it, or by importing, directly or through other modules, a module that names it."""
+    problems = []
+    trees = {
+        path: ast.parse(text)
+        for path, text in sorted(files.items())
+        if path.startswith("backend/app/") and path.endswith(".py")
+    }
+    modules = {_module_name(path): path for path in trees}
+    for entry in sorted(system_reads):
+        path, _, name = entry.partition(":")
+        if path not in trees:
+            continue
+        found = [f for f in _functions(trees[path]) if f.name == name]
+        if not found:
+            problems.append(f"{entry}: the listed function is not defined")
+            continue
+        tainted = _tainted(trees[path])
+        for function in found:
+            reason = _returned_columns(function, tainted)
+            if reason:
+                problems.append(f"{entry}: {reason}")
+        holders = {p for p, tree in trees.items() if p != path and _names_function(tree, name)}
+        for start, tree in trees.items():
+            if not start.startswith(LAYERS_THAT_MUST_NOT_REACH):
+                continue
+            if start in holders:
+                problems.append(f"{start}: names the system read {name}")
+                continue
+            through = sorted(_reached(tree, trees, modules) & holders)
+            if through:
+                problems.append(f"{start}: reaches the system read {name} through {through[0]}")
     return problems
 
 

@@ -53,6 +53,8 @@ export const messages = {
     searchRejected: "Wpisz krótszą frazę, najwyżej 254 znaki.",
     noMatchTitle: "Nie znaleziono klientów",
     noMatchExplanation: "Wpisz inną nazwę, miejscowość lub dane kontaktowe.",
+    owner: "Opiekun klienta",
+    allOwners: "Wszyscy handlowcy",
     listFailed: "Nie udało się wczytać listy klientów.",
     retry: "Spróbuj ponownie",
     newTitle: "Nowy klient",

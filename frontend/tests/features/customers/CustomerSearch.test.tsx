@@ -2,12 +2,12 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../../../src/App";
-import type { Problem, SessionInfo } from "../../../src/api/auth";
+import type { Problem } from "../../../src/api/auth";
 import type { CustomerList, ValidationProblem } from "../../../src/api/customers";
 import { pageNavigation } from "../../../src/api/navigation";
 import { mount } from "../../../src/mount";
 import { CUSTOMERS_URL, deferred } from "../../support/customers-http";
-import { SESSION_URL } from "../../support/http";
+import { type OlderSessionInfo, SESSION_URL } from "../../support/http";
 
 // K-07 (EKO-3-04): the search field is a convenience; the server decides what matches (K-01..K-04).
 // Synthetic values throughout (ADR-0005).
@@ -21,7 +21,7 @@ type ListSource = ListReply | (() => Promise<ListReply>);
 
 // Routed by the decoded `q` the request carries ("" when it carries none), so a test states the
 // term it expects without depending on how the SPA encodes it.
-function stubListApi(byTerm: Record<string, ListSource>, session?: SessionInfo) {
+function stubListApi(byTerm: Record<string, ListSource>, session?: OlderSessionInfo) {
   const lists: URL[] = [];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -238,8 +238,9 @@ describe("K-07: the Customers screen sends the search to the server and shows wh
   });
 
   it("no session is shown an owner selector, and the screen never sends an owner", async () => {
-    // The session read carries no roles (C-1, ADR-0003), so a rep, a manager and a rep+manager
-    // session are the same to the SPA; this one session stands for all three.
+    // This session read carries no `roles`, as from a backend before EKO-3-08, which the SPA reads
+    // as no roles (EKO-3-08 K-07 edge); a session holding `manager` is shown the selector instead
+    // (OwnerSelector.test.tsx).
     window.history.replaceState(null, "", "/klienci");
     const { lists } = stubListApi(
       { "": listOf("Kowal Agro"), kowal: listOf("Kowal Agro") },

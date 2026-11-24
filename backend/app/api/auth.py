@@ -22,7 +22,7 @@ from app.auth.gate import (
 )
 from app.auth.sessions import LoginRefused, Unavailable
 from app.data.sessions import StorageUnavailable
-from app.domain.caller import Caller
+from app.domain.caller import Caller, Role
 from app.domain.session_policy import ABSOLUTE_LIMIT, LOGIN_TRANSACTION_VALIDITY
 
 router = APIRouter(prefix="/auth", route_class=AccessFirstRoute)
@@ -40,10 +40,14 @@ class Redirect(BaseModel):
 
 
 class SessionInfo(BaseModel):
+    """The caller's own subject, name and application roles, all from the token verified for this
+    request: never from the display-name copy (ADR-0003-C37). The roles are a set, sent sorted."""
+
     model_config = ConfigDict(extra="forbid")
 
     subject: str
     name: str | None
+    roles: list[Role]
 
 
 class LoggedOut(BaseModel):
@@ -153,7 +157,7 @@ def login_callback(
     "/session", operation_id="session_read", response_model=SessionInfo, responses=_UNAUTHENTICATED
 )
 def session_read(caller: Annotated[Caller, Depends(current_caller)]) -> SessionInfo:
-    return SessionInfo(subject=caller.subject, name=caller.name)
+    return SessionInfo(subject=caller.subject, name=caller.name, roles=sorted(caller.roles))
 
 
 @router.post("/logout", operation_id="logout", response_model=LoggedOut, responses=_UNAUTHENTICATED)

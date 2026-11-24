@@ -100,10 +100,11 @@ export type ReadResult =
   | { kind: "notFound" }
   | { kind: "failed" };
 
-// The list operation's query parameters (EKO-3-04, Q-6): the list request's query string is built
-// from this type alone. The server's `owner` filter is not declared: the SPA never sends it (C-1).
+// The list operation's query parameters (EKO-3-04 Q-6, EKO-3-08): `listPath` sends exactly these
+// keys, each through its entry in `LIST_QUERY_VALUES`, which fails to compile if one is missing.
 export interface CustomerListQuery {
   q?: string;
+  owner?: string;
 }
 
 // "rejected": the server refused the query (422); its body is not read, so no value comes back.
@@ -264,13 +265,32 @@ export async function readCustomer(id: string): Promise<ReadResult> {
   return { kind: "failed" };
 }
 
-// The term goes into the request's query string only, never into the SPA's location (ADR-0005-C13);
-// a blank term is no term, so the request is the unfiltered list.
+// What each parameter sends, `null` leaving it out: a blank term is no term; the owner is an opaque
+// subject, sent byte-equal, and empty means every owner the caller may see.
+const LIST_QUERY_VALUES: {
+  [K in keyof Required<CustomerListQuery>]: (given: string) => string | null;
+} = {
+  q: (given) => {
+    const term = given.trim();
+    return term === "" ? null : term;
+  },
+  owner: (given) => (given === "" ? null : given),
+};
+
+function isListQueryName(name: string): name is keyof CustomerListQuery {
+  return name in LIST_QUERY_VALUES;
+}
+
+// The parameters go into the request's query string only, never into the SPA's location
+// (ADR-0005-C13); with none given the request is the unfiltered list.
 function listPath(query: CustomerListQuery): `/api/${string}` {
   const params = new URLSearchParams();
-  const term = query.q?.trim() ?? "";
-  if (term !== "") {
-    params.set("q", term);
+  for (const name of Object.keys(LIST_QUERY_VALUES).filter(isListQueryName)) {
+    const given = query[name];
+    const value = given === undefined ? null : LIST_QUERY_VALUES[name](given);
+    if (value !== null) {
+      params.set(name, value);
+    }
   }
   const search = params.toString();
   return search === "" ? "/api/customers" : `/api/customers?${search}`;

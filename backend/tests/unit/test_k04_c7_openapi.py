@@ -46,6 +46,7 @@ def test_k04_c23_api_prefix_holds_exactly_health_the_four_auth_routes_and_custom
         "/api/customers/{customer_id}",
         "/api/health",
         "/api/reference/voivodeships",
+        "/api/reps",
     ]
     # EKO-3-01 (decision H6-B A on Issue #195): the three customer operations.
     assert sorted(paths["/api/customers"]) == ["get", "post"]
@@ -53,3 +54,5 @@ def test_k04_c23_api_prefix_holds_exactly_health_the_four_auth_routes_and_custom
     assert sorted(paths["/api/health"]) == ["get", "head"]
     # EKO-3-02 (Q-3 A on Issue #208): the read-only voivodeship and county reference.
     assert sorted(paths["/api/reference/voivodeships"]) == ["get"]
+    # EKO-3-08 (G-4 A on Issue #216): the manager's list of reps.
+    assert sorted(paths["/api/reps"]) == ["get"]

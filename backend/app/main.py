@@ -30,6 +30,7 @@ from app.api.customers import LARGEST_CREATE_BODY
 from app.api.customers import router as customers_router
 from app.api.health import router as health_router
 from app.api.reference import router as reference_router
+from app.api.reps import router as reps_router
 from app.auth.crypto import Sealer
 from app.auth.gate import (
     AccessFirstRoute,
@@ -377,6 +378,7 @@ def create_app() -> FastAPI:
         app.include_router(auth_router, prefix="/api")
         app.include_router(customers_router, prefix="/api")
         app.include_router(reference_router, prefix="/api")
+        app.include_router(reps_router, prefix="/api")
         _check_access_first(app)
         if LARGEST_CREATE_BODY > REQUEST_BODY_LIMIT:
             raise RuntimeError("the request body limit refuses a valid customer")
