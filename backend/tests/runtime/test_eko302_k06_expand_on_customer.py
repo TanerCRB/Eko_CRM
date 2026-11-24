@@ -236,9 +236,12 @@ def test_k06_existing_customers_read_back_unchanged(expand_lab: Lab, step: str) 
 
     head_backend(lab)
     by_id_after = read(lab, session, seeded["id"]).json()
+    assert by_id_after.pop("archived") is False
     assert without_new_fields(by_id_after) == by_id_before.json()
     # The list is unchanged in shape and content (Out of scope: new fields in the list).
-    assert listed(lab, session).content == list_before.content
+    assert listed(lab, session).json() == {
+        "items": [{**item, "archived": False} for item in list_before.json()["items"]]
+    }
 
 
 def test_k06_previous_backend_on_expanded_schema(expand_lab: Lab, step: str) -> None:

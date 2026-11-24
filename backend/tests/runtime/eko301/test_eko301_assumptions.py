@@ -51,7 +51,11 @@ def test_a06_a_list_item_is_the_identifier_name_and_country_only(crm: Crm) -> No
         },
     )
     listed = rep.send("GET", CUSTOMERS).json()
-    assert listed == {"items": [{"id": customer_id, "name": "Gospodarstwo A06", "country": "PL"}]}
+    assert listed == {
+        "items": [
+            {"id": customer_id, "name": "Gospodarstwo A06", "country": "PL", "archived": False}
+        ]
+    }
 
 
 STRICT: dict[str, dict[str, Any]] = {

@@ -56,6 +56,7 @@ def protected_operations(app: FastAPI) -> list[tuple[str, str]]:
 # answer is the operation's own success and every other answer is the access dependency's.
 VALID_BODIES: dict[tuple[str, str], dict[str, Any]] = {
     ("POST", "/api/customers"): {"json": {"name": "Gospodarstwo Trasa"}},
+    ("PUT", "/api/customers/{customer_id}"): {"json": {"name": "Gospodarstwo Trasa"}},
 }
 CUSTOMER_PARAMETER = "{customer_id}"
 

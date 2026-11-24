@@ -44,13 +44,16 @@ def test_k04_c23_api_prefix_holds_exactly_health_the_four_auth_routes_and_custom
         "/api/auth/session",
         "/api/customers",
         "/api/customers/{customer_id}",
+        "/api/customers/{customer_id}/archive",
+        "/api/customers/{customer_id}/restore",
         "/api/health",
         "/api/reference/voivodeships",
         "/api/reps",
     ]
-    # EKO-3-01 (decision H6-B A on Issue #195): the three customer operations.
+    # EKO-3-01 (decision H6-B A on Issue #195): the three customer operations; EKO-3-05 (Q-5 on
+    # Issue #253) adds edit, archive and restore.
     assert sorted(paths["/api/customers"]) == ["get", "post"]
-    assert sorted(paths["/api/customers/{customer_id}"]) == ["get"]
+    assert sorted(paths["/api/customers/{customer_id}"]) == ["get", "put"]
     assert sorted(paths["/api/health"]) == ["get", "head"]
     # EKO-3-02 (Q-3 A on Issue #208): the read-only voivodeship and county reference.
     assert sorted(paths["/api/reference/voivodeships"]) == ["get"]

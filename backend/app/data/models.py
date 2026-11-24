@@ -121,6 +121,9 @@ class CustomerRow(Base):
     nip: Mapped[str | None] = mapped_column(Text(collation="C"))
     # Any other customer's tax identifier as entered, trimmed and NFC.
     foreign_tax_id: Mapped[str | None] = mapped_column(Text)
+    # Revision 0007 (EKO-3-05, Q-4 B): when the customer was archived, NULL while it is active;
+    # PD-C4. Set only from the application's clock, never by a column default (ADR-0002-C13).
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class CustomerContactRow(Base):

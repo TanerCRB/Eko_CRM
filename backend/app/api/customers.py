@@ -1,13 +1,16 @@
 """Customers: create, read by identifier, plain list (EKO-3-01; CUS-1, CUS-2, CUS-8, C-1 A to
-C-3 A, Q-L A, Q-O A), with the address and tax identifier of EKO-3-02 (CUS-3 to CUS-5), and the
-list's search `q` and owner filter `owner` (EKO-3-04; ACC-4, PRH-4, ACC-8).
+C-3 A, Q-L A, Q-O A), with the address and tax identifier of EKO-3-02 (CUS-3 to CUS-5), the
+list's search `q` and owner filter `owner` (EKO-3-04; ACC-4, PRH-4, ACC-8), and edit, archive,
+restore and the list's `state` filter (EKO-3-05; CUS-9, ACC-5; gate-1 decision D-1).
 
 The handlers pass the caller value inward and decide nothing about ownership (ADR-0003 addendum
 of EKO-3-01, section 2). The request models hold the value rules of `app.domain.customers`, so a
-rejected request is answered 422 before any service runs and nothing is stored. A customer
+rejected request is answered 422 before any service runs and nothing is stored; an edit is
+judged by the create request model itself, on the body alone (EKO-3-05 Q-5, G-6 A). A customer
 outside the caller's scope is answered exactly as one that exists nowhere: 404 `not found`. No
-response names the owner (Q-O A). Every response here carries `Cache-Control: no-store`, set for
-all of `/api/` in `main.py` (ADR-0005-C12); path parameters are UUIDs only (ADR-0005-C13).
+response names the owner (Q-O A) or the archived instant (Q-4 B). Every response here carries
+`Cache-Control: no-store`, set for all of `/api/` in `main.py` (ADR-0005-C12); path parameters
+are UUIDs only (ADR-0005-C13).
 """
 
 import re
@@ -33,8 +36,9 @@ from pydantic import (
 from pydantic_core import ErrorDetails, InitErrorDetails
 
 from app.api.auth import Problem
-from app.api.dependencies import get_database
+from app.api.dependencies import get_clock, get_database
 from app.auth.gate import AccessFirstRoute, current_caller
+from app.core.clock import Clock
 from app.data.customers import CustomerStore
 from app.data.database import Database
 from app.domain import customers as rules
@@ -47,6 +51,7 @@ from app.domain.customers import (
     CustomerDraft,
     CustomerSearch,
     CustomerSummary,
+    StateFilter,
     TaxId,
 )
 from app.domain.ownership import owner_filter
@@ -129,7 +134,9 @@ def _judged(info: ValidationInfo, *fields: str) -> bool:
 
 
 class CustomerCreate(RequestModel):
-    """A new customer. The owner is never part of the request: an unknown field is a 422.
+    """A new customer, or the whole of an edited one (EKO-3-05 Q-5: the edit's request model is
+    this one, so an edit is judged exactly as a create). The owner is never part of the request:
+    an unknown field is a 422.
 
     The address and the tax ID are optional; omitted, `null`, `""` or whitespace only is not
     given (G-2 A). The country decides their rules (C-3 A); `tax_id` is a NIP for Poland and
@@ -262,7 +269,8 @@ class ContactOut(BaseModel):
 
 class CustomerOut(BaseModel):
     """The customer as stored; every address part and the tax ID is `null` when not given. The
-    tax ID is the Polish customer's canonical NIP or the foreign customer's text."""
+    tax ID is the Polish customer's canonical NIP or the foreign customer's text. `archived` is
+    the stored state (EKO-3-05); the instant of archiving is never answered (Q-4 B)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -276,6 +284,7 @@ class CustomerOut(BaseModel):
     county: str | None
     tax_id: str | None
     contacts: list[ContactOut]
+    archived: bool
 
     @classmethod
     def of(cls, customer: Customer) -> "CustomerOut":
@@ -294,19 +303,28 @@ class CustomerOut(BaseModel):
                 ContactOut(kind=c.kind.value, value=c.value, note=c.note, primary=c.primary)
                 for c in customer.contacts
             ],
+            archived=customer.archived,
         )
 
 
 class CustomerItem(BaseModel):
+    """A listed customer; `archived` is its stored state, never the state the list asked for."""
+
     model_config = ConfigDict(extra="forbid")
 
     id: UUID
     name: str
     country: str
+    archived: bool
 
     @classmethod
     def of(cls, customer: CustomerSummary) -> "CustomerItem":
-        return cls(id=customer.id, name=customer.name, country=customer.country)
+        return cls(
+            id=customer.id,
+            name=customer.name,
+            country=customer.country,
+            archived=customer.archived,
+        )
 
 
 class CustomerList(BaseModel):
@@ -331,8 +349,9 @@ def customer_store(database: Annotated[Database, Depends(get_database)]) -> Cust
 
 Store = Annotated[CustomerStore, Depends(customer_store)]
 CurrentCaller = Annotated[Caller, Depends(current_caller)]
+CurrentClock = Annotated[Clock, Depends(get_clock)]
 
-LIST_PARAMETERS = ("q", "owner")
+LIST_PARAMETERS = ("q", "owner", "state")
 
 
 def _undecodable(query_string: bytes) -> set[str]:
@@ -351,11 +370,11 @@ def _undecodable(query_string: bytes) -> set[str]:
     return found
 
 
-def _query_value(
-    name: str, rule: Callable[[str], str | None], raw: str, errors: list[dict[str, Any]]
-) -> str | None:
+def _query_value[T](
+    name: str, rule: Callable[[str], T], raw: str, errors: list[dict[str, Any]]
+) -> T | None:
     try:
-        judged: str | None = rule(raw)
+        judged: T = rule(raw)
     except ValueError as exc:
         # A fixed message: the value itself is never repeated (ADR-0005).
         errors.append(
@@ -379,9 +398,18 @@ def customer_search(
         str,
         Query(description="An owner subject; it narrows the caller's visible customers only."),
     ] = "",
+    state: Annotated[
+        str,
+        Query(
+            description="Which customers by state: active (empty or absent), archived or both.",
+            # Empty is accepted and means active, so it is listed with the closed set.
+            json_schema_extra={"enum": ["", *(s.value for s in StateFilter)]},
+        ),
+    ] = "",
 ) -> CustomerSearch:
     """The list's query parameters, judged before any service runs; a refusal is a 422 naming
-    the parameter and repeating no value (ADR-0005). Empty is not given (G-5 A)."""
+    the parameter and repeating no value (ADR-0005). Empty is not given (G-5 A); for `state`,
+    not given is active (EKO-3-05 G-2 A)."""
     errors: list[dict[str, Any]] = []
     undecodable = _undecodable(request.scope.get("query_string", b""))
     for name in sorted(undecodable, key=LIST_PARAMETERS.index):
@@ -391,9 +419,12 @@ def customer_search(
         )  # fmt: skip
     term = None if "q" in undecodable else _query_value("q", rules.search_term, q, errors)
     subject = None if "owner" in undecodable else _query_value("owner", owner_filter, owner, errors)
-    if errors:
+    selected = (
+        None if "state" in undecodable else _query_value("state", rules.state_filter, state, errors)
+    )
+    if errors or selected is None:
         raise RequestValidationError(errors)
-    return CustomerSearch(term=term, owner=subject)
+    return CustomerSearch(term=term, owner=subject, state=selected)
 
 
 Search = Annotated[CustomerSearch, Depends(customer_search)]
@@ -429,3 +460,39 @@ def list_customers(caller: CurrentCaller, store: Store, search: Search) -> Custo
 )
 def read_customer(customer_id: UUID, caller: CurrentCaller, store: Store) -> CustomerOut:
     return CustomerOut.of(service.read_customer(store, caller, customer_id))
+
+
+@router.put(
+    "/{customer_id}",
+    operation_id="customer_edit",
+    response_model=CustomerOut,
+    # 409: the customer is archived and is restored first (G-4 A, D-2 S-2 A).
+    responses={**_REFUSALS, 404: {"model": Problem}, 409: {"model": Problem}},
+)
+def edit_customer(
+    customer_id: UUID, body: CustomerCreate, caller: CurrentCaller, store: Store
+) -> CustomerOut:
+    """The whole customer as the body states it (G-6 A); its contacts are replaced (G-5 A)."""
+    return CustomerOut.of(service.edit_customer(store, caller, customer_id, body.draft()))
+
+
+@router.post(
+    "/{customer_id}/archive",
+    operation_id="customer_archive",
+    response_model=CustomerOut,
+    responses={**_REFUSALS, 404: {"model": Problem}},
+)
+def archive_customer(
+    customer_id: UUID, caller: CurrentCaller, store: Store, clock: CurrentClock
+) -> CustomerOut:
+    return CustomerOut.of(service.archive_customer(store, caller, customer_id, clock))
+
+
+@router.post(
+    "/{customer_id}/restore",
+    operation_id="customer_restore",
+    response_model=CustomerOut,
+    responses={**_REFUSALS, 404: {"model": Problem}},
+)
+def restore_customer(customer_id: UUID, caller: CurrentCaller, store: Store) -> CustomerOut:
+    return CustomerOut.of(service.restore_customer(store, caller, customer_id))

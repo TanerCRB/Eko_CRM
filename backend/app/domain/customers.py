@@ -9,8 +9,8 @@ a fixed message that never repeats the value (ADR-0005: no personal data in a me
 import re
 import unicodedata
 from collections.abc import Sequence
-from dataclasses import dataclass
-from enum import StrEnum
+from dataclasses import dataclass, field
+from enum import Enum, StrEnum
 from uuid import UUID
 
 from app.domain import regions
@@ -86,6 +86,29 @@ class ContactKind(StrEnum):
 class CustomerNotFound(Exception):
     """No customer with this identifier is visible to the caller: missing and not visible are
     the same answer (ADR-0003 addendum of EKO-3-01, section 3)."""
+
+
+class CustomerArchived(Exception):
+    """An archived customer inside the caller's scope is not edited; it is restored first
+    (EKO-3-05 G-4 A). Raised only after the scope selected the customer, never for one outside
+    it (ADR-0003 addendum draft of EKO-3-05, scope before state)."""
+
+
+class Unchanged(Enum):
+    """Why a change by identifier changed nothing: the customer is outside the caller's scope or
+    exists nowhere, or it is archived and the change needs an active customer."""
+
+    MISSING = "missing"
+    ARCHIVED = "archived"
+
+
+class StateFilter(StrEnum):
+    """The list's state filter (EKO-3-05 Q-5): a closed set compared byte-wise; it selects
+    records within the scope and is never part of it (Q-2 A)."""
+
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+    BOTH = "both"
 
 
 def _text(raw: str) -> str:
@@ -250,6 +273,16 @@ def search_term(raw: str) -> str | None:
     return _bounded(raw, SEARCH_LIMIT)
 
 
+def state_filter(raw: str) -> StateFilter:
+    """Exactly one of the closed set, no trimming or case folding; `""` is not given, which is
+    active (EKO-3-05 Q-5, G-2 A). The message names the set, never the value sent."""
+    if raw == "":
+        return StateFilter.ACTIVE
+    if raw not in {state.value for state in StateFilter}:
+        raise ValueError("not a customer state: active, archived or both")
+    return StateFilter(raw)
+
+
 def contact_value(kind: ContactKind, raw: str) -> str:
     if kind is ContactKind.PHONE:
         return phone_number(raw)
@@ -324,16 +357,20 @@ class Customer:
     contacts: tuple[Contact, ...]
     address: Address = Address()
     tax_id: TaxId = TaxId()
+    # The stored state, never derived from a request (EKO-3-05 K-05 M-s2); no default, so every
+    # reader of the row states it.
+    archived: bool = field(kw_only=True)
 
 
 @dataclass(frozen=True)
 class CustomerSearch:
-    """What a list request narrows the caller's scope by: a search term and an owner subject,
-    each already judged, `None` when not given. It selects records within the scope and never
-    replaces it (ADR-0003 addendum of EKO-3-04)."""
+    """What a list request narrows the caller's scope by: a search term, an owner subject and a
+    state, each already judged; term and owner `None` when not given, the state active. It
+    selects records within the scope and never replaces it (ADR-0003 addendum of EKO-3-04)."""
 
     term: str | None = None
     owner: str | None = None
+    state: StateFilter = StateFilter.ACTIVE
 
 
 @dataclass(frozen=True)
@@ -341,3 +378,4 @@ class CustomerSummary:
     id: UUID
     name: str
     country: str
+    archived: bool

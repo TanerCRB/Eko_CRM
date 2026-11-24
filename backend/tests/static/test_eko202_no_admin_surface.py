@@ -61,7 +61,14 @@ def test_k06_the_only_changing_operations_are_logout_and_customer_create() -> No
         if method in CHANGING
     }
     # EKO-3-01 adds customer creation (decision H6-B A on Issue #195); it creates no account.
-    assert changing == {"POST /api/auth/logout", "POST /api/customers"}
+    # EKO-3-05 adds customer edit, archive and restore (Q-5 on Issue #253).
+    assert changing == {
+        "POST /api/auth/logout",
+        "POST /api/customers",
+        "PUT /api/customers/{customer_id}",
+        "POST /api/customers/{customer_id}/archive",
+        "POST /api/customers/{customer_id}/restore",
+    }
 
 
 def test_k06_no_application_source_calls_keycloak_admin_api() -> None:
