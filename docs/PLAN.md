@@ -788,6 +788,20 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   Follow-ups: EKO-3-03 (the unique constraint, CUS-6 and the contract step), #161 (frontend API types, now
   including `reference.ts`), #219 (the `eko131` static tests flaky on a Windows host).
 
+- [ ] **EKO-3-03** — Block a second customer with an existing NIP (#252).
+  *Done when:* server tests prove: a second customer whose Polish NIP equals an existing one after the
+  EKO-3-02 normalisation is refused company-wide and the refused request stores nothing (CUS-6); a rep gets
+  a byte-equal answer whether the existing customer is theirs or another rep's, carrying the CUS-6 sentence
+  and nothing about that customer (PRH-4); a manager gets the same status plus a reference that opens
+  through the manager's scope; two concurrent creates leave one customer and the loser gets the refusal,
+  not a 503; the unique constraint on `nip` exists after a contract migration, NULL `nip` and equal
+  `foreign_tax_id` stay allowed (ADR-0002-C9); the NIP is in neither the backend nor the PostgreSQL log
+  (ADR-0005-C3); create, by-id read and list behave as before. The SPA create form shows the refusal.
+  **Out of scope (explicit):** duplicate warnings (CUS-7, split off at gate 1); NIP edit (until customer
+  edit exists); `foreign_tax_id` uniqueness; archived-NIP reservation (EKO-3-05); merge or take-over flows;
+  a pre-save NIP lookup; real data.
+  After EKO-3-02.
+
 - [x] **EKO-3-04** — Let users find customers in a list (#215).
   *Done when:* server tests prove: one text query matches a customer's name, town or contact value
   case-insensitively; a rep's search never returns another rep's customer (by name, town or contact), the
