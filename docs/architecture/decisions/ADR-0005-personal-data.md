@@ -1536,3 +1536,44 @@ Every other rule and control of this decision is unchanged.
 
 **Why.** G-3 A adds a credential that PD-S1, the never-list and the off-server rules do not name.
 Naming it closes the gap without changing any holder, retention or stored event type.
+
+### 2026-11-22 — The display-name copy: items of PD-S3, the records that keep it, and the count of its 180 days
+
+**Status:** Accepted 2026-11-22 (gate 1 of EKO-3-08, Issue #216).
+
+**What it adds.** From this date:
+
+- **PD-S3** also holds, as part of the display-name copy, whether the token of the subject's last
+  login held `rep`, and the instant of that login.
+- **Referring records.** A record refers to a subject when a column of the reference set holds
+  it. At this date the set is exactly `customer.owner_subject`. Sessions and login transactions
+  are not referring records. A column holding a staff subject is named with the suffix
+  `_subject`, and the task that adds one adds it to the set in the same release and names it at
+  its gate 1.
+- **The 180 days** of *Retention* for the copy are 180 × 24 hours after the last-login instant,
+  between UTC instants of the injected clock; "no later than" includes the bound, and the
+  interval between runs counts within it.
+- **"Deleted together with the last such record"** is forwarded to the first task that deletes a
+  referring record or changes the subject a column of the set holds (EKO-3-07, reassignment, or
+  the permanent-erasure feature). That task's gate 1 decides whether a copy losing its last
+  reference is deleted at once or falls under the 180-day bound. Until then ADR-0005-C9's first
+  clause is not tested.
+- The retention run writes counts only, never a subject or a name.
+
+**New control ADR-0005-C21.** This adds items and rules and restates none, so it is not a
+deviation. Every other rule and control of this decision is unchanged. The draft and the merged
+code of EKO-3-08 name this control ADR-0005-C20; that identifier was already taken by the addendum
+of 2026-11-12, so the human assigned ADR-0005-C21 at gate 3 of EKO-3-08 (2026-11-24). Renaming the
+references in code and tests is #249.
+
+**Why.** *Classifying columns* has each new column named against an item of this decision, and
+the copy needs two items PD-S3 did not list. A referring column the retention does not know
+would delete an author's name while records still show that author. Approved by the human at
+gate 1 of EKO-3-08 on 2026-11-22 (Issue #216); the text is that of
+[`EKO-3-08-staff-display-name-copy-adr0003-adr0005-addendum-draft-2026-11-22.md`](EKO-3-08-staff-display-name-copy-adr0003-adr0005-addendum-draft-2026-11-22.md).
+
+**ADR-0005-C21.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0005-C21 | Every column in the application schema whose name ends in `_subject` is in the retention's reference set held in the code, and the set equals the list held in the test; a fixture column with that suffix outside the set fails; a copy whose subject only one column of the set holds is kept past 180 days after the last login, for each column of the set. |

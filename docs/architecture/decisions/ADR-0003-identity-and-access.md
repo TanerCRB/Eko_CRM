@@ -1204,3 +1204,51 @@ accepted control is a declared deviation. It follows the precedent of the addend
 |---|---|
 | ADR-0003-C36 | Under `backend/app/`, an `OwnedBy` or `AllRecords` value is constructed only in `backend/app/domain/ownership.py`; a fixture module elsewhere under `backend/app/` that constructs either fails the check. |
 | ADR-0003-C33 (restated) | As in the addendum text above: the unfiltered list as before; a searched or filtered list answers only records of the caller's scope that the search or filter selects, and a rep's answer to a search or filter that selects only another owner's records equals its answer to one that selects nothing (status, body, and headers other than `Eko-Correlation-Id`). |
+
+### 2026-11-22 — The staff display-name copy: its items, written at login, never an authority; the retention sweep's reference read; ADR-0003-C35 restated
+
+**Status:** Accepted 2026-11-22, as a declared deviation (gate 1 of EKO-3-08, Issue #216).
+
+**What it adds.** *Staff personal data* names the display-name copy but not what else it holds
+or what it may decide. From this date:
+
+- The Application row of *Staff personal data* reads, for the copy: the subject identifier; the
+  display name, the verified access token's `name` claim or none, in NFC; whether that login's
+  token held `rep`; the instant of that login. Nothing else of the token is kept in it.
+- The copy is written only by the login callback, after every check of *Browser flow* has passed,
+  in the same database transaction as the new session; a refused callback writes nothing and a
+  token refresh does not write it. One subject has one copy; a later login replaces its items.
+- The copy is never an authority. No caller value is built from it, and no role check,
+  visibility scope, ownership decision or access answer reads it. Every operation decides from
+  the token verified for that request. Its role item only selects the entries of the
+  manager-only list of reps.
+- The copy table is not an owned table.
+
+**What it restates.** The addendum of 2026-11-17, *Where it is enforced*: "Every `data` function
+that reads or changes rows of an owned table takes that scope as a required argument with no
+default" reads: "... with no default, except a function on the closed system-read list. A
+function on that list reads an owned table only to test whether a row refers to a subject,
+returns no column of an owned table, and is reached from no module under `backend/app/api/` or
+`backend/app/auth/`. At this date the list holds only the deletion of display-name copies that no
+referring record keeps (ADR-0005 addendum of the same date). Adding a function to it is a gate-1
+decision of the task that adds it, on the Architect's impact map." `OwnedBy` and `AllRecords`
+stay built only from a caller value. ADR-0003-C35 is restated (table below).
+
+**New control ADR-0003-C37.** Every other rule and control of this decision is unchanged; the
+session-exempt, role-free and non-CRM lists are unchanged.
+
+**Why.** The 180-day rule needs the last-login instant and the list of reps needs the `rep`
+role of the last login, and neither was in the inventory. A stored role that some later code
+read as a caller's role would let a database row grant a right the identity server withdrew.
+The retention run has no caller, so it cannot hold a scope, and making one for it would make
+"all records" obtainable without a caller. Restating an accepted rule and control is a declared
+deviation, following the addenda of 2026-10-28 (C4) and 2026-11-20 (C33). Approved by the human
+at gate 1 of EKO-3-08 on 2026-11-22 (Issue #216); the text is that of
+[`EKO-3-08-staff-display-name-copy-adr0003-adr0005-addendum-draft-2026-11-22.md`](EKO-3-08-staff-display-name-copy-adr0003-adr0005-addendum-draft-2026-11-22.md).
+
+**ADR-0003-C35 restated and ADR-0003-C37.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0003-C35 (restated) | Every function under `backend/app/data/` that reads or changes rows of an owned table takes a visibility scope as a required parameter with no default, or is on the closed system-read list held in the check; the list in the check equals the list held in the test; a fixture function on an owned table with neither fails, a listed function that returns a column of an owned table fails, and a listed function imported by a module under `backend/app/api/` or `backend/app/auth/` fails; no module outside `backend/app/data/` refers to an owned table. |
+| ADR-0003-C37 | After `alembic upgrade head` the copy table has exactly the columns of the subject, the display name, the `rep` item and the last-login instant; a refused login callback leaves it unchanged; a copy rewritten in the database to the opposite `rep` item, or to any role, changes no answer of any operation for that subject, its session read included. |
