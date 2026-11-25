@@ -248,12 +248,26 @@ NIP_CONSTRAINT = (
 
 
 def previous_tree(directory: Path) -> Path:
-    """This backend as of revision 0006: the same files with revision 0007's left out, so its
-    `migrate` brings a database to 0006 exactly as the code before this task did."""
+    """This backend as of revision 0006: the same files with revision 0007's and every later
+    one's left out, so its `migrate` brings a database to 0006 exactly as the code before this
+    task did."""
     target = directory / "backend-0006"
     if target.exists():
         return target
-    skipped = shutil.ignore_patterns("__pycache__", f"{REVISION}_*")
+    skipped = shutil.ignore_patterns("__pycache__", f"{REVISION}_*", "000[89]_*", "00[1-9][0-9]_*")
+    shutil.copytree(BACKEND / "app", target / "app", ignore=skipped)
+    shutil.copytree(BACKEND / "migrations", target / "migrations", ignore=skipped)
+    shutil.copy2(BACKEND / "alembic.ini", target / "alembic.ini")
+    return target
+
+
+def tree_as_of_0007(directory: Path) -> Path:
+    """This backend as of revision 0007: the same files with every revision after 0007 left out,
+    so its `migrate` brings a database to 0007 and no further (revision 0008: EKO-3-06)."""
+    target = directory / "backend-0007"
+    if target.exists():
+        return target
+    skipped = shutil.ignore_patterns("__pycache__", "000[89]_*", "00[1-9][0-9]_*")
     shutil.copytree(BACKEND / "app", target / "app", ignore=skipped)
     shutil.copytree(BACKEND / "migrations", target / "migrations", ignore=skipped)
     shutil.copy2(BACKEND / "alembic.ini", target / "alembic.ini")

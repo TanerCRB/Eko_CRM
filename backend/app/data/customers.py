@@ -32,6 +32,7 @@ from sqlalchemy import (
     select,
     true,
 )
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.data.database import Database
@@ -102,6 +103,47 @@ def _is_nip_taken(error: IntegrityError) -> bool:
     )
 
 
+def _row(customer_id: uuid.UUID, scope: OwnedBy, draft: CustomerDraft) -> dict[str, object]:
+    """The customer's own columns for a new row owned by the scope's subject."""
+    return {
+        "id": customer_id,
+        "name": draft.name,
+        "country": draft.country,
+        "owner_subject": scope.subject,
+        "street": draft.address.street,
+        "postal_code": draft.address.postal_code,
+        "town": draft.address.town,
+        "voivodeship": draft.address.voivodeship,
+        "county": draft.address.county,
+        "nip": draft.tax_id.nip,
+        "foreign_tax_id": draft.tax_id.foreign,
+    }
+
+
+def _insert_contacts(
+    connection: Connection, scope: OwnedBy, customer_id: uuid.UUID, draft: CustomerDraft
+) -> None:
+    """The draft's contacts in the order given, in the transaction that just wrote their customer
+    under `scope` (ADR-0003-C35: a contact is reached only through its customer)."""
+    if not draft.contacts:
+        return
+    connection.execute(
+        insert(CustomerContactRow),
+        [
+            {
+                "id": new_identifier(),
+                "customer_id": customer_id,
+                "position": position,
+                "kind": contact.kind.value,
+                "value": contact.value,
+                "note": contact.note,
+                "is_primary": contact.primary,
+            }
+            for position, contact in enumerate(draft.contacts)
+        ],
+    )
+
+
 class CustomerStore:
     def __init__(self, database: Database) -> None:
         self._engine = database.engine
@@ -121,46 +163,45 @@ class CustomerStore:
         customer_id = new_identifier()
         with self._connection() as connection:
             try:
-                connection.execute(
-                    insert(CustomerRow).values(
-                        id=customer_id,
-                        name=draft.name,
-                        country=draft.country,
-                        owner_subject=scope.subject,
-                        street=draft.address.street,
-                        postal_code=draft.address.postal_code,
-                        town=draft.address.town,
-                        voivodeship=draft.address.voivodeship,
-                        county=draft.address.county,
-                        nip=draft.tax_id.nip,
-                        foreign_tax_id=draft.tax_id.foreign,
-                    )
-                )
+                connection.execute(insert(CustomerRow).values(_row(customer_id, scope, draft)))
             except IntegrityError as error:
                 if _is_nip_taken(error):
                     # Leaving the block rolls the transaction back: nothing of this create stays.
                     raise NipTaken from None
                 raise
-            if draft.contacts:
-                connection.execute(
-                    insert(CustomerContactRow),
-                    [
-                        {
-                            "id": new_identifier(),
-                            "customer_id": customer_id,
-                            "position": position,
-                            "kind": contact.kind.value,
-                            "value": contact.value,
-                            "note": contact.note,
-                            "is_primary": contact.primary,
-                        }
-                        for position, contact in enumerate(draft.contacts)
-                    ],
-                )
+            _insert_contacts(connection, scope, customer_id, draft)
             connection.commit()
         return Customer(
             customer_id, draft.name, draft.country, draft.contacts, draft.address, draft.tax_id
         )
+
+    def load(self, scope: OwnedBy, dataset_key: str, draft: CustomerDraft) -> bool:
+        """A record of the operator seed's dataset, as `create` stores it plus its dataset key;
+        False, with nothing written, when a customer with that key is already stored.
+
+        The key's unique index decides in the insert itself, never a read before it, so a
+        record already loaded is skipped whoever owns it (EKO-3-06 A-2 A, G-5 A). A NIP another
+        customer holds is `NipTaken`, as for `create`; the holder is never looked up.
+        """
+        customer_id = new_identifier()
+        statement = (
+            postgresql.insert(CustomerRow)
+            .values({**_row(customer_id, scope, draft), "dataset_key": dataset_key})
+            .on_conflict_do_nothing(index_elements=[CustomerRow.dataset_key])
+            .returning(CustomerRow.id)
+        )
+        with self._connection() as connection:
+            try:
+                added = connection.execute(statement).scalar_one_or_none()
+            except IntegrityError as error:
+                if _is_nip_taken(error):
+                    raise NipTaken from None
+                raise
+            if added is None:
+                return False
+            _insert_contacts(connection, scope, customer_id, draft)
+            connection.commit()
+        return True
 
     def find_by_nip(self, scope: VisibilityScope, nip: str) -> uuid.UUID | None:
         """The identifier, and nothing else, of the customer in the scope holding `nip`. Read

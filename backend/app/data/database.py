@@ -40,6 +40,9 @@ def create_app_engine(settings: Settings) -> Engine:
         # ADR-0002 addendum of 2026-11-02 (G-6 A): the total wait for one checkout.
         pool_timeout=POOL_TIMEOUT_SECONDS,
         pool_pre_ping=True,
+        # Statement parameters are customer values (ADR-0005): never in a log line or a
+        # driver error's text, whatever level a logger is set to.
+        hide_parameters=True,
         connect_args=connect_args(settings),
     )
 

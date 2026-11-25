@@ -162,3 +162,19 @@ def load_settings[T: BaseSettings](cls: type[T]) -> T:
             "configuration error: missing, empty or invalid environment variable(s): "
             + ", ".join(names)
         ) from None
+
+
+# The synthetic-only declaration (ADR-0005 addendum of EKO-3-06, C22): one environment variable of
+# `worker`, not a secret, and declared only by this exact value, never by a boolean word.
+SYNTHETIC_DATA_DECLARATION = "APP_SYNTHETIC_DATA_ONLY"
+SYNTHETIC_DATA_DECLARED = "declared"
+
+
+class SeedSettings(Settings):
+    """The operator seed only, a one-off of `worker` (ADR-0004 addendum of EKO-3-06)."""
+
+    # A plain string: absent, empty, whitespace or any other value is "not declared".
+    app_synthetic_data_only: str = ""
+
+    def declares_synthetic_data_only(self) -> bool:
+        return self.app_synthetic_data_only == SYNTHETIC_DATA_DECLARED

@@ -19,7 +19,7 @@ from collections.abc import Iterator
 import pytest
 
 from tests.runtime.conftest import Started
-from tests.runtime.lab import Lab, PsqlSession, docker
+from tests.runtime.lab import SHIPPED_HEAD, Lab, PsqlSession, docker
 from tests.runtime.test_eko302_k06_expand_on_customer import (
     SEEDED,
     created,
@@ -123,7 +123,7 @@ def test_k05_the_previous_release_creates_and_reads_customers_on_0007(
 
     code, logs = lab.run_migrate()
     assert code == 0, logs
-    assert lab.versions() == [REVISION]
+    assert lab.versions() == [SHIPPED_HEAD]
     assert lab.sql(NIP_CONSTRAINT) == [["UNIQUE (nip)"]]
     assert lab.composition.inspect("backend")["Config"]["Image"] == step
 

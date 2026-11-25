@@ -23,6 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.data.base import Base
 
 NIP_UNIQUE = "uq_customer_nip"
+DATASET_KEY_UNIQUE = "uq_customer_dataset_key"
 
 
 class SchemaRevisionLineage(Base):
@@ -105,6 +106,8 @@ class CustomerRow(Base):
         # Company-wide, NULLs distinct; revision 0007 (EKO-3-03). `app.data.customers` tells its
         # violation apart by this name.
         UniqueConstraint("nip", name=NIP_UNIQUE),
+        # Revision 0008 (EKO-3-06): decides in the seed's insert whether a record is loaded.
+        Index(DATASET_KEY_UNIQUE, "dataset_key", unique=True),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
@@ -125,6 +128,9 @@ class CustomerRow(Base):
     nip: Mapped[str | None] = mapped_column(Text(collation="C"))
     # Any other customer's tax identifier as entered, trimmed and NFC.
     foreign_tax_id: Mapped[str | None] = mapped_column(Text)
+    # Revision 0008 (EKO-3-06): a seeded record's key in the committed dataset, written only by
+    # the operator seed; NULL for every customer a request creates. Not personal data.
+    dataset_key: Mapped[str | None] = mapped_column(Text(collation="C"))
 
 
 class CustomerContactRow(Base):

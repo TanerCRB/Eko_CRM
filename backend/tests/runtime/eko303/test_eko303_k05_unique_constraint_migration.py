@@ -5,7 +5,8 @@ violation while NULLs and equal foreign tax IDs stay allowed; and over stored du
 revision refuses the run naming only their count, changing nothing.
 
 Each migration case has a database of its own on the test's server, brought to 0006 by this tree
-with revision 0007's file left out, then migrated by this tree as `migrate` runs. The previous
+with revision 0007's file left out, then migrated by this tree as `migrate` runs; a run that
+succeeds uses this tree as of 0007, with every later revision left out. The previous
 release on the new head is `tests/runtime/test_eko303_k05_previous_release_on_0007.py`.
 """
 
@@ -32,6 +33,7 @@ from tests.runtime.eko303.conftest import (
     refused_count,
     rows_of,
     run_migrate,
+    tree_as_of_0007,
     versions,
 )
 from tests.support import eko302_nip as nips
@@ -131,7 +133,7 @@ def test_k05_the_schema_diff_from_0006_is_one_unique_constraint_on_nip(
 ) -> None:
     at_previous(pg, DATABASE, tmp_path)
     before = schema(pg, DATABASE)
-    code, output = run_migrate(pg, DATABASE)
+    code, output = run_migrate(pg, DATABASE, tree_as_of_0007(tmp_path))
     assert code == 0, output[-2000:]
     after = schema(pg, DATABASE)
     assert after - before == Counter(
@@ -191,7 +193,7 @@ def test_k05_contrast_distinct_nips_nulls_and_equal_foreign_tax_ids_reach_the_ne
         ("PL", None, None), ("DE", None, "DE123456789"), ("DE", None, "DE123456789"),
     )  # fmt: skip
     before = rows_of(pg, DATABASE, ROWS)
-    code, output = run_migrate(pg, DATABASE)
+    code, output = run_migrate(pg, DATABASE, tree_as_of_0007(tmp_path))
     assert code == 0, output[-2000:]
     assert refused_count(output) is None
     assert versions(pg, DATABASE) == [REVISION]
@@ -201,7 +203,7 @@ def test_k05_contrast_distinct_nips_nulls_and_equal_foreign_tax_ids_reach_the_ne
 
 def test_k05_an_empty_customer_table_migrates(pg: Postgres, tmp_path: Path) -> None:
     at_previous(pg, DATABASE, tmp_path)
-    code, output = run_migrate(pg, DATABASE)
+    code, output = run_migrate(pg, DATABASE, tree_as_of_0007(tmp_path))
     assert code == 0, output[-2000:]
     assert versions(pg, DATABASE) == [REVISION]
     assert constraint(pg, DATABASE) == [("u", "UNIQUE (nip)", False)]

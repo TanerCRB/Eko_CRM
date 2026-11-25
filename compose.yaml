@@ -138,6 +138,13 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
       APP_DB_POOL_SIZE: "2"
       APP_DB_MAX_OVERFLOW: "0"
+      # The synthetic-only declaration (ADR-0005 addendum, EKO-3-06): not a secret, and never
+      # set by this file. Unset or empty means "not declared"; only the one exact value the
+      # backend accepts declares the environment, and the operator seed refuses any other state
+      # before it writes. A shared environment adds it to its environment file only after the
+      # human's dated ADR-0005-C16 statement exists, and removes it when that is withdrawn.
+      # Only worker gets it: the seed runs as a one-off of this service (ADR-0004-C37).
+      APP_SYNTHETIC_DATA_ONLY: ${APP_SYNTHETIC_DATA_ONLY:-}
     restart: unless-stopped
 
   keycloak:
