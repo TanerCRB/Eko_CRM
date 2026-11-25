@@ -907,6 +907,19 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   above). Follow-ups: #216 (the manager owner selector and the comment fix), EKO-3-05 (the
   active/archived filter).
 
+- [ ] **EKO-3-06** — Provide a seed script with synthetic customers (#258).
+  *Done when:* server tests prove: an operator script loads a synthetic dataset (several reps, about 200
+  customers each, per-rep owner) into an environment declared synthetic-only; every loaded customer
+  satisfies CUS-2..CUS-5 and CUS-8 by the same rules as customer create, with no duplicate NIP; an
+  invalid record is reported with its rule and not loaded while the valid ones are; running it twice, or
+  after an interruption, creates no duplicates; the script refuses a target not declared synthetic-only,
+  creates no Keycloak account and leaves every pre-existing customer untouched; a rep sees only their own
+  seeded customers.
+  **Out of scope (explicit):** real data; Excel import and operator-supplied input files (IMP-1..IMP-4,
+  later); creating Keycloak accounts; duplicate warnings (EKO-3-09); archived, edited or reassigned seeded
+  customers (EKO-3-05, EKO-3-07); visits, notes, actions; a clean or reset mode; a UI.
+  After EKO-3-03.
+
 - [x] **EKO-3-08** — Let the manager narrow the customer list to one rep (#216).
   *Done when:* server tests prove: each login stores the caller's display-name copy by subject (updated, not
   duplicated, no e-mail or username); a manager reads a list of reps and a rep is refused with an answer
