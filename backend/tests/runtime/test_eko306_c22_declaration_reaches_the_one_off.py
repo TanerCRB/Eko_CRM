@@ -12,7 +12,7 @@ What the backend accepts is not proven here: the probe reports the raw value onl
 
 import pytest
 
-from tests.runtime.conftest import Composition, checked_images_override, read_env, write_env
+from tests.runtime.conftest import Composition, read_env, write_env
 
 pytestmark = pytest.mark.runtime
 
@@ -39,8 +39,9 @@ def _containers(composition: Composition) -> list[str]:
 def test_eko306_c22_one_off_worker_carries_the_environment_files_declaration(
     fresh: Composition,
 ) -> None:
-    if checked_images_override() is None:
-        fresh.compose("build", "backend", timeout=900)
+    # The same call in both modes (the backup_lab precedent): in a release run the checked-images
+    # override resets `build`, so this builds nothing and the one-off runs the placed image.
+    fresh.compose("build", "backend", timeout=900)
     assert VARIABLE not in fresh.env
 
     assert _one_off(fresh) == "VALUE[]"

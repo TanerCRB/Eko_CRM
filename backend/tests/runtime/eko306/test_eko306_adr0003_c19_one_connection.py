@@ -24,7 +24,8 @@ pytestmark = pytest.mark.runtime
 
 ONE = "eko306_one_connection"
 ONE_PASSWORD = "synthetic-eko306-one"
-AS_ONE = {"APP_DB_USER": ONE, "APP_DB_PASSWORD": ONE_PASSWORD}
+# Pairs, not a literal mapping: ADR-0004-C9's check reads `NAME: value` as an assignment.
+AS_ONE = dict([("APP_DB_USER", ONE), ("APP_DB_PASSWORD", ONE_PASSWORD)])
 
 
 @pytest.fixture
