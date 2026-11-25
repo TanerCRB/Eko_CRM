@@ -2163,3 +2163,28 @@ mount prohibition keeps runtime-editable page content, which would be internet-f
 the release, out of the composition. G-3 A puts a second factor into the Keycloak database. Without
 the compromise and restore duties, a backup set or a restore could bring back an authenticator the
 company had withdrawn.
+
+### 2026-11-24 — *Expand → deploy → contract*: the first contract step ships with its unreleased expand
+
+**Status:** Accepted 2026-11-24, as a declared deviation (gate 1 of EKO-3-03, Issue #252).
+
+**What it changes.** Release step 3's "It ships in a later release than its expand migration
+and the code change it follows, never in the same release" does not apply to revision `0007`
+(the unique constraint on `customer.nip`, ADR-0002 addendum of the same date). It ships in the
+same release as its expand `0005`, as `0006`, and as the code that writes `nip`, because:
+- none of them has been published;
+- the only published release, v0.1.2 at head `0004`, never writes `nip`, so the clause "only
+  once no running release reads or writes the old shape" holds.
+This holds only while every published release's schema head is an ancestor of `0005`. If a
+release holding `0005` or `0006` but not `0007` is published before EKO-3-03 merges, it lapses
+and the task returns to gate 1. A rollback from that release to v0.1.2 keeps the database at
+`0007` and is a rollback, not a restore. Release step 3 binds every later contract step as
+written.
+
+Every other rule and control of this decision is unchanged.
+
+**Why.** The rule keeps a contract migration from breaking a release that still writes the old
+shape. Here no release has ever written it. Publishing an intermediate release only to meet the
+letter would create such a release. Approved by the human at gate 1 of EKO-3-03 on
+2026-11-24 (Issue #252); the text is that of
+[`EKO-3-03-nip-uniqueness-contract-step-adr0002-adr0003-adr0004-adr0005-addendum-draft-2026-11-24.md`](EKO-3-03-nip-uniqueness-contract-step-adr0002-adr0003-adr0004-adr0005-addendum-draft-2026-11-24.md).

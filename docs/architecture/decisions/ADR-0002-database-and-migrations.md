@@ -481,3 +481,26 @@ rule and restates none, so it is not a deviation. Approved by the human at gate 
 | Control | Acceptance criterion |
 |---|---|
 | ADR-0002-C17 | A test against the pinned PostgreSQL stores a customer named `ŁĄKOWA` with town `ŻÓŁTE` and an e-mail contact `ŁUKASZ.KOS@example.com`, and gets that customer for each of the queries `łąk`, `żół` and `łukasz.kos` (the last matching a `COLLATE "C"` column on a non-ASCII letter), and for `ŁĄK` given in NFD; a customer named `100% _a\b` is returned for `%`, `_` and `\` and a customer without those characters is not; a query consisting of `%` alone does not return every customer; no migration adds an index, an extension or a column for the search. |
+
+### 2026-11-24 — The unique constraint on `nip`: a contract step shipped with its refusal; stored duplicates refuse the revision
+
+**Status:** Accepted 2026-11-24, as a declared deviation (gate 1 of EKO-3-03, Issue #252).
+
+**What it changes.** The addendum of 2026-11-19 ends: from EKO-3-03's merge, *NIP uniqueness*
+and ADR-0002-C9 hold as written, and ADR-0002-C9 as restated for the interval no longer applies.
+Its sentence "it ships in a later release than the code that stops writing duplicates" is
+replaced for this one step by: revision `0007` creates the unique constraint on `nip`, with
+`NULL` values distinct and nothing on `foreign_tax_id`, and ships in the same release as the code
+that answers a duplicate, because that code is the refusal the constraint raises and no
+published release writes `nip` (ADR-0004 addendum of the same date). Before its DDL the revision
+counts, in SQL, the NIP values held by more than one customer; when the count is above zero it
+refuses the run naming only the count, and changes nothing. No revision clears, moves or deletes
+a stored NIP. The count is part of a revision, serves no request and is not a `data` function.
+
+Every other rule and control of this decision is unchanged.
+
+**Why.** Before the constraint exists, a release can stop writing duplicates only by a read
+across owners, which ADR-0003-C35 forbids. The constraint is the only arbiter of two concurrent
+creates. A data step would need a "which customer wins" rule the brief does not give. Approved by
+the human at gate 1 of EKO-3-03 on 2026-11-24 (Issue #252); the text is that of
+[`EKO-3-03-nip-uniqueness-contract-step-adr0002-adr0003-adr0004-adr0005-addendum-draft-2026-11-24.md`](EKO-3-03-nip-uniqueness-contract-step-adr0002-adr0003-adr0004-adr0005-addendum-draft-2026-11-24.md).

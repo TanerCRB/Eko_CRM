@@ -1252,3 +1252,35 @@ at gate 1 of EKO-3-08 on 2026-11-22 (Issue #216); the text is that of
 |---|---|
 | ADR-0003-C35 (restated) | Every function under `backend/app/data/` that reads or changes rows of an owned table takes a visibility scope as a required parameter with no default, or is on the closed system-read list held in the check; the list in the check equals the list held in the test; a fixture function on an owned table with neither fails, a listed function that returns a column of an owned table fails, and a listed function imported by a module under `backend/app/api/` or `backend/app/auth/` fails; no module outside `backend/app/data/` refers to an owned table. |
 | ADR-0003-C37 | After `alembic upgrade head` the copy table has exactly the columns of the subject, the display name, the `rep` item and the last-login instant; a refused login callback leaves it unchanged; a copy rewritten in the database to the opposite `rep` item, or to any role, changes no answer of any operation for that subject, its session read included. |
+
+### 2026-11-24 — A create refused by a company-wide unique constraint; the reference for an all-records caller
+
+**Status:** Accepted 2026-11-24 (gate 1 of EKO-3-03, Issue #252).
+
+**What it adds.** The addendum of 2026-11-17 decides what a caller may read, not what a refused
+write may tell it. From this date, for a create refused because the database's unique
+constraint on `customer.nip` refused its insert:
+- the refusal is decided by that constraint, never by a read made before the insert;
+- every caller holding `rep` without `manager` gets one answer, whoever owns the stored customer,
+  the caller included. It is equal in status, body and headers other than
+  `Eko-Correlation-Id`, and tells only that the value is taken;
+- a caller whose visibility scope is all records also gets the stored customer's identifier. It
+  is read after the refusal by a `data` function that takes that scope as a required parameter
+  and applies it in its statement. The `domain` function of *Where it is enforced* decides,
+  from the caller value, whether a caller gets it.
+No function is added to the closed system-read list. **New control ADR-0003-C38** (table
+below).
+
+Every other rule and control of this decision is unchanged.
+
+**Why.** A company-wide constraint necessarily tells a rep that a value exists outside its
+scope. CUS-6 accepts exactly that one fact (gate-1 G-3), so it is written down as the only
+disclosure, rather than left as an unstated exception to *Outside the scope means missing*.
+Approved by the human at gate 1 of EKO-3-03 on 2026-11-24 (Issue #252); the text is that of
+[`EKO-3-03-nip-uniqueness-contract-step-adr0002-adr0003-adr0004-adr0005-addendum-draft-2026-11-24.md`](EKO-3-03-nip-uniqueness-contract-step-adr0002-adr0003-adr0004-adr0005-addendum-draft-2026-11-24.md).
+
+**ADR-0003-C38.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0003-C38 | A test stores a customer with NIP N for rep A. A create with N by rep B, and by rep B for B's own customer holding M, answers 409 with equal status, body and headers other than `Eko-Correlation-Id`, and the body holds no identifier, subject, field value, count or NIP. The same create by a caller holding `rep` and `manager` answers the same status and body plus `existing_customer_id`, which `GET /api/customers/<id>` resolves to the stored customer under that caller. A caller holding `manager` without `rep` gets 403 whether N is taken or not, and nothing is stored. Of two overlapping creates with N, one is stored and the other gets the 409. |
