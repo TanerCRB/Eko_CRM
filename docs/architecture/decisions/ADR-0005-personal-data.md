@@ -1577,3 +1577,17 @@ gate 1 of EKO-3-08 on 2026-11-22 (Issue #216); the text is that of
 | Control | Acceptance criterion |
 |---|---|
 | ADR-0005-C21 | Every column in the application schema whose name ends in `_subject` is in the retention's reference set held in the code, and the set equals the list held in the test; a fixture column with that suffix outside the set fails; a copy whose subject only one column of the set holds is kept past 180 days after the last login, for each column of the set. |
+
+### 2026-11-24 — `migrate` may write the count of duplicated NIP values
+
+**Status:** Accepted 2026-11-24 (gate 1 of EKO-3-03, Issue #252).
+
+**What it adds.** *What each component may write*, the backend item: `migrate` may also write,
+in the refusal of the unique-constraint revision (ADR-0002 addendum of the same date), the number
+of NIP values held by more than one customer. The NIP values stay under *Never written*. Every
+other rule and control of this decision is unchanged.
+
+**Why.** The operator needs to know that stored rows block the revision before resolving them by
+hand. A count is not a customer field value, and naming the NIPs would be one. Approved by the
+human at gate 1 of EKO-3-03 on 2026-11-24 (Issue #252); the text is that of
+[`EKO-3-03-nip-uniqueness-contract-step-adr0002-adr0003-adr0004-adr0005-addendum-draft-2026-11-24.md`](EKO-3-03-nip-uniqueness-contract-step-adr0002-adr0003-adr0004-adr0005-addendum-draft-2026-11-24.md).
