@@ -109,7 +109,10 @@ the last line before a non-zero exit:
 - `configuration error: missing, empty or invalid environment variable(s): <NAMES>`
   (ADR-0004-C10), naming variables only;
 - `<process> refused to start: <reason>` and `migrate refused: <reason>` (ADR-0004, addendum of
-  2026-10-29), naming revision identifiers only.
+  2026-10-29), naming revision identifiers only;
+- `seed refused to start: <reason>` (EKO-3-06), naming the declaration variable
+  `APP_SYNTHETIC_DATA_ONLY`, the subject rule (never a subject) or revision identifiers only. The
+  seed's own lines are `message` lines of logger `app.seed` with `process` `worker`.
 
 ## `proxy`
 
