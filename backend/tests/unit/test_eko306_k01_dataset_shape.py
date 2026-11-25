@@ -72,7 +72,7 @@ def test_c23_the_value_set_is_the_committed_fingerprint() -> None:
 
 PROBE = (
     "from tests.support.eko306_dataset import dataset_rows, fingerprint; "
-    "print(fingerprint(dataset_rows()))"
+    "print(fingerprint(dataset_rows()))"  # leftovers-allow: subprocess probe source, not output
 )
 
 
