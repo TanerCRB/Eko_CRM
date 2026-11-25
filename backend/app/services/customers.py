@@ -3,7 +3,8 @@ by owner since EKO-3-04.
 
 Each receives the caller value and takes its scope only from `app.domain.ownership`, so the
 ownership rule is decided there and applied by `app.data.customers`; nothing here compares an
-owner (ADR-0003 addendum of EKO-3-01, section 2).
+owner (ADR-0003 addendum of EKO-3-01, section 2). A create refused for a taken NIP (EKO-3-03)
+names the stored customer only to a caller that rule gives a reference.
 """
 
 from uuid import UUID
@@ -16,12 +17,24 @@ from app.domain.customers import (
     CustomerNotFound,
     CustomerSearch,
     CustomerSummary,
+    NipTaken,
 )
-from app.domain.ownership import creation_scope, visibility_scope
+from app.domain.ownership import creation_scope, reference_scope, visibility_scope
 
 
 def create_customer(store: CustomerStore, caller: Caller, draft: CustomerDraft) -> Customer:
-    return store.create(creation_scope(caller), draft)
+    """`creation_scope` decides first, so a caller without `rep` is refused before any NIP is
+    judged. A taken NIP is refused by the insert; the stored customer is then read under the
+    reference scope, never under the caller's own (ADR-0003-C38)."""
+    scope = creation_scope(caller)
+    try:
+        return store.create(scope, draft)
+    except NipTaken:
+        reference = reference_scope(caller)
+        nip = draft.tax_id.nip
+        if reference is None or nip is None:
+            raise
+        raise NipTaken(store.find_by_nip(reference, nip)) from None
 
 
 def read_customer(store: CustomerStore, caller: Caller, customer_id: UUID) -> Customer:

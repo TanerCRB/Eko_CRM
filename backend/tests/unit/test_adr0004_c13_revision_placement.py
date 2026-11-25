@@ -23,41 +23,41 @@ from app.data.schema_revision import (
 )
 from tests.support.repo import REPO_ROOT
 
-SHIPPED = RevisionTree(("0001", "0002", "0003", "0004", "0005", "0006"))
-NEXT = RevisionTree(("0001", "0002", "0003", "0004", "0005", "0006", "t_next"))
+SHIPPED = RevisionTree(("0001", "0002", "0003", "0004", "0005", "0006", "0007"))
+NEXT = RevisionTree(("0001", "0002", "0003", "0004", "0005", "0006", "0007", "t_next"))
 REVISIONS = Path(__file__).parents[1] / "runtime" / "revisions"
 VERSIONS = REPO_ROOT / "backend" / "migrations" / "versions"
-FULL_LINEAGE = frozenset({"0001", "0002", "0003", "0004", "0005", "0006", "t_next"})
+FULL_LINEAGE = frozenset({"0001", "0002", "0003", "0004", "0005", "0006", "0007", "t_next"})
 
 # (alembic_version rows or None for no table, lineage rows or None for no table, tree) -> placement
 CASES = {
     "no alembic_version table": (None, None, SHIPPED, Placement.EMPTY),
     "no row": (
         (),
-        frozenset({"0001", "0002", "0003", "0004", "0005", "0006"}),
+        frozenset({"0001", "0002", "0003", "0004", "0005", "0006", "0007"}),
         SHIPPED,
         Placement.NO_ROW,
     ),
     "two rows": (
-        ("0005", "0006"),
-        frozenset({"0001", "0002", "0003", "0004", "0005", "0006"}),
+        ("0006", "0007"),
+        frozenset({"0001", "0002", "0003", "0004", "0005", "0006", "0007"}),
         SHIPPED,
         Placement.SEVERAL_ROWS,
     ),
     "head": (
-        ("0006",),
-        frozenset({"0001", "0002", "0003", "0004", "0005", "0006"}),
+        ("0007",),
+        frozenset({"0001", "0002", "0003", "0004", "0005", "0006", "0007"}),
         SHIPPED,
         Placement.HEAD,
     ),
-    "head without lineage": (("0006",), None, SHIPPED, Placement.HEAD),
+    "head without lineage": (("0007",), None, SHIPPED, Placement.HEAD),
     "ancestor": (("0001",), None, SHIPPED, Placement.ANCESTOR),
     "descendant": (("t_next",), FULL_LINEAGE, SHIPPED, Placement.DESCENDANT),
     "descendant, lineage dropped": (("t_next",), None, SHIPPED, Placement.UNPLACEABLE),
     "descendant, lineage emptied": (("t_next",), frozenset(), SHIPPED, Placement.UNPLACEABLE),
     "unknown identifier": (
         ("zz",),
-        frozenset({"0001", "0002", "0003", "0004", "0005", "0006"}),
+        frozenset({"0001", "0002", "0003", "0004", "0005", "0006", "0007"}),
         SHIPPED,
         Placement.UNPLACEABLE,
     ),
@@ -69,8 +69,8 @@ CASES = {
     ),
     "sibling": (
         ("t_b",),
-        frozenset({"0001", "0002", "0003", "0004", "0005", "0006", "t_b"}),
-        RevisionTree(("0001", "0002", "0003", "0004", "0005", "0006", "t_a")),
+        frozenset({"0001", "0002", "0003", "0004", "0005", "0006", "0007", "t_b"}),
+        RevisionTree(("0001", "0002", "0003", "0004", "0005", "0006", "0007", "t_a")),
         Placement.UNPLACEABLE,
     ),
     "the next release at its own head": (("t_next",), FULL_LINEAGE, NEXT, Placement.HEAD),
@@ -114,7 +114,7 @@ def test_adr0004_c13_refusal_names_the_revisions_and_the_reason() -> None:
     with pytest.raises(RevisionRefused) as refused:
         check_servable(DatabaseRevision(("0001",), None), SHIPPED)
     assert "0001" in str(refused.value)
-    assert "0006" in str(refused.value)
+    assert "0007" in str(refused.value)
     assert "older" in str(refused.value)
 
 

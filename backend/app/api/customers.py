@@ -30,6 +30,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic.json_schema import SkipJsonSchema
 from pydantic_core import ErrorDetails, InitErrorDetails
 
 from app.api.auth import Problem
@@ -318,6 +319,26 @@ class CustomerList(BaseModel):
     items: list[CustomerItem]
 
 
+# CUS-6 as fixed at gate 1 of EKO-3-03 (A-2 A): one English sentence, ASCII only.
+NIP_TAKEN = "a customer with this NIP already exists - contact your manager"
+
+
+class NipTakenProblem(BaseModel):
+    """The 409 of a create whose Polish NIP a stored customer holds, whoever owns it (CUS-6). The
+    text is the same for every caller and names no customer, owner, count or NIP. Only a caller
+    whose scope is all records gets `existing_customer_id`; for any other caller the field is
+    absent, never `null` (ADR-0003-C38, gate 1 of EKO-3-03)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    detail: str
+    # Absent rather than `null`: the schema shows no null, and the answer drops a `None`.
+    existing_customer_id: UUID | SkipJsonSchema[None] = None
+
+    def body(self) -> dict[str, Any]:
+        return self.model_dump(mode="json", exclude_none=True)
+
+
 _REFUSALS: dict[int | str, dict[str, Any]] = {
     401: {"model": Problem},
     403: {"model": Problem},
@@ -404,7 +425,7 @@ Search = Annotated[CustomerSearch, Depends(customer_search)]
     operation_id="customer_create",
     status_code=201,
     response_model=CustomerOut,
-    responses=_REFUSALS,
+    responses={**_REFUSALS, 409: {"model": NipTakenProblem}},
 )
 def create_customer(body: CustomerCreate, caller: CurrentCaller, store: Store) -> CustomerOut:
     return CustomerOut.of(service.create_customer(store, caller, body.draft()))

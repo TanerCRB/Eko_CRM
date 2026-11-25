@@ -26,8 +26,8 @@ from tests.runtime.conftest import BUILT_SERVICES, Composition
 from tests.support.repo import REPO_ROOT
 
 REVISIONS = Path(__file__).parent / "revisions"
-SHIPPED_HEAD = "0006"
-SHIPPED_TREE = ("0001", "0002", "0003", "0004", "0005", "0006")
+SHIPPED_HEAD = "0007"
+SHIPPED_TREE = ("0001", "0002", "0003", "0004", "0005", "0006", "0007")
 # The tables of the shipped revisions after 0002 (0003: sessions and login transactions; 0004:
 # customers and contacts, the contact table first for its foreign key; 0006: the staff
 # display-name copy).
@@ -580,6 +580,6 @@ REFUSING_STATES: dict[str, Callable[[Lab], None]] = {
     "vi-descendant-lineage-dropped": _lineage_dropped,
 }
 ACCEPTING_STATES: dict[str, Callable[[Lab], None]] = {
-    "head-0006": Lab.at_head,
+    "head-0007": Lab.at_head,
     "descendant-t_next": lambda lab: lab.at_variant_head("next"),
 }

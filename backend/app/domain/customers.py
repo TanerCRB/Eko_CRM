@@ -88,6 +88,17 @@ class CustomerNotFound(Exception):
     the same answer (ADR-0003 addendum of EKO-3-01, section 3)."""
 
 
+class NipTaken(Exception):
+    """A create refused because a stored customer, whoever owns it, holds its NIP (CUS-6): HTTP
+    409. It carries no value of either customer; `existing` is the stored customer's identifier,
+    set only for a caller the ownership rule gives a reference (ADR-0003-C38, gate 1 of
+    EKO-3-03)."""
+
+    def __init__(self, existing: UUID | None = None) -> None:
+        super().__init__()
+        self.existing = existing
+
+
 def _text(raw: str) -> str:
     # PostgreSQL's UTF-8 text holds neither U+0000 nor a lone surrogate, which a JSON escape can
     # still produce; refused here, as a value, instead of failing at the database.

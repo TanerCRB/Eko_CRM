@@ -22,6 +22,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.data.base import Base
 
+NIP_UNIQUE = "uq_customer_nip"
+
 
 class SchemaRevisionLineage(Base):
     """The revisions from the base to the database's head; written only by migrate (revision 0002,
@@ -98,9 +100,11 @@ class CustomerRow(Base):
 
     __tablename__ = "customer"
     __table_args__ = (
-        # Only the canonical ten digits (ADR-0002 *NIP uniqueness*); the unique constraint is
-        # EKO-3-03's (ADR-0002 addendum of EKO-3-02, a declared deviation until then).
+        # Only the canonical ten digits (ADR-0002 *NIP uniqueness*).
         CheckConstraint("nip ~ '^[0-9]{10}$'", name="nip"),
+        # Company-wide, NULLs distinct; revision 0007 (EKO-3-03). `app.data.customers` tells its
+        # violation apart by this name.
+        UniqueConstraint("nip", name=NIP_UNIQUE),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
