@@ -30,6 +30,7 @@ const polish: CustomerRecord = {
   county: "Łódź",
   tax_id: STORED_NIP,
   contacts: [],
+  archived: false,
 };
 
 beforeAll(async () => {

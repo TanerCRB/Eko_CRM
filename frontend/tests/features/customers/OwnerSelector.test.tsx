@@ -74,7 +74,7 @@ function listOf(...names: string[]): ListReply {
   const ids = [ID_A, ID_B];
   return {
     status: 200,
-    body: { items: names.map((name, index) => ({ id: ids[index] ?? ID_B, name, country: "PL" })) },
+    body: { items: names.map((name, index) => ({ id: ids[index] ?? ID_B, name, country: "PL", archived: false })) },
   };
 }
 

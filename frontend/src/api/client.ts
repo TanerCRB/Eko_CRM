@@ -4,11 +4,12 @@ export type ApiResponse =
   | { kind: "ok"; status: number; body: unknown }
   | { kind: "unauthenticated" }
   | { kind: "unavailable" }
-  // `body` only on 422: the validation answer names fields; no other refusal's body is read.
+  // `body` only on 422, whose answer names fields, and on 409, whose `detail` names the conflict;
+  // no other refusal's body is read.
   | { kind: "failed"; status: number; body?: unknown };
 
 export interface RequestOptions {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PUT";
   // Sent as JSON; absent means no body and no Content-Type.
   body?: unknown;
   // "report" leaves a 401 to the caller; every other request starts a login on 401.
@@ -49,8 +50,8 @@ export async function apiRequest(
   if (response.status === 503) {
     return { kind: "unavailable" };
   }
-  if (response.status === 422) {
-    return { kind: "failed", status: 422, body: parseJson(text) };
+  if (response.status === 422 || response.status === 409) {
+    return { kind: "failed", status: response.status, body: parseJson(text) };
   }
   if (!response.ok) {
     return { kind: "failed", status: response.status };

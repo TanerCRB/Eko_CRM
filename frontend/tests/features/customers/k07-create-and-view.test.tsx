@@ -42,12 +42,13 @@ const saved: CustomerRecord = {
   voivodeship: null,
   county: null,
   tax_id: null,
+  archived: false,
 };
 
 const emptyList: CustomerReply = { status: 200, body: { items: [] } };
 const listOfOne: CustomerReply = {
   status: 200,
-  body: { items: [{ id: CUSTOMER_ID, name: NAME, country: "PL" }] },
+  body: { items: [{ id: CUSTOMER_ID, name: NAME, country: "PL", archived: false }] },
 };
 
 interface ContactEntry {
@@ -291,6 +292,7 @@ describe("K-07: in the SPA a rep creates a customer with contacts and sees the s
           voivodeship: null,
           county: null,
           tax_id: null,
+          archived: false,
         },
       },
     });
@@ -311,7 +313,7 @@ describe("K-07: in the SPA a rep creates a customer with contacts and sees the s
     stubCustomerApi({
       [`GET ${CUSTOMERS_URL}`]: {
         status: 200,
-        body: { items: [{ id: CUSTOMER_ID, name: "<b>x</b>", country: "PL" }] },
+        body: { items: [{ id: CUSTOMER_ID, name: "<b>x</b>", country: "PL", archived: false }] },
       },
     });
     render(<App />);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { countryName } from "../../api/countries";
-import { listCustomers, type ListResult } from "../../api/customers";
+import { listCustomers, type CustomerListQuery, type ListResult } from "../../api/customers";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { messages } from "../../i18n/pl";
@@ -10,16 +10,28 @@ import { ownerOptions } from "./ownerOptions";
 import { customerPath, NEW_CUSTOMER_PATH } from "./paths";
 import { useReps } from "./useReps";
 
-// The answer remembers the term and owner it was asked for, so the empty state speaks of those and
-// not of whatever the controls hold while the next answer is on its way.
-type ListState = { kind: "loading" } | (ListResult & { term: string; owner: string });
+type StateFilter = NonNullable<CustomerListQuery["state"]>;
 
-// `owner` is a rep's subject, "" for every owner the caller may see.
+// The answer remembers the term, owner and state it was asked for, so the empty state speaks of
+// those and not of whatever the controls hold while the next answer is on its way.
+type ListState =
+  | { kind: "loading" }
+  | (ListResult & { term: string; owner: string; filter: StateFilter | undefined });
+
+// `owner` is a rep's subject, "" for every owner the caller may see; `filter` is undefined until
+// the user picks a state, and is then sent as picked.
 interface ListRequest {
   term: string;
   owner: string;
+  filter: StateFilter | undefined;
   attempt: number;
 }
+
+const STATE_FILTERS: readonly { value: StateFilter; label: string }[] = [
+  { value: "active", label: messages.customer.activeFilter },
+  { value: "archived", label: messages.customer.archivedFilter },
+  { value: "both", label: messages.customer.bothFilter },
+];
 
 // Typing pauses this long before the term is sent; Enter sends it at once.
 const SEARCH_DELAY_MS = 300;
@@ -33,7 +45,12 @@ const SEARCH_MAX_LENGTH = 254;
 export function CustomerList() {
   const [state, setState] = useState<ListState>({ kind: "loading" });
   const [input, setInput] = useState("");
-  const [request, setRequest] = useState<ListRequest>({ term: "", owner: "", attempt: 0 });
+  const [request, setRequest] = useState<ListRequest>({
+    term: "",
+    owner: "",
+    filter: undefined,
+    attempt: 0,
+  });
   const reps = useReps(holdsManager(useSession()));
   const options = useMemo(() => (reps === null ? null : ownerOptions(reps)), [reps]);
   const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -42,10 +59,14 @@ export function CustomerList() {
 
   useEffect(() => {
     let current = true;
-    void listCustomers({ q: request.term, owner: request.owner }).then((result) => {
+    const query: CustomerListQuery = { q: request.term, owner: request.owner };
+    if (request.filter !== undefined) {
+      query.state = request.filter;
+    }
+    void listCustomers(query).then((result) => {
       // An answer to a request since replaced is dropped, so a late older answer never wins.
       if (current) {
-        setState({ ...result, term: request.term, owner: request.owner });
+        setState({ ...result, term: request.term, owner: request.owner, filter: request.filter });
       }
     });
     return () => {
@@ -75,6 +96,16 @@ export function CustomerList() {
     setState({ kind: "loading" });
     setRequest((current) => ({ ...current, owner, attempt: 0 }));
   }
+
+  function chooseState(filter: StateFilter) {
+    if (filter === (request.filter ?? "active")) {
+      return;
+    }
+    setState({ kind: "loading" });
+    setRequest((current) => ({ ...current, filter, attempt: 0 }));
+  }
+
+  const shownFilter = request.filter ?? "active";
 
   const rejected = state.kind === "rejected";
 
@@ -136,6 +167,21 @@ export function CustomerList() {
             }}
           />
         </label>
+        <div className="segments" role="group" aria-label={messages.customer.stateFilter}>
+          {STATE_FILTERS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={shownFilter === option.value ? "active" : undefined}
+              aria-pressed={shownFilter === option.value}
+              onClick={() => {
+                chooseState(option.value);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
         {options === null ? null : (
           <label>
             <span className="sr-only">{messages.customer.owner}</span>
@@ -174,7 +220,7 @@ export function CustomerList() {
         </div>
       ) : null}
       {state.kind === "listed" && state.customers.length === 0 ? (
-        state.term === "" && state.owner === "" ? (
+        state.term === "" && state.owner === "" && (state.filter ?? "active") === "active" ? (
           <EmptyState
             title={messages.customer.emptyTitle}
             explanation={messages.customer.emptyExplanation}
@@ -182,7 +228,11 @@ export function CustomerList() {
         ) : (
           <EmptyState
             title={messages.customer.noMatchTitle}
-            explanation={messages.customer.noMatchExplanation}
+            explanation={
+              state.term === "" && (state.filter ?? "active") !== "active"
+                ? messages.customer.noMatchStateExplanation
+                : messages.customer.noMatchExplanation
+            }
           />
         )
       ) : null}
@@ -200,6 +250,9 @@ export function CustomerList() {
                 {customer.name}
               </a>
               <small>{countryName(customer.country)}</small>
+              {customer.archived ? (
+                <span className="customer-archived-mark">{messages.customer.archivedMark}</span>
+              ) : null}
             </li>
           ))}
         </ul>
