@@ -110,6 +110,9 @@ export const messages = {
     nipInvalid:
       "Podaj NIP: 10 cyfr z poprawną sumą kontrolną. Myślniki, spacje i prefiks PL są pomijane.",
     foreignTaxIdInvalid: "Numer podatkowy może mieć najwyżej 32 znaki.",
+    nipTaken: "Klient z tym numerem NIP już istnieje — skontaktuj się z kierownikiem.",
+    nipTakenWithReference: "Klient z tym numerem NIP już istnieje.",
+    openExistingCustomer: "Otwórz istniejącego klienta",
     regionHidden: "Województwo lub powiat wymaga poprawy. Te pola dotyczą tylko klientów z Polski.",
     notGiven: "Nie podano",
     contactsTitle: "Kontakty",

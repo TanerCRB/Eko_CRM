@@ -4,6 +4,7 @@ import type {
   CustomerList,
   CustomerRecord,
   CustomerSummary,
+  NipTakenProblem,
   ValidationProblem,
 } from "../../src/api/customers";
 import type { VoivodeshipList } from "../../src/api/reference";
@@ -23,6 +24,7 @@ export type CustomerReply =
   | { status: 200; body: VoivodeshipList }
   | { status: 422; body: ValidationProblem }
   | { status: 403 | 404 | 409 | 500 | 503; body: Problem }
+  | { status: 409; body: NipTakenProblem }
   // A body outside the contract, written as text so no contracts-layer type vouches for it.
   | { status: 200 | 409; raw: string };
 

@@ -13,6 +13,7 @@ import { SelectField } from "../../components/SelectField";
 import { useMountFocus } from "../../components/useMountFocus";
 import { messages } from "../../i18n/pl";
 import { followLink } from "../../routing/location";
+import { customerPath } from "./paths";
 import { useVoivodeships } from "./useVoivodeships";
 
 type AddressPart = (typeof ADDRESS_PARTS)[number];
@@ -36,6 +37,8 @@ export type FormResult =
   | { kind: "refused" }
   | { kind: "notFound" }
   | { kind: "restoreFirst" }
+  // Another customer holds the NIP (EKO-3-03); the reference is the answer's, never the session's.
+  | { kind: "nipTaken"; existingCustomerId: string | null }
   | { kind: "failed" };
 
 type Outcome =
@@ -50,6 +53,7 @@ type Outcome =
     }
   | { kind: "refused" }
   | { kind: "notFound" }
+  | { kind: "nipTaken"; existingCustomerId: string | null }
   | { kind: "failed" }
   // The edit was refused until the customer is restored (D-3 F-1 A); the values stay as entered.
   | { kind: "restoreFirst" }
@@ -181,6 +185,17 @@ export function CustomerForm({
       ? addressError(part, outcome.sentCountry === POLAND)
       : undefined;
   // A rejected part whose field this country hides is told in the form alert instead.
+  // The answer's reference alone picks the sentence and the link (EKO-3-03), never the session.
+  const existingPath =
+    outcome.kind === "nipTaken" && outcome.existingCustomerId !== null
+      ? customerPath(outcome.existingCustomerId)
+      : null;
+  const taxIdError =
+    outcome.kind !== "nipTaken"
+      ? fieldError("tax_id")
+      : existingPath === null
+        ? messages.customer.nipTaken
+        : messages.customer.nipTakenWithReference;
   const hiddenRegionRejected = !polish && REGION_PARTS.some((part) => isRejected(part));
   const saving = outcome.kind === "saving";
   const restoring = outcome.kind === "restoring";
@@ -324,11 +339,24 @@ export function CustomerForm({
         <Field
           label={polish ? messages.customer.nip : messages.customer.foreignTaxId}
           value={address.tax_id}
-          error={fieldError("tax_id")}
+          error={taxIdError}
           onChange={(event) => {
             setPart("tax_id", event.target.value);
           }}
         />
+        {existingPath === null ? null : (
+          <p>
+            <a
+              className="text-link"
+              href={existingPath}
+              onClick={(event) => {
+                followLink(event, existingPath);
+              }}
+            >
+              {messages.customer.openExistingCustomer}
+            </a>
+          </p>
+        )}
       </fieldset>
       <h2>{messages.customer.addressTitle}</h2>
       <fieldset className="form-section" disabled={saving}>

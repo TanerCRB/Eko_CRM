@@ -1,6 +1,6 @@
 """EKO-3-05 K-04, static half (ADR-0002, ADR-0004 *Expand -> deploy -> contract* and the EKO-3-05
-addendum draft, ADR-0002-C13, ADR-0005-C1; K-04 M-p5): revision 0007 only adds the nullable
-`customer.archived_at` as an instant with its offset, on 0006; it sets no default the database
+addendum draft, ADR-0002-C13, ADR-0005-C1; K-04 M-p5): revision 0008 only adds the nullable
+`customer.archived_at` as an instant with its offset, on 0007; it sets no default the database
 would evaluate, no NOT NULL, no timeout and writes no row, so an `INSERT` that names no such column
 stores an active customer; and its docstring gives the column the ADR-0005 category PD-C4.
 
@@ -24,7 +24,7 @@ from tests.static.test_eko302_k06_expand_revision import (
 
 
 def revision() -> Path:
-    [found] = VERSIONS.glob("0007_*.py")
+    [found] = VERSIONS.glob("0008_*.py")
     return found
 
 
@@ -61,11 +61,11 @@ def violations(source: str) -> list[str]:
     return problems
 
 
-def test_k04_revision_0007_adds_only_a_nullable_archived_instant_on_0006() -> None:
+def test_k04_revision_0008_adds_only_a_nullable_archived_instant_on_0007() -> None:
     source = revision().read_text(encoding="utf-8")
     assert violations(source) == []
-    assert assigned(source, "revision") == ["0007"]
-    assert assigned(source, "down_revision") == ["0006"]
+    assert assigned(source, "revision") == ["0008"]
+    assert assigned(source, "down_revision") == ["0007"]
 
 
 def test_k04_contrast_a_planted_default_not_null_backfill_or_missing_category_is_found() -> None:

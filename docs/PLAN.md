@@ -788,6 +788,67 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   Follow-ups: EKO-3-03 (the unique constraint, CUS-6 and the contract step), #161 (frontend API types, now
   including `reference.ts`), #219 (the `eko131` static tests flaky on a Windows host).
 
+- [x] **EKO-3-03** — Block a second customer with an existing NIP (#252).
+  *Done when:* server tests prove: a second customer whose Polish NIP equals an existing one after the
+  EKO-3-02 normalisation is refused company-wide and the refused request stores nothing (CUS-6); a rep gets
+  a byte-equal answer whether the existing customer is theirs or another rep's, carrying the CUS-6 sentence
+  and nothing about that customer (PRH-4); a manager gets the same status plus a reference that opens
+  through the manager's scope; two concurrent creates leave one customer and the loser gets the refusal,
+  not a 503; the unique constraint on `nip` exists after a contract migration, NULL `nip` and equal
+  `foreign_tax_id` stay allowed (ADR-0002-C9); the NIP is in neither the backend nor the PostgreSQL log
+  (ADR-0005-C3); create, by-id read and list behave as before. The SPA create form shows the refusal.
+  **Out of scope (explicit):** duplicate warnings (CUS-7, split off at gate 1); NIP edit (until customer
+  edit exists); `foreign_tax_id` uniqueness; archived-NIP reservation (EKO-3-05); merge or take-over flows;
+  a pre-save NIP lookup; real data.
+  After EKO-3-02.
+  **Done 2026-11-25:** merged in [PR #256](https://github.com/TanerCRB/Eko_CRM/pull/256) as `7bca7ad` on 2026-11-25 by the human, from the
+  operator's account (TanerCRB; the repository has one account); code verified at `3707144` (the QA checkpoint:
+  QA PROOF HOLDS at the developer checkpoint `decc1fa`, QA's one added test committed in `3707144`; Invariant
+  Guardian, Reviewer and Security Auditor PASS at `3707144`; no finding above Low); the PR head `d8452d1` adds
+  cost-register rows only. Mechanism: revision `0007_customer_nip_unique` on `0006` counts in SQL the NIP values
+  held by more than one customer and refuses `migrate` naming only that count, or creates the unique constraint
+  `uq_customer_nip` on `customer.nip` (NULLs distinct, nothing on `foreign_tax_id`; the ORM model declares it in
+  `backend/app/data/models.py`); `backend/app/data/customers.py` turns only a `UniqueViolation` on that constraint
+  name into the domain refusal `NipTaken` (`backend/app/domain/customers.py`) and reads the stored customer's
+  identifier by `find_by_nip(scope, nip)`; `backend/app/services/customers.py` asks for it only under the
+  all-records scope that `reference_scope` (`backend/app/domain/ownership.py`) gives a caller holding `manager`;
+  `POST /api/customers` answers 409 `NipTakenProblem` (`backend/app/api/customers.py`, `backend/app/main.py`),
+  byte-equal for every rep and with `existing_customer_id` for a rep+manager. The SPA create form
+  (`frontend/src/features/customers/NewCustomer.tsx`, `frontend/src/api/customers.ts` `parseNipTaken`,
+  `frontend/src/api/client.ts`, `frontend/src/i18n/pl.ts`) tells the refusal at the NIP field, keeps every typed
+  value, and links to the existing customer only from the answer's reference. Tests: `backend/tests/runtime/eko303/`
+  (K-01..K-06 and QA's `test_eko303_qa_other_unique_violation.py`), `backend/tests/runtime/test_eko303_k05_previous_release_on_0007.py`,
+  `backend/tests/unit/test_eko303_k05_previous_release_both_bases.py`, `test_eko303_k07_nip_taken_openapi.py`,
+  `frontend/tests/features/customers/NewCustomer.nip-taken.test.tsx`, the `NipTakenProblem` pair in
+  `backend/tests/support/frontend_contract.py` (rows in `architecture/capabilities.md`). Gate 1 (2026-11-24, every
+  recommendation accepted): G-1 A (CUS-7 split off as EKO-3-09, #254), G-2 A, G-3 A, G-4/A-1 A, G-5 A, G-6/A-4 A,
+  G-7 A, G-8 A, A-2 A (409), A-3 A, A-5 A; the ADR-0002, ADR-0003, ADR-0004 and ADR-0005 addenda of 2026-11-24 are
+  appended in this commit to
+  [`ADR-0002-database-and-migrations.md`](architecture/decisions/ADR-0002-database-and-migrations.md),
+  [`ADR-0003-identity-and-access.md`](architecture/decisions/ADR-0003-identity-and-access.md),
+  [`ADR-0004-deployment-and-recovery.md`](architecture/decisions/ADR-0004-deployment-and-recovery.md) and
+  [`ADR-0005-personal-data.md`](architecture/decisions/ADR-0005-personal-data.md) from
+  [`EKO-3-03-nip-uniqueness-contract-step-adr0002-adr0003-adr0004-adr0005-addendum-draft-2026-11-24.md`](architecture/decisions/EKO-3-03-nip-uniqueness-contract-step-adr0002-adr0003-adr0004-adr0005-addendum-draft-2026-11-24.md)
+  (two declared deviations: the ADR-0002 addendum of 2026-11-19's release ordering and ADR-0004 release step 3,
+  for revision `0007` only; new control ADR-0003-C38; the `migrate` duplicate count under ADR-0005). The EKO-3-02
+  interval without the unique constraint ends with this merge: ADR-0002-C9 holds as written. Scope widened twice
+  during implementation (2026-11-24, recorded on #252), each after a developer hard stop 6, not a fix round:
+  G-8 to cover the mechanical edits of tests pinned to the shipped head (`0006` to `0007`, test revisions
+  re-based, `t_planted_0007` renamed `t_planted_0008`), and one added row in
+  `test_eko135_k01_frontend_types.py`; no evaluator `STOP`, so no fix round. Gate 2 (2026-11-25, every
+  recommendation accepted): U-01 (the previous-release run of K-05(4), which no local session could execute)
+  closed by CI: `test_k05_the_previous_release_creates_and_reads_customers_on_0007` passed in both runtime jobs at
+  `d8452d1`; backend A-01..A-05 and frontend A-01..A-03 accepted as built and recorded as amendment lines under
+  K-03, K-05, K-06 and K-07 of #252 (scope re-locked, fingerprint `759492da`); backend A-02 (the reference read
+  finding nothing or failing) and frontend A-03 (the field error kept after a country switch) have no test. QA's
+  first suite let M-02 (the constraint-name check) survive; QA's added test kills it; M-22 and M-23 (a lookup before
+  the insert) are caught only by the concurrency, migration and PostgreSQL-log contrast tests. CI: all nine checks
+  green at `d8452d1`. One Low finding carried on: Reviewer R-01 (under pool saturation the manager's reference read
+  can answer 503 instead of the 409 with the reference), #255. Two recorded exceptions, EKO-3-03/weakening-1 (a
+  `# type: ignore[union-attr]` in the K-04 commit gate) and EKO-3-03/weakening-2 (the previous-release test's skip
+  from `0007`), both blocking again 2026-12-31 (`architecture/exception-register.md`). Follow-ups: #255 (R-01),
+  #254 (EKO-3-09, duplicate warnings).
+
 - [x] **EKO-3-04** — Let users find customers in a list (#215).
   *Done when:* server tests prove: one text query matches a customer's name, town or contact value
   case-insensitively; a rep's search never returns another rep's customer (by name, town or contact), the

@@ -33,6 +33,7 @@ from tests.support import eko302_nip as nips
 pytestmark = pytest.mark.runtime
 
 TWIN_NAME = "Gospodarstwo Bliźniak K06"
+SIBLING_NIP = nips.valid_nip(305612)
 
 
 def edited_body() -> dict[str, Any]:
@@ -47,13 +48,17 @@ def edited_body() -> dict[str, Any]:
 @pytest.fixture
 def scene(crm: Crm, clock: FakeClock) -> dict[str, Any]:
     rep_a, rep_b = crm.login(REP_A, ["rep"]), crm.login(REP_B, ["rep"])
+    # The sibling is the target's twin in name, address and contact values, with its own NIP: no
+    # two customers hold one NIP (K-06 edge, the unique constraint of EKO-3-03).
     twin: dict[str, Any] = {
         "name": TWIN_NAME,
+        "street": "ul. Bliźniacza 6",
+        "town": "Bliźniaków",
         "tax_id": nips.valid_nip(305602),
         "contacts": [phone("+48601305621", "Notatka K06", primary=True)],
     }
     target = customer(rep_a, **twin)
-    sibling = customer(rep_a, **{**twin, "contacts": [phone("+48601305622", "Notatka K06")]})
+    sibling = customer(rep_a, **{**twin, "tax_id": SIBLING_NIP})
     archived_sibling = customer(
         rep_a, "Gospodarstwo Uśpione K06", contacts=[email("uspione-k06@example.com")]
     )
@@ -118,3 +123,13 @@ def test_k06_edge_a_double_submitted_edit_ends_in_one_state_and_leaves_the_sibli
         (1, "email", "po-zmianie-k06@example.com", None, False),
     ]
     assert archived_at(crm, scene["archived_sibling"]) == scene["earlier"]
+
+
+def test_k06_edge_an_edit_refused_for_a_taken_nip_changes_no_other_row(
+    crm: Crm, scene: dict[str, Any]
+) -> None:
+    target = scene["target"]
+    before = snapshot(crm)
+    refused = edit(scene["rep_a"], target, {**edited_body(), "tax_id": SIBLING_NIP})
+    assert refused.status_code == 409, refused.text
+    assert snapshot(crm) == before

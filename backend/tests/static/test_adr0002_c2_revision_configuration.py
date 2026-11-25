@@ -18,9 +18,9 @@ def real_tree_files() -> list[str]:
     return sorted(p.name for p in VERSIONS.iterdir() if p.is_file() and p.suffix == ".py")
 
 
-def test_adr0002_c2_real_tree_holds_exactly_the_six_revision_files() -> None:
+def test_adr0002_c2_real_tree_holds_exactly_the_seven_revision_files() -> None:
     files = real_tree_files()
-    assert len(files) == 7
+    assert len(files) == 8
     assert files[0].startswith("0001_")
     assert files[1].startswith("0002_")
     assert files[2].startswith("0003_")
@@ -28,6 +28,7 @@ def test_adr0002_c2_real_tree_holds_exactly_the_six_revision_files() -> None:
     assert files[4].startswith("0005_")
     assert files[5].startswith("0006_")
     assert files[6].startswith("0007_")
+    assert files[7].startswith("0008_")
     assert not set(files) & {p.name for p in TEST_REVISIONS.glob("*.py")}
 
 

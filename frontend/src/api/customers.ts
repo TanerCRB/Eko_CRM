@@ -93,21 +93,33 @@ export type RejectedField =
   | { field: AddressPart }
   | { field: "request" };
 
+// The 409 answer to a create whose NIP another customer holds (EKO-3-03). `existing_customer_id`
+// comes only to an all-records caller and is absent, never null, otherwise; `detail` is never shown.
+export interface NipTakenProblem {
+  detail: string;
+  existing_customer_id?: string;
+}
+
+// "nipTaken": `existingCustomerId` is the answer's reference when it is a customer id, else null;
+// the answer alone decides it, never the session's roles.
 export type CreateResult =
   | { kind: "created"; customer: CustomerRecord }
   | { kind: "rejected"; fields: RejectedField[] }
+  | { kind: "nipTaken"; existingCustomerId: string | null }
   | { kind: "refused" }
   | { kind: "failed" };
 
 // Not exported (the contract check compares every exported type); the edit's answer as the form
 // reads it. "notFound": the id exists nowhere the caller may see (ADR-0003-C33); "restoreFirst":
-// the customer is archived and must be restored before its data can change (EKO-3-05 S-2 A).
+// the customer is archived and must be restored before its data can change (EKO-3-05 S-2 A);
+// "nipTaken": another customer holds the NIP (D-6 X-4 A), with the answer's reference if any.
 type EditResult =
   | { kind: "saved"; customer: CustomerRecord }
   | { kind: "rejected"; fields: RejectedField[] }
   | { kind: "refused" }
   | { kind: "notFound" }
   | { kind: "restoreFirst" }
+  | { kind: "nipTaken"; existingCustomerId: string | null }
   | { kind: "failed" };
 
 // Archive and restore answer the customer as it now is; not exported, as `EditResult`.
@@ -271,6 +283,9 @@ export async function createCustomer(input: CustomerInput): Promise<CreateResult
   if (response.kind === "failed" && response.status === 422) {
     return { kind: "rejected", fields: parseRejection(response.body) };
   }
+  if (response.kind === "failed" && response.status === 409) {
+    return parseNipTaken(response.body);
+  }
   if (response.kind === "failed" && response.status === 403) {
     return { kind: "refused" };
   }
@@ -296,17 +311,31 @@ export async function editCustomer(id: string, input: CustomerInput): Promise<Ed
   if (response.kind === "failed" && response.status === 404) {
     return { kind: "notFound" };
   }
-  if (response.kind === "failed" && response.status === 409 && isRestoreFirst(response.body)) {
-    return { kind: "restoreFirst" };
+  if (response.kind === "failed" && response.status === 409) {
+    return editConflict(response.body);
   }
   return { kind: "failed" };
 }
 
-// Compared byte for byte: any other 409 is a conflict the SPA does not know how to resolve.
+// The PUT's two 409 texts (D-6 X-4 A), compared byte for byte; any other 409 is a conflict the
+// SPA does not know how to resolve. Create's looser reading (`parseNipTaken`) is not used here.
 const RESTORE_FIRST_DETAIL = "restore it first";
+const NIP_TAKEN_DETAIL = "a customer with this NIP already exists - contact your manager";
 
-function isRestoreFirst(body: unknown): boolean {
-  return isRecord(body) && body["detail"] === RESTORE_FIRST_DETAIL;
+function editConflict(body: unknown): EditResult {
+  if (!isRecord(body)) {
+    return { kind: "failed" };
+  }
+  if (body["detail"] === RESTORE_FIRST_DETAIL) {
+    return { kind: "restoreFirst" };
+  }
+  if (body["detail"] !== NIP_TAKEN_DETAIL) {
+    return { kind: "failed" };
+  }
+  const reference = body["existing_customer_id"];
+  const existingCustomerId =
+    typeof reference === "string" && isCustomerId(reference) ? reference : null;
+  return { kind: "nipTaken", existingCustomerId };
 }
 
 async function changeState(id: string, change: "archive" | "restore"): Promise<StateChangeResult> {
@@ -331,6 +360,18 @@ export function archiveCustomer(id: string): Promise<StateChangeResult> {
 
 export function restoreCustomer(id: string): Promise<StateChangeResult> {
   return changeState(id, "restore");
+}
+
+// A reference that is not a customer id gives no link (ADR-0005-C13); a body without the
+// refusal's `detail` is not this refusal at all.
+function parseNipTaken(body: unknown): CreateResult {
+  if (!isRecord(body) || typeof body["detail"] !== "string") {
+    return { kind: "failed" };
+  }
+  const reference = body["existing_customer_id"];
+  const existingCustomerId =
+    typeof reference === "string" && isCustomerId(reference) ? reference : null;
+  return { kind: "nipTaken", existingCustomerId };
 }
 
 export async function readCustomer(id: string): Promise<ReadResult> {

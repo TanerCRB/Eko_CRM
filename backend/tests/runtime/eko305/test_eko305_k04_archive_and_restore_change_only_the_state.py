@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 
+from app.api.customers import NipTakenProblem
 from tests.runtime.eko201.conftest import FakeClock
 from tests.runtime.eko301.conftest import MANAGER, REP_A, REP_B, Crm, create
 from tests.runtime.eko305.conftest import (
@@ -234,8 +235,58 @@ def test_k04_editing_an_archived_customer_is_refused_409_and_changes_nothing(
     assert read_json(owner, customer_id)["name"] == "Gospodarstwo Po Archiwum K04"
 
 
-def test_k04_the_put_declares_409_with_the_problem_body(crm: Crm) -> None:
-    responses = crm.app.openapi()["paths"]["/api/customers/{customer_id}"]["put"]["responses"]
-    assert responses["409"]["content"]["application/json"]["schema"] == {
-        "$ref": "#/components/schemas/Problem"
+def test_k04_the_put_declares_409_as_create_does_and_restore_first_is_an_instance(
+    crm: Crm,
+) -> None:
+    paths = crm.app.openapi()["paths"]
+    put = paths["/api/customers/{customer_id}"]["put"]["responses"]["409"]
+    post = paths["/api/customers"]["post"]["responses"]["409"]
+    schema = put["content"]["application/json"]["schema"]
+    assert schema == {"$ref": "#/components/schemas/NipTakenProblem"}
+    assert schema == post["content"]["application/json"]["schema"]
+    instance = NipTakenProblem.model_validate({"detail": "restore it first"})
+    assert instance.body() == {"detail": "restore it first"}
+
+
+TAKEN = nips.valid_nip(305481)
+
+
+@pytest.mark.parametrize(
+    ("subject", "roles"),
+    [
+        pytest.param(REP_A, ["rep"], id="owner"),
+        pytest.param(MANAGER, ["manager"], id="manager"),
+    ],
+)
+def test_k04_an_archived_customers_edit_to_a_taken_nip_answers_restore_first(
+    crm: Crm, subject: str, roles: list[str]
+) -> None:
+    owner = crm.login(REP_A, ["rep"])
+    holder = customer(owner, "Gospodarstwo Posiadacz K04", tax_id=TAKEN)
+    customer_id = customer(owner, **full_body())
+    assert archive(owner, customer_id).status_code == 200
+    editor = crm.login(subject, roles)
+    body = {"name": "Gospodarstwo NIP K04", "tax_id": TAKEN}
+    before = snapshot(crm)
+    refused = edit(editor, customer_id, body)
+    assert refused.content == b'{"detail":"restore it first"}', refused.text
+    assert refused.status_code == 409
+    assert snapshot(crm) == before
+    # Contrast: only the state differs; once restored, the same PUT meets the NIP.
+    assert restore(editor, customer_id).status_code == 200
+    taken = edit(editor, customer_id, body)
+    expected: dict[str, Any] = {
+        "detail": "a customer with this NIP already exists - contact your manager"
     }
+    if subject == MANAGER:
+        expected["existing_customer_id"] = holder
+    assert (taken.status_code, taken.json()) == (409, expected)
+
+
+def test_k04_an_archived_holder_keeps_its_nip_and_is_restored_with_it(crm: Crm) -> None:
+    rep_a, rep_b = crm.login(REP_A, ["rep"]), crm.login(REP_B, ["rep"])
+    holder = customer(rep_a, "Gospodarstwo Posiadacz K04", tax_id=TAKEN)
+    assert archive(rep_a, holder).status_code == 200
+    assert create(rep_b, {"name": "Gospodarstwo B K04", "tax_id": TAKEN}).status_code == 409
+    restored = restore(rep_a, holder)
+    assert (restored.status_code, restored.json()["tax_id"]) == (200, TAKEN)

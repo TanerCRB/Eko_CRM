@@ -170,3 +170,8 @@ Accepted at gate 2 of EKO-1-38 in [PR #229](https://github.com/TanerCRB/Eko_CRM/
 
 - Exception EKO-1-38/mutation-1 — owner: @TanerCRB — reason: mutation M-R01 (the late send anchored on the refresh start alone, the midpoint rule dropped) survives because the hold end is a guarded line at S + 1.5 and with the refresh lag at 0.2 s no lag separates the two rules with a usable margin; a regression shows as a named hold-margin red under load, attributable from the logged run record; the Reviewer judged it test timing, not a mechanism — blocks again: 2027-05-21
 - Exception EKO-1-38/mutation-2 — owner: @TanerCRB — reason: mutation M-R03 (the round-1 send rule restored, holder on process b) survives because Reviewer R-03 was a margin, not a mechanism; the evidence is the measured minimum blocker-side margin rising from 0.047 s to 0.281 s — blocks again: 2027-05-21
+
+Accepted at gate 2 of EKO-3-03 in [PR #256](https://github.com/TanerCRB/Eko_CRM/pull/256) (both weakening findings decided by the human on 2026-11-24 at the developer checkpoint, recorded on #252; the `blocks again` date confirmed at gate 2 on 2026-11-25).
+
+- Exception EKO-3-03/weakening-1 — owner: @TanerCRB — reason: the K-04 commit gate's `# type: ignore[union-attr]` on the checked-out DBAPI connection's rollback in `backend/tests/runtime/eko303/conftest.py`, which fixes a hang in which the pool returned an unrolled-back connection — blocks again: 2026-12-31
+- Exception EKO-3-03/weakening-2 — owner: @TanerCRB — reason: the K-05 previous-release test skips once the previous release's head is already 0007 or later (G-7 A, the both-bases pattern of EKO-3-02/weakening-2), and fails rather than skips on 0005 or 0006 — blocks again: 2026-12-31

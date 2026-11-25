@@ -1,4 +1,4 @@
-"""EKO-3-05 K-02 (ACC-4, ACC-8, PRH-4; ADR-0003-C33 by-id clause; ADR-0003-C38): a rep's edit,
+"""EKO-3-05 K-02 (ACC-4, ACC-8, PRH-4; ADR-0003-C33 by-id clause; ADR-0003-C39): a rep's edit,
 archive or restore of another rep's customer answers exactly as the same call on a well-formed
 identifier that exists nowhere (status, body, and headers other than `Eko-Correlation-Id`), and
 leaves that customer's row and contacts byte-identical, `archived_at` included.
@@ -42,6 +42,7 @@ from tests.runtime.eko305.conftest import (
     snapshot,
     status_and_json,
 )
+from tests.support import eko302_nip as nips
 from tests.support.api_surface import route_contexts
 from tests.support.c2_routes import body_routes
 
@@ -269,3 +270,46 @@ def test_k02_contrast_the_managers_edit_of_the_archived_customer_is_refused_409(
     assert answer(edit(rep_a, b_customer, VALID_EDIT)) == answer(
         edit(rep_a, nowhere(crm), VALID_EDIT)
     )
+
+
+TAKEN = nips.valid_nip(305281)
+TAKEN_BY_B = nips.valid_nip(305291)
+
+
+@pytest.mark.parametrize("held_by", ["the-reps-own", "another-of-rep-bs"])
+@pytest.mark.parametrize("target_archived", [False, True], ids=["active", "archived"])
+def test_k02_a_taken_nip_gives_no_answer_outside_the_scope(
+    crm: Crm, b_customer: str, held_by: str, target_archived: bool
+) -> None:
+    rep_a, rep_b = crm.login(REP_A, ["rep"]), crm.login(REP_B, ["rep"])
+    customer(rep_a, "Gospodarstwo A NIP K02", tax_id=TAKEN)
+    customer(rep_b, "Gospodarstwo B NIP K02", tax_id=TAKEN_BY_B)
+    if target_archived:
+        assert archive(rep_b, b_customer).status_code == 200
+    nip = TAKEN if held_by == "the-reps-own" else TAKEN_BY_B
+    body = {**VALID_EDIT, "tax_id": nip}
+    before = snapshot(crm)
+    denied = edit(rep_a, b_customer, body)
+    missing = edit(rep_a, nowhere(crm), body)
+    assert status_and_json(denied) == NOT_FOUND, denied.text
+    assert answer(denied) == answer(missing)
+    assert b"existing_customer_id" not in denied.content
+    assert snapshot(crm) == before
+
+
+def test_k02_contrast_the_managers_same_edit_meets_the_nip_with_the_holder(
+    crm: Crm, b_customer: str
+) -> None:
+    rep_a = crm.login(REP_A, ["rep"])
+    holder = customer(rep_a, "Gospodarstwo A NIP K02", tax_id=TAKEN)
+    manager = crm.login(MANAGER, ["manager"])
+    before = snapshot(crm)
+    taken = edit(manager, b_customer, {**VALID_EDIT, "tax_id": TAKEN})
+    assert status_and_json(taken) == (
+        409,
+        {
+            "detail": "a customer with this NIP already exists - contact your manager",
+            "existing_customer_id": holder,
+        },
+    )
+    assert snapshot(crm) == before

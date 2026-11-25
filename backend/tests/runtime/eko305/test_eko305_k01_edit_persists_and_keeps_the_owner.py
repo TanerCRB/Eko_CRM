@@ -1,4 +1,4 @@
-"""EKO-3-05 K-01 (ACC-4, ACC-5; G-5 A, G-6 A, Q-3 A, Q-5; ADR-0003-C38, success half): the owner or
+"""EKO-3-05 K-01 (ACC-4, ACC-5; G-5 A, G-6 A, Q-3 A, Q-5; ADR-0003-C39, success half): the owner or
 the manager edits a customer with `PUT /api/customers/{id}`; the change is stored, a separate read
 shows exactly the values sent, and the owner stays the stored one.
 

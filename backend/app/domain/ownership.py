@@ -52,6 +52,15 @@ def creation_scope(caller: Caller) -> OwnedBy:
     return OwnedBy(caller.subject)
 
 
+def reference_scope(caller: Caller) -> AllRecords | None:
+    """The scope a create refused for a taken NIP looks the stored customer up under: every
+    record for a caller holding `manager`, nothing for any other, so a rep's refusal is the same
+    whoever owns that customer, the rep included (ADR-0003-C38, gate 1 of EKO-3-03)."""
+    if caller.has_manager_rights:
+        return AllRecords()
+    return None
+
+
 def owner_filter(raw: str) -> str | None:
     """A request's owner filter: a subject as sent, never trimmed, folded or normalised, so it is
     compared byte-wise; `""` is no filter (G-5 A). It is judged on its form alone, never on

@@ -1,4 +1,4 @@
-"""EKO-3-05 K-04, ADR-0004-C37 (EKO-3-05 addendum draft; gate-1 decision Q-1 A): revision 0007 adds
+"""EKO-3-05 K-04, ADR-0004-C37 (EKO-3-05 addendum draft; gate-1 decision Q-1 A): revision 0008 adds
 the customer's archived state as an expand step, and the published previous release keeps working
 over it and over a rollback.
 
@@ -12,7 +12,7 @@ over it and over a rollback.
 
 The previous backend is found as ADR-0004-C13's previous-release half finds it
 (`tests/support/releases.py`) and run by digest. These tests run while that release's head is below
-0007 and at least 0004, the first head with customer operations: once a release holding 0007 is
+0008 and at least 0004, the first head with customer operations: once a release holding 0008 is
 published, the step lies behind the previous release and they skip, naming why. A missing release,
 an older head or a non-numeric one fails. Every customer value is synthetic (ADR-0005).
 """
@@ -44,7 +44,7 @@ from tests.support.releases import (
 
 pytestmark = pytest.mark.previous_release
 
-REVISION = "0007"
+REVISION = "0008"
 # Revision 0004 adds the customers; a release before it has no customer operation to keep working.
 OLDEST_HEAD = "0004"
 CUSTOMERS = "/api/customers"

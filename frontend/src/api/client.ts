@@ -4,8 +4,8 @@ export type ApiResponse =
   | { kind: "ok"; status: number; body: unknown }
   | { kind: "unauthenticated" }
   | { kind: "unavailable" }
-  // `body` only on 422, whose answer names fields, and on 409, whose `detail` names the conflict;
-  // no other refusal's body is read.
+  // `body` only on 422 (the fields it names) and 409 (EKO-3-03's NIP refusal, EKO-3-05's
+  // restore-first), told apart by the caller; no other refusal's body is read.
   | { kind: "failed"; status: number; body?: unknown };
 
 export interface RequestOptions {

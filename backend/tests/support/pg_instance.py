@@ -9,7 +9,7 @@ import subprocess
 import sys
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -84,12 +84,16 @@ def _wait_ready(port: int) -> None:
             time.sleep(0.5)
 
 
+DEFAULT_COMMAND = ("-c", "max_connections=100")
+
+
 @contextmanager
-def postgres() -> Iterator[Postgres]:
+def postgres(command: Sequence[str] = DEFAULT_COMMAND) -> Iterator[Postgres]:
+    """`command`: the server's arguments after the image (EKO-3-03 passes the release's)."""
     name = f"eko201-pg-{uuid.uuid4().hex[:10]}"
     _docker(
         "run", "-d", "--rm", "--name", name, "-e", f"POSTGRES_PASSWORD={SUPERUSER_PASSWORD}",
-        "-p", "127.0.0.1::5432", IMAGE, "-c", "max_connections=100",
+        "-p", "127.0.0.1::5432", IMAGE, *command,
     )  # fmt: skip
     try:
         mapped = _docker("port", name, "5432/tcp").stdout.strip().splitlines()[0]

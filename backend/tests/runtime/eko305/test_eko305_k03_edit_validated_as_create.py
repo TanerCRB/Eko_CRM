@@ -4,10 +4,7 @@ a create. For each rule the same invalid input goes once to `POST /api/customers
 rejected edit leaves the stored customer and its contacts byte-identical, and repeats no submitted
 value in its answer or in any log record the backend writes, at DEBUG.
 
-Until EKO-3-03 a NIP edit is not checked for uniqueness: a valid NIP another customer holds is
-accepted, and the answer says nothing a NIP nobody holds would not (ADR-0002 addendum of
-EKO-3-02, a declared deviation; the release constraint "no real data before EKO-3-03" holds).
-EKO-3-03 must change the pin below on purpose.
+The NIP taken on edit (ADR-0003-C40) is `test_eko305_k03_nip_taken_on_edit*.py`.
 """
 
 import json
@@ -18,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from tests.runtime.eko301.conftest import REP_A, REP_B, Crm, create, customer_url
+from tests.runtime.eko301.conftest import REP_A, Crm, create, customer_url
 from tests.runtime.eko302.test_eko302_k05_rejected_stores_nothing_repeats_nothing import (
     logged_text,
 )
@@ -225,33 +222,6 @@ def test_k03_a_rejected_edit_touching_storage_rolls_its_contacts_back(crm: Crm) 
     finally:
         with crm.pg.connect() as connection:
             connection.execute(remove)
-
-
-def test_k03_a_nip_another_customer_holds_is_accepted_and_answered_as_an_unused_one(
-    crm: Crm,
-) -> None:
-    rep_a, rep_b = crm.login(REP_A, ["rep"]), crm.login(REP_B, ["rep"])
-    held_by_a = nips.valid_nip(305311)
-    held_by_b = nips.valid_nip(305321)
-    unused = nips.valid_nip(305331)
-    customer(rep_a, "Sasiad A K03", tax_id=held_by_a)
-    customer(rep_b, "Sasiad B K03", tax_id=held_by_b)
-    target = customer(rep_a, "Cel K03")
-
-    def edited_with(nip: str) -> dict[str, Any]:
-        response = edit(rep_a, target, {"name": "Cel K03", "tax_id": nips.spaced(nip)})
-        assert response.status_code == 200, response.text
-        answered: dict[str, Any] = response.json()
-        assert answered["tax_id"] == nip
-        return {**answered, "tax_id": None}
-
-    baseline = edited_with(unused)
-    assert edited_with(held_by_a) == baseline
-    assert edited_with(held_by_b) == baseline
-    assert crm.pg.rows("SELECT count(*) FROM customer WHERE nip = %s", (held_by_b,)) == [(2,)]
-    # Contrast: the same NIP with one check digit changed is refused.
-    wrong = edit(rep_a, target, {"name": "Cel K03", "tax_id": nips.wrong_check_digit(held_by_b)})
-    assert located(wrong) == [("body", "tax_id")]
 
 
 DECOMPOSED = unicodedata.normalize("NFD", "Zażółć Gęślą Jaźń")

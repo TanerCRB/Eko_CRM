@@ -111,6 +111,17 @@ class StateFilter(StrEnum):
     BOTH = "both"
 
 
+class NipTaken(Exception):
+    """A create or an edit refused because another stored customer, whoever owns it, holds its NIP
+    (CUS-6): HTTP 409. It carries no value of either customer; `existing` is the stored
+    customer's identifier, set only for a caller the ownership rule gives a reference
+    (ADR-0003-C38, gate 1 of EKO-3-03; ADR-0003-C40 for an edit)."""
+
+    def __init__(self, existing: UUID | None = None) -> None:
+        super().__init__()
+        self.existing = existing
+
+
 def _text(raw: str) -> str:
     # PostgreSQL's UTF-8 text holds neither U+0000 nor a lone surrogate, which a JSON escape can
     # still produce; refused here, as a value, instead of failing at the database.

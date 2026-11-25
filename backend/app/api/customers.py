@@ -33,6 +33,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic.json_schema import SkipJsonSchema
 from pydantic_core import ErrorDetails, InitErrorDetails
 
 from app.api.auth import Problem
@@ -336,6 +337,27 @@ class CustomerList(BaseModel):
     items: list[CustomerItem]
 
 
+# CUS-6 as fixed at gate 1 of EKO-3-03 (A-2 A): one English sentence, ASCII only.
+NIP_TAKEN = "a customer with this NIP already exists - contact your manager"
+
+
+class NipTakenProblem(BaseModel):
+    """The 409 of a create or an edit whose Polish NIP another stored customer holds, whoever owns
+    it (CUS-6). The text is the same for every caller and names no customer, owner, count or NIP.
+    Only a caller whose scope is all records gets `existing_customer_id`; for any other caller
+    the field is absent, never `null` (ADR-0003-C38, gate 1 of EKO-3-03; ADR-0003-C40). The
+    edit's other 409, `{"detail":"restore it first"}`, is an instance of it too (D-6 X-4 A)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    detail: str
+    # Absent rather than `null`: the schema shows no null, and the answer drops a `None`.
+    existing_customer_id: UUID | SkipJsonSchema[None] = None
+
+    def body(self) -> dict[str, Any]:
+        return self.model_dump(mode="json", exclude_none=True)
+
+
 _REFUSALS: dict[int | str, dict[str, Any]] = {
     401: {"model": Problem},
     403: {"model": Problem},
@@ -435,7 +457,7 @@ Search = Annotated[CustomerSearch, Depends(customer_search)]
     operation_id="customer_create",
     status_code=201,
     response_model=CustomerOut,
-    responses=_REFUSALS,
+    responses={**_REFUSALS, 409: {"model": NipTakenProblem}},
 )
 def create_customer(body: CustomerCreate, caller: CurrentCaller, store: Store) -> CustomerOut:
     return CustomerOut.of(service.create_customer(store, caller, body.draft()))
@@ -466,8 +488,9 @@ def read_customer(customer_id: UUID, caller: CurrentCaller, store: Store) -> Cus
     "/{customer_id}",
     operation_id="customer_edit",
     response_model=CustomerOut,
-    # 409: the customer is archived and is restored first (G-4 A, D-2 S-2 A).
-    responses={**_REFUSALS, 404: {"model": Problem}, 409: {"model": Problem}},
+    # 409: archived, `{"detail":"restore it first"}` (G-4 A, D-2 S-2 A), or the NIP taken as on
+    # create (ADR-0003-C40); one schema for both, told apart by `detail` (D-6 X-4 A).
+    responses={**_REFUSALS, 404: {"model": Problem}, 409: {"model": NipTakenProblem}},
 )
 def edit_customer(
     customer_id: UUID, body: CustomerCreate, caller: CurrentCaller, store: Store

@@ -12,6 +12,11 @@ scope, the identifier and the state the change needs, so the state is judged on 
 scoped statement locks: a change never lands on a customer whose state changed before the write
 (ADR-0003 addendum draft of EKO-3-05, Q-3 A). Contacts are replaced only through the identifier
 that scoped `UPDATE` returned. No change writes `owner_subject`.
+
+A taken NIP is decided by the database's unique constraint on `nip`, never by a read before the
+insert or the update (ADR-0002 *NIP uniqueness*; gate 1 of EKO-3-03; ADR-0003-C40): its
+violation, told apart by the constraint's name, becomes `NipTaken`, which carries no value. The
+driver's message names the NIP, so it is never read or written anywhere.
 """
 
 import logging
@@ -20,6 +25,7 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import datetime
 
+import psycopg
 from sqlalchemy import (
     ColumnElement,
     Connection,
@@ -35,10 +41,10 @@ from sqlalchemy import (
     true,
     update,
 )
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.data.database import Database
-from app.data.models import CustomerContactRow, CustomerRow
+from app.data.models import NIP_UNIQUE, CustomerContactRow, CustomerRow
 from app.data.sessions import StorageUnavailable
 from app.domain.customers import (
     Address,
@@ -48,6 +54,7 @@ from app.domain.customers import (
     CustomerDraft,
     CustomerSearch,
     CustomerSummary,
+    NipTaken,
     StateFilter,
     TaxId,
     Unchanged,
@@ -96,7 +103,7 @@ def _visible(scope: VisibilityScope) -> ColumnElement[bool]:
     return CustomerRow.owner_subject == scope.subject
 
 
-# The stored state as the answers carry it: NULL is active (revision 0007, Q-4 B).
+# The stored state as the answers carry it: NULL is active (revision 0008, Q-4 B).
 ARCHIVED = CustomerRow.archived_at.is_not(None)
 # The list's state condition, joined to the scope's by AND; `both` drops only this one.
 STATE_CONDITIONS: dict[StateFilter, ColumnElement[bool]] = {
@@ -187,6 +194,16 @@ def _unchanged(connection: Connection, scope: VisibilityScope, customer_id: uuid
     return Unchanged.MISSING if inside is None else Unchanged.ARCHIVED
 
 
+def _is_nip_taken(error: IntegrityError) -> bool:
+    """Whether the violated constraint is the one on `nip`, from the driver's diagnostic field:
+    SQLSTATE 23505 alone is not enough, the contact table's one-primary index raises it too."""
+    cause = error.orig
+    return (
+        isinstance(cause, psycopg.errors.UniqueViolation)
+        and cause.diag.constraint_name == NIP_UNIQUE
+    )
+
+
 class CustomerStore:
     def __init__(self, database: Database) -> None:
         self._engine = database.engine
@@ -205,11 +222,17 @@ class CustomerStore:
         """The customer, owned by the scope's subject, and its contacts in the order given."""
         customer_id = new_identifier()
         with self._connection() as connection:
-            connection.execute(
-                insert(CustomerRow).values(
-                    id=customer_id, owner_subject=scope.subject, **_draft_columns(draft)
+            try:
+                connection.execute(
+                    insert(CustomerRow).values(
+                        id=customer_id, owner_subject=scope.subject, **_draft_columns(draft)
+                    )
                 )
-            )
+            except IntegrityError as error:
+                if _is_nip_taken(error):
+                    # Leaving the block rolls the transaction back: nothing of this create stays.
+                    raise NipTaken from None
+                raise
             if draft.contacts:
                 rows = _contact_rows(customer_id, draft.contacts)
                 connection.execute(insert(CustomerContactRow), rows)
@@ -224,6 +247,15 @@ class CustomerStore:
             archived=False,
         )
 
+    def find_by_nip(self, scope: VisibilityScope, nip: str) -> uuid.UUID | None:
+        """The identifier, and nothing else, of the customer in the scope holding `nip`. Read
+        after a create or an edit was refused for that NIP, in a transaction of its own, so the
+        stored customer that refused it is committed and seen (gate 1 of EKO-3-03, A-3 A)."""
+        statement = select(CustomerRow.id).where(CustomerRow.nip == nip, _visible(scope))
+        with self._connection() as connection:
+            found: uuid.UUID | None = connection.execute(statement).scalar_one_or_none()
+        return found
+
     def find(self, scope: VisibilityScope, customer_id: uuid.UUID) -> Customer | None:
         """The customer by identifier and scope, with its contacts in order."""
         with self._connection() as connection:
@@ -234,18 +266,26 @@ class CustomerStore:
     ) -> Customer | Unchanged:
         """The whole customer as `draft` states it, its contacts replaced in the order given, in
         one transaction (G-5 A, G-6 A); only an active customer is edited (G-4 A). The owner is
-        the stored one: the `UPDATE` does not name it."""
+        the stored one: the `UPDATE` does not name it. A NIP another customer holds is refused
+        by the constraint on that `UPDATE`, as on create (C40); the target keeps its own."""
         with self._connection() as connection:
-            written = connection.execute(
-                update(CustomerRow)
-                .where(
-                    CustomerRow.id == customer_id,
-                    _visible(scope),
-                    CustomerRow.archived_at.is_(None),
-                )
-                .values(**_draft_columns(draft))
-                .returning(CustomerRow.id)
-            ).scalar_one_or_none()
+            try:
+                written = connection.execute(
+                    update(CustomerRow)
+                    .where(
+                        CustomerRow.id == customer_id,
+                        _visible(scope),
+                        CustomerRow.archived_at.is_(None),
+                    )
+                    .values(**_draft_columns(draft))
+                    .returning(CustomerRow.id)
+                ).scalar_one_or_none()
+            except IntegrityError as error:
+                # Reached only by a row the scope and the state let through (ADR-0003-C40);
+                # leaving the block rolls the edit back, its contacts untouched.
+                if _is_nip_taken(error):
+                    raise NipTaken from None
+                raise
             if written is None:
                 return _unchanged(connection, scope, customer_id)
             connection.execute(

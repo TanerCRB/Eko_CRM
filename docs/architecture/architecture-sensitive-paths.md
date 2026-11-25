@@ -20,6 +20,7 @@ that marks a decision "pending <id>" is rewritten by that decision's own task wh
 | `backend/app/api/**` | auth, personal-data | ADR-0001, ADR-0003, ADR-0005 | every endpoint is an access decision over personal data |
 | `backend/app/main.py` | auth, personal-data | ADR-0001, ADR-0003, ADR-0005 | wires the app-wide access dependency and the error handling of requests carrying personal data |
 | `backend/app/domain/**` | personal-data | ADR-0001, ADR-0005 | the contact model and what it keeps out of logs |
+| `backend/app/domain/ownership.py` | auth | ADR-0003 | the only place that builds a visibility, creation or reference scope (`OwnedBy`, `AllRecords`; ADR-0003-C36): since EKO-3-03, `reference_scope` decides which caller gets the stored customer's identifier in the duplicate-NIP refusal (ADR-0003-C38), so a widened scope discloses another rep's customer to a rep (EKO-3-03) |
 | `backend/app/services/**` | personal-data | ADR-0001, ADR-0005 | every read and write of contacts goes through here |
 | `frontend/src/**` | personal-data | ADR-0001, ADR-0003, ADR-0005 | renders contacts; holds no token (ADR-0003: HttpOnly session cookie, one origin) |
 | `backend/app/core/settings.py` | secrets | ADR-0001, ADR-0004 | the one place configuration and secrets are read |

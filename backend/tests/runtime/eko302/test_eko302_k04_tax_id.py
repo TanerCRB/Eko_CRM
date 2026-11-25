@@ -3,8 +3,9 @@ accepted at gate 1): a Polish tax ID has surrounding whitespace, hyphens, spaces
 `PL` removed, must then be ten ASCII digits with a valid checksum, and is stored and returned as
 the ten digits; a foreign tax ID is free text with no checksum, stored in its own column.
 
-Until EKO-3-03 no uniqueness applies: a NIP another rep's customer holds gets exactly the answer
-a NIP nobody holds gets (PRH-4). Every NIP is synthetic and built at run time (G-7 A).
+Since EKO-3-03 a NIP is unique company-wide (CUS-6): the spellings of one NIP are one NIP, and a
+NIP another rep's customer holds is refused with an answer naming nothing of that customer
+(PRH-4; gate 1 of EKO-3-03, G-8 A). Every NIP is synthetic and built at run time (G-7 A).
 """
 
 import string
@@ -43,13 +44,16 @@ def tax_id_of(crm: Crm, tax_id: Any, country: str = "PL") -> tuple[Any, dict[str
 
 def test_k04_one_nip_four_spellings_read_back_identical(crm: Crm) -> None:
     nip = nips.valid_nip(3003)
-    spellings = [nip, nips.hyphenated(nip), nips.spaced(nip), "PL" + nip]
-    assert len(set(spellings)) == 4
-    for spelling in spellings:
-        read, row = tax_id_of(crm, spelling)
-        assert read == nip, spelling
-        assert (row["nip"], row["foreign_tax_id"]) == (nip, None)
-    assert crm.counts()["customer"] == 4
+    first, *others = [nip, nips.hyphenated(nip), nips.spaced(nip), "PL" + nip]
+    assert len({first, *others}) == 4
+    read, row = tax_id_of(crm, first)
+    assert read == nip
+    assert (row["nip"], row["foreign_tax_id"]) == (nip, None)
+    rep = crm.login(REP_A, ["rep"])
+    # Each other spelling normalises to the same ten digits, so it is that NIP, already taken.
+    for spelling in others:
+        assert create(rep, {"name": NAME, "tax_id": spelling}).status_code == 409, spelling
+    assert crm.counts()["customer"] == 1
 
 
 def test_k04_wrong_checksum_rejected(crm: Crm) -> None:
@@ -143,18 +147,16 @@ def test_k04_foreign_tax_id_free_text(crm: Crm, foreign: str) -> None:
 def test_k04_a_nip_another_reps_customer_holds_gets_the_answer_an_unused_nip_gets(
     crm: Crm,
 ) -> None:
+    """Since EKO-3-03 (CUS-6, G-8 A) the held NIP is refused, not stored; what stays of this test
+    is that the answer names nothing of the other rep's customer."""
     held, unused = nips.valid_nip(6006), nips.valid_nip(7007)
     owner = crm.login(REP_A, ["rep"])
     created_id(owner, {"name": "Gospodarstwo Rep A", "street": "ul. Ukryta 7", "tax_id": held})
     rep_b = crm.login(REP_B, ["rep"])
     on_held = create(rep_b, {"name": NAME, "tax_id": held})
     on_unused = create(rep_b, {"name": NAME, "tax_id": unused})
-    assert on_held.status_code == on_unused.status_code == 201, on_held.text
-    first, second = on_held.json(), on_unused.json()
-    assert first["tax_id"] == held and second["tax_id"] == unused
-    strip = ("id", "tax_id")
-    assert {k: v for k, v in first.items() if k not in strip} == {
-        k: v for k, v in second.items() if k not in strip
-    }
+    assert (on_held.status_code, on_unused.status_code) == (409, 201), on_held.text
+    assert on_unused.json()["tax_id"] == unused
     assert "Rep A" not in on_held.text and "Ukryta" not in on_held.text
-    assert crm.pg.rows("SELECT count(*) FROM customer WHERE nip = %s", (held,)) == [(2,)]
+    assert held not in on_held.text
+    assert crm.pg.rows("SELECT count(*) FROM customer WHERE nip = %s", (held,)) == [(1,)]
