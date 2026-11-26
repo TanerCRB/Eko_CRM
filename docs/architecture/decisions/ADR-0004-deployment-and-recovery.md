@@ -2224,3 +2224,42 @@ the human at gate 1 of EKO-3-06 on 2026-11-25 (Issue #258); the text is that of
 | Control | Acceptance criterion |
 |---|---|
 | ADR-0004-C37 | The operator seed started against a database at a revision older than its code's head, or at one it cannot place, exits non-zero and leaves every application table and the schema byte-equal; a seed run at head leaves `alembic_version`, `schema_revision_lineage` and the schema dump unchanged; `docker compose config --services` is unchanged by this task. |
+
+### 2026-11-26 — An expand step adding a record state, and a rollback over it
+
+**Status:** Accepted 2026-11-26 (gate 1 of EKO-3-05, Issue #253).
+
+**What it adds.** *Expand → deploy → contract* requires the release before an expand step to
+keep working on the new schema, but does not say what that means for a column that holds a
+record's state. From this date:
+
+- A revision that adds a record state adds its column nullable, or `NOT NULL` with a constant
+  default not evaluated from the database's clock. An `INSERT` that does not name it stores the
+  state's default meaning. The revision rewrites no existing row's personal data.
+- A release that does not know a state keeps working on the expanded schema when its reads and
+  writes succeed, it changes no stored state, and it answers a record in an unknown state as the
+  state's default meaning. For the customer's archived state (EKO-3-05, revision `0009`) the
+  default is active. On a rollback to such a release it lists archived customers among the
+  active ones; that is announced with the rollback, and the stored state is unchanged when the
+  newer release serves again.
+- A record state that restricts no one's reading is not an access rule under *Rollback to the
+  previous release*. One that makes records unreadable to a caller who could read them is one,
+  and its release cannot be rolled back.
+
+**New control ADR-0004-C38** (table below). The EKO-3-03 addendum of the same release, on
+revision `0007`, and the EKO-3-06 addendum, on revision `0008` and with ADR-0004-C37, are
+unchanged. Every other rule and control of this decision is unchanged.
+
+**Why.** EKO-3-05 adds the first record state on a table holding rows. Without this text, the
+previous release's reading of archived customers as active would be judged by each evaluator as
+either "working" or "not working" on the new schema, and a rollback over it would be decided
+during an incident. This adds a rule and restates none. Approved by the human at gate 1 of
+EKO-3-05 on 2026-11-24 (D-1) and, as revised after the EKO-3-03 and EKO-3-06 merges, on 2026-11-25
+(D-6) and 2026-11-26 (D-8) (Issue #253); the text is that of
+[`EKO-3-05-changing-customers-archived-state-adr0003-adr0004-addendum-draft-2026-11-24.md`](EKO-3-05-changing-customers-archived-state-adr0003-adr0004-addendum-draft-2026-11-24.md).
+
+**ADR-0004-C38.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0004-C38 | Against the published previous release found as ADR-0004-C13's previous-release half finds it, while that release's head is below `0009`, the revision adding the archived state, and at least `0004`: customers and contacts stored by the previous release read back unchanged and active after the step; the previous backend keeps reading, listing and creating customers on the expanded schema, and a customer it creates reads back active from the head backend; after the head backend archives a customer and the previous backend serves again, the previous backend's by-id read and list answer that customer and change nothing of it, and when the head backend serves again the customer is still archived with every field and contact unchanged. Once that release's head is at or past `0009`, the test skips naming why; an older, missing or non-numeric head fails. |
