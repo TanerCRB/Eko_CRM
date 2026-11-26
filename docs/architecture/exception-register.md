@@ -179,3 +179,7 @@ Accepted at gate 2 of EKO-3-03 in [PR #256](https://github.com/TanerCRB/Eko_CRM/
 Accepted at gate 2 of EKO-3-06 in [PR #260](https://github.com/TanerCRB/Eko_CRM/pull/260) (Security Auditor B-01, decided by the human on 2026-11-25 and recorded on #258; the residual is stated in the ADR-0005 addendum of 2026-11-25).
 
 - Exception EKO-3-06/B-01 — owner: @TanerCRB — reason: the synthetic-only declaration can also be supplied per run by a shell variable or -e, which Compose cannot prevent, so only the operator procedure in docs/operations/seed.md guards it (accepted by the human on 2026-11-25; the residual goes into the ADR-0005 addendum at gate 3) — blocks again: 2026-12-31
+
+Accepted at gate 2 of EKO-3-05 in [PR #261](https://github.com/TanerCRB/Eko_CRM/pull/261) (the weakening finding decided by the human on 2026-11-24, D-3 W-1 A, and its threshold moved to 0009 on 2026-11-26, D-8 Y-1 A, both recorded on #253; the `blocks again` date confirmed at gate 2 on 2026-11-26).
+
+- Exception EKO-3-05/weakening-1 — owner: @TanerCRB — reason: the K-04 C38 previous-release test (test_eko305_k04_c38_previous_release_over_the_archived_state.py) skips once the previous release's head is already 0009 or later (D-3 W-1 A, threshold moved by D-8 Y-1 A, the both-bases pattern of EKO-3-02/weakening-2), and fails rather than skips below 0004 or on a missing or non-numeric head — blocks again: 2026-12-31

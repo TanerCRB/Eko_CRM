@@ -1335,3 +1335,77 @@ addenda of 2026-11-20 (C33) and 2026-11-22 (C35). Approved by the human at gate 
 |---|---|
 | ADR-0003-C39 | Under `backend/app/`, the operator creation scope function of `backend/app/domain/ownership.py` is imported only by `backend/app/seed.py`; a fixture import of it from a module under `backend/app/api/`, `backend/app/auth/`, from `backend/app/main.py` or `backend/app/worker.py` fails the check; a seed run with three named subjects stores each share with exactly its named subject as `customer.owner_subject`, refuses a subject outside the owner form before any write, succeeds with Keycloak unreachable, and leaves `staff_display_name` byte-equal. |
 | ADR-0003-C19 (restated) | On the PostgreSQL server, Keycloak's database role and the application's database role each have a connection limit greater than zero, Keycloak's configured `db-pool-max-size` does not exceed its role's limit, the backend's configured workers × (pool size + max overflow) plus the background jobs' pools plus one migration connection plus one connection of the operator seed does not exceed the application role's limit, and the two limits together are below `max_connections` minus `superuser_reserved_connections`; a seed run holds at most one connection to the application database. |
+
+### 2026-11-26 — Changing a customer; a change refused by the NIP unique constraint; the archived state is a filter, never a scope; ADR-0003-C33 restated
+
+**Status:** Accepted 2026-11-26, as a declared deviation (gate 1 of EKO-3-05, Issue #253).
+
+**What it adds.** The addendum of 2026-11-17 decides who reads and who creates a customer, not
+who changes one, and the EKO-3-03 addendum (C38) decides what a create refused by the unique
+constraint on `customer.nip` tells its caller, not what a refused change tells it. From this
+date:
+
+- Editing, archiving and restoring a customer take the visibility scope: a caller holding
+  `manager` changes every customer, with or without `rep`; a caller holding `rep` without
+  `manager` only those it owns. Creation still needs `rep`. A change never sets or alters the
+  owner; changing it is reassignment (EKO-3-07).
+- The `data` function that writes a change applies the scope in the statement that writes the
+  row; a customer's contacts are changed only through a customer selected under the scope.
+- A change never writes the dataset key of the EKO-3-06 addendum: a seeded customer keeps its
+  key through an edit, an archive and a restore, so the operator seed adds nothing for it. The
+  operator creation scope is a creation scope only; no change is made with it, and the seed
+  changes no stored customer and writes no archived state.
+- The archived state is a value of the record, never part of a visibility scope. A list selects
+  by state as a request value within the scope, joined by AND; with no state given it selects
+  active customers. An archived customer stays in its owner's and the manager's scope and is read
+  by identifier as an active one is.
+- For an operation naming a record by identifier, a record outside the scope gets the not-found
+  answer whatever its state; a state-dependent answer is given only inside the scope, judged on
+  the row the scoped statement selected, in the transaction that writes it.
+- An edit refused because the unique constraint on `customer.nip` refused its write is answered
+  as the EKO-3-03 addendum answers a refused create: decided by the constraint, never by a read
+  before the write; one answer for every caller holding `rep` without `manager`, whoever holds
+  the NIP, the caller included; the holder's identifier added only for a caller whose visibility
+  scope is all records, read after the refusal under that scope. A caller holding `manager`
+  without `rep` gets it too. An edit keeping the customer's own NIP is not refused. The NIP is
+  judged only for a record inside the scope and in a state that may be changed: the access
+  decision, then the body, then the scope, then the state, then the constraint. An archived
+  customer keeps holding its NIP.
+
+**What it restates.** ADR-0003-C33's list clause, as restated on 2026-11-20, reads: "every list
+given no search or filter other than the default state answers a caller holding `rep` without
+`manager` exactly the active records it owns and a caller holding `manager` all active records;
+a list given the state that selects every state, and no other search or filter, answers them
+every record it owns, and all records, respectively; a list given a search or filter answers
+exactly the records of that set which the search or filter selects, so a caller holding `rep`
+without `manager` is never answered a record it does not own, and its answer to a search or
+filter that selects only another owner's records equals its answer to one that selects no record
+at all (status, body, and headers other than `Eko-Correlation-Id`)". The rest of C33 is
+unchanged.
+
+**New controls ADR-0003-C40 and ADR-0003-C41** (table below). ADR-0003-C38 and the EKO-3-03
+addendum text, and ADR-0003-C39 and the EKO-3-06 addendum text, are unchanged. Every other
+rule and control of this decision is unchanged; the session-exempt, role-free and non-CRM lists
+are unchanged, no change operation is marked non-CRM, and no function is added to the closed
+system-read list.
+
+**Why.** ACC-5 has the manager edit any rep's customer, and C-2 A and C-3 A have the manager
+archive and restore any customer. The manager may hold no `rep`, so the creation rule cannot be
+the change rule. A state folded into the scope would let a request value widen it (PRH-4). A
+state or NIP answer given before the scope would tell a rep that another rep's customer exists
+(ACC-8). CUS-6 accepts one disclosure, that a NIP is taken; an edit reaching the same constraint
+must disclose no more than a create does. A change that cleared a seeded customer's dataset key
+would make the next seed run load it again. C33's letter fails on a default-active list where the
+rule holds. Restating an accepted control is a declared deviation, following the addenda of
+2026-11-20 (C33) and 2026-11-22 (C35). Approved by the human at gate 1 of EKO-3-05 on
+2026-11-24 (D-1) and, as revised after the EKO-3-03 and EKO-3-06 merges, on 2026-11-25 (D-6) and
+2026-11-26 (D-8) (Issue #253); the text is that of
+[`EKO-3-05-changing-customers-archived-state-adr0003-adr0004-addendum-draft-2026-11-24.md`](EKO-3-05-changing-customers-archived-state-adr0003-adr0004-addendum-draft-2026-11-24.md).
+
+**ADR-0003-C40, ADR-0003-C41 and ADR-0003-C33 (restated).**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0003-C40 | A test stores customer X with NIP N for rep A, and customers Y of rep A and Z of rep B, neither holding N. Rep A's edit of Y setting N and rep B's edit of Z setting N answer 409 with status, body and headers other than `Eko-Correlation-Id` equal to each other and to EKO-3-03's refused create, and the body holds no identifier, subject, field value, count or NIP; the edit of Y setting N by a caller holding `manager` with `rep`, and by one holding `manager` without `rep`, answers the same status and body plus `existing_customer_id`, which `GET /api/customers/<id>` resolves to X under that caller; after each refused edit the edited customer's row and contacts are byte-identical; an edit of X that keeps N succeeds; with X archived the same edit of Y is still refused; with Y archived the owner's edit setting N answers `{"detail":"restore it first"}`, and a rep's edit of another rep's customer setting N answers the missing-identifier 404; of two overlapping edits setting N on two customers, one is stored and the other gets the 409. |
+| ADR-0003-C41 | For every operation that changes an owned record named by identifier (at this date: edit, archive and restore of a customer): a caller holding `manager`, with or without `rep`, changes a customer of any owner; a caller holding `rep` without `manager` changes its own; administrator-only and role-less callers get 403 and nothing changes; a rep's change of another owner's customer, active or archived, and with a body whose NIP another customer holds, answers equal to the same change on a well-formed identifier that exists nowhere (status, body, headers other than `Eko-Correlation-Id`), gives no state-dependent or NIP-taken answer, and leaves that customer's row and contacts byte-identical; after any change by any caller the owner and the dataset key are the stored ones, shown on a customer that holds a dataset key; a seed run over a seeded customer that was edited and archived adds nothing and leaves its row and contacts byte-identical; the scope is applied in the statement that writes the row, so removing it from that statement alone, with any scoped read kept, fails a test or is recorded as a redundant layer by QA. |
+| ADR-0003-C33 (restated) | As in the addendum text above: with no filter other than the default state, a rep gets exactly its own active customers and the manager all active customers; with the every-state value, exactly its own and all customers; a searched or filtered list answers only records of the caller's scope that the search or filter selects, for every state value; and a rep's answer to a search or filter that selects only another owner's records equals its answer to one that selects nothing (status, body, and headers other than `Eko-Correlation-Id`). |
