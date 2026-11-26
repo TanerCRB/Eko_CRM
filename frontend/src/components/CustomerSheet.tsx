@@ -22,6 +22,8 @@ interface CustomerSheetProps {
   countryLabel: string;
   // Further labelled values shown after the country, in order; each label appears once.
   details?: readonly SheetDetail[];
+  // The record's state as display text, shown under the name (P2: "Klient aktywny").
+  status?: string;
 }
 
 function kindLabel(kind: string): string {
@@ -34,7 +36,7 @@ function kindLabel(kind: string): string {
 // P2 CustomerSheet, the part this release has: name, country, the details the feature passes
 // (address and tax ID) and contacts. Every value is a text child, so markup in it is shown, never
 // interpreted.
-export function CustomerSheet({ customer, countryLabel, details = [] }: CustomerSheetProps) {
+export function CustomerSheet({ customer, countryLabel, details = [], status }: CustomerSheetProps) {
   const headingRef = useMountFocus<HTMLHeadingElement>();
   const contactsId = useId();
 
@@ -44,6 +46,7 @@ export function CustomerSheet({ customer, countryLabel, details = [] }: Customer
         <h1 ref={headingRef} tabIndex={-1}>
           {customer.name}
         </h1>
+        {status === undefined ? null : <p>{status}</p>}
       </div>
       <dl className="detail-grid">
         <div>

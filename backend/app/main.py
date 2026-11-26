@@ -46,7 +46,7 @@ from app.core.logs import RequestLine, correlation_id, install_interpreter_hooks
 from app.core.settings import AuthSettings, Settings, load_settings
 from app.data.database import Database
 from app.data.sessions import SessionStore, StorageUnavailable
-from app.domain.customers import CustomerNotFound, NipTaken
+from app.domain.customers import CustomerArchived, CustomerNotFound, NipTaken
 from app.domain.ownership import NotPermitted
 
 logger = logging.getLogger(__name__)
@@ -284,6 +284,11 @@ async def _not_found(request: Request, exc: Exception) -> Response:
     return _problem(404, "not found")
 
 
+async def _restore_first(request: Request, exc: Exception) -> Response:
+    # Only a customer inside the caller's scope reaches this (EKO-3-05 G-4 A, D-2 S-2 A).
+    return _problem(409, "restore it first")
+
+
 async def _nip_taken(request: Request, exc: Exception) -> Response:
     # The reference is set only by the service, for an all-records caller (ADR-0003-C38).
     existing = exc.existing if isinstance(exc, NipTaken) else None
@@ -353,13 +358,14 @@ def create_app() -> FastAPI:
         settings = load_settings(Settings)
         auth_settings = load_settings(AuthSettings)
         database = Database.from_settings(settings)
+        clock = SystemClock()
         http = http_client()
         auth = Authenticator(
             origin=auth_settings.app_origin,
             store=SessionStore(database),
             oidc=OidcClient(auth_settings, http),
             sealer=Sealer(auth_settings.session_key()),
-            clock=SystemClock(),
+            clock=clock,
         )
 
         @asynccontextmanager
@@ -380,6 +386,7 @@ def create_app() -> FastAPI:
             dependencies=[Depends(authenticate)],
         )
         app.state.database = database
+        app.state.clock = clock
         app.state.auth = auth
         app.include_router(health_router, prefix="/api")
         app.include_router(auth_router, prefix="/api")
@@ -400,6 +407,7 @@ def create_app() -> FastAPI:
         app.add_exception_handler(StorageUnavailable, _unavailable)
         app.add_exception_handler(NotPermitted, _role_refused)
         app.add_exception_handler(CustomerNotFound, _not_found)
+        app.add_exception_handler(CustomerArchived, _restore_first)
         app.add_exception_handler(NipTaken, _nip_taken)
         install_request_handling(app)
         return app

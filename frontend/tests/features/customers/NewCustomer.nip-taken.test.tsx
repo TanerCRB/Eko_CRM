@@ -62,6 +62,7 @@ function customer(id: string, name: string): CustomerRecord {
     county: null,
     tax_id: null,
     contacts: [],
+    archived: false,
   };
 }
 
@@ -101,7 +102,7 @@ function stub(creates: readonly Source[]) {
         throw new Error(`Unexpected request ${method} ${url}`);
       }
       const reply = typeof source === "function" ? await source() : source;
-      const text = "raw" in reply ? reply.raw : JSON.stringify(reply.body);
+      const text = "raw" in reply ? reply.raw : JSON.stringify("older" in reply ? reply.older : reply.body);
       return new Response(text, {
         status: reply.status,
         headers: { "content-type": "application/json" },

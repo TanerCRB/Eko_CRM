@@ -51,6 +51,7 @@ export interface ContactRecord {
 
 // A backend from before EKO-3-02 sends no address parts during a rolling deployment;
 // `parseCustomer` reads a missing part as `null` (not given), so the parsed record always has them.
+// `archived` (EKO-3-05) is the stored state; a backend from before it sends none, read as active.
 export interface CustomerRecord {
   id: string;
   name: string;
@@ -62,12 +63,15 @@ export interface CustomerRecord {
   voivodeship: string | null;
   county: string | null;
   tax_id: string | null;
+  archived: boolean;
 }
 
+// `archived` is each item's stored state, never the `state` the list was asked for.
 export interface CustomerSummary {
   id: string;
   name: string;
   country: string;
+  archived: boolean;
 }
 
 export interface CustomerList {
@@ -105,6 +109,25 @@ export type CreateResult =
   | { kind: "refused" }
   | { kind: "failed" };
 
+// Not exported (the contract check compares every exported type); the edit's answer as the form
+// reads it. "notFound": the id exists nowhere the caller may see (ADR-0003-C33); "restoreFirst":
+// the customer is archived and must be restored before its data can change (EKO-3-05 S-2 A);
+// "nipTaken": another customer holds the NIP (D-6 X-4 A), with the answer's reference if any.
+type EditResult =
+  | { kind: "saved"; customer: CustomerRecord }
+  | { kind: "rejected"; fields: RejectedField[] }
+  | { kind: "refused" }
+  | { kind: "notFound" }
+  | { kind: "restoreFirst" }
+  | { kind: "nipTaken"; existingCustomerId: string | null }
+  | { kind: "failed" };
+
+// Archive and restore answer the customer as it now is; not exported, as `EditResult`.
+type StateChangeResult =
+  | { kind: "changed"; customer: CustomerRecord }
+  | { kind: "notFound" }
+  | { kind: "failed" };
+
 export type ReadResult =
   | { kind: "found"; customer: CustomerRecord }
   | { kind: "notFound" }
@@ -112,9 +135,11 @@ export type ReadResult =
 
 // The list operation's query parameters (EKO-3-04 Q-6, EKO-3-08): `listPath` sends exactly these
 // keys, each through its entry in `LIST_QUERY_VALUES`, which fails to compile if one is missing.
+// `state` (EKO-3-05 Q-5): absent means active on the server, as an empty value does.
 export interface CustomerListQuery {
   q?: string;
   owner?: string;
+  state?: "active" | "archived" | "both";
 }
 
 // "rejected": the server refused the query (422); its body is not read, so no value comes back.
@@ -152,14 +177,18 @@ function parseSummary(value: unknown): CustomerSummary | null {
   if (!isRecord(value)) {
     return null;
   }
-  const { id, name, country } = value;
+  const { id, name, country, archived } = value;
   if (typeof id !== "string" || !isCustomerId(id)) {
     return null;
   }
   if (typeof name !== "string" || typeof country !== "string") {
     return null;
   }
-  return { id, name, country };
+  // Missing means a backend from before EKO-3-05, where nothing could be archived.
+  if (archived !== undefined && typeof archived !== "boolean") {
+    return null;
+  }
+  return { id, name, country, archived: archived === true };
 }
 
 export function parseCustomer(value: unknown): CustomerRecord | null {
@@ -263,6 +292,76 @@ export async function createCustomer(input: CustomerInput): Promise<CreateResult
   return { kind: "failed" };
 }
 
+// The edit states the whole customer in the create body (G-6 A): `PUT` replaces what is stored.
+export async function editCustomer(id: string, input: CustomerInput): Promise<EditResult> {
+  if (!isCustomerId(id)) {
+    return { kind: "notFound" };
+  }
+  const response = await apiRequest(`/api/customers/${id}`, { method: "PUT", body: input });
+  if (response.kind === "ok") {
+    const customer = parseCustomer(response.body);
+    return customer === null ? { kind: "failed" } : { kind: "saved", customer };
+  }
+  if (response.kind === "failed" && response.status === 422) {
+    return { kind: "rejected", fields: parseRejection(response.body) };
+  }
+  if (response.kind === "failed" && response.status === 403) {
+    return { kind: "refused" };
+  }
+  if (response.kind === "failed" && response.status === 404) {
+    return { kind: "notFound" };
+  }
+  if (response.kind === "failed" && response.status === 409) {
+    return editConflict(response.body);
+  }
+  return { kind: "failed" };
+}
+
+// The PUT's two 409 texts (D-6 X-4 A), compared byte for byte; any other 409 is a conflict the
+// SPA does not know how to resolve. Create's looser reading (`parseNipTaken`) is not used here.
+const RESTORE_FIRST_DETAIL = "restore it first";
+const NIP_TAKEN_DETAIL = "a customer with this NIP already exists - contact your manager";
+
+function editConflict(body: unknown): EditResult {
+  if (!isRecord(body)) {
+    return { kind: "failed" };
+  }
+  if (body["detail"] === RESTORE_FIRST_DETAIL) {
+    return { kind: "restoreFirst" };
+  }
+  if (body["detail"] !== NIP_TAKEN_DETAIL) {
+    return { kind: "failed" };
+  }
+  const reference = body["existing_customer_id"];
+  const existingCustomerId =
+    typeof reference === "string" && isCustomerId(reference) ? reference : null;
+  return { kind: "nipTaken", existingCustomerId };
+}
+
+async function changeState(id: string, change: "archive" | "restore"): Promise<StateChangeResult> {
+  if (!isCustomerId(id)) {
+    return { kind: "notFound" };
+  }
+  const response = await apiRequest(`/api/customers/${id}/${change}`, { method: "POST" });
+  if (response.kind === "ok") {
+    const customer = parseCustomer(response.body);
+    return customer === null ? { kind: "failed" } : { kind: "changed", customer };
+  }
+  if (response.kind === "failed" && response.status === 404) {
+    return { kind: "notFound" };
+  }
+  return { kind: "failed" };
+}
+
+// Both send no body; a repeat answers the same customer, so a retry is harmless (K-04).
+export function archiveCustomer(id: string): Promise<StateChangeResult> {
+  return changeState(id, "archive");
+}
+
+export function restoreCustomer(id: string): Promise<StateChangeResult> {
+  return changeState(id, "restore");
+}
+
 // A reference that is not a customer id gives no link (ADR-0005-C13); a body without the
 // refusal's `detail` is not this refusal at all.
 function parseNipTaken(body: unknown): CreateResult {
@@ -300,6 +399,8 @@ const LIST_QUERY_VALUES: {
     return term === "" ? null : term;
   },
   owner: (given) => (given === "" ? null : given),
+  // The closed set is the type's, so a given value is always one the server accepts.
+  state: (given) => given,
 };
 
 function isListQueryName(name: string): name is keyof CustomerListQuery {

@@ -57,7 +57,7 @@ def share_items(crm: Crm, owner: str) -> list[dict[str, Any]]:
         "SELECT id::text, name, country FROM customer WHERE owner_subject = %s ORDER BY id",
         (owner,),
     )
-    return [{"id": i, "name": n, "country": c} for i, n, c in rows]
+    return [{"id": i, "name": n, "country": c, "archived": False} for i, n, c in rows]
 
 
 def test_k01_each_share_is_stored_under_its_named_subject_and_seen_by_it_only(

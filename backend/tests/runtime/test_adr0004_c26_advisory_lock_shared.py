@@ -64,6 +64,7 @@ def test_adr0004_c26_advisory_lock_shared(lab: Lab) -> None:
         "0006",
         "0007",
         "0008",
+        "0009",
         "t_next",
     }
     assert lab.comparison_dump() != before

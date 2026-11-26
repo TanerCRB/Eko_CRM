@@ -27,6 +27,7 @@ const saved: CustomerRecord = {
   voivodeship: null,
   county: null,
   tax_id: null,
+  archived: false,
 };
 
 beforeAll(async () => {

@@ -131,6 +131,9 @@ class CustomerRow(Base):
     # Revision 0008 (EKO-3-06): a seeded record's key in the committed dataset, written only by
     # the operator seed; NULL for every customer a request creates. Not personal data.
     dataset_key: Mapped[str | None] = mapped_column(Text(collation="C"))
+    # Revision 0009 (EKO-3-05, Q-4 B): when the customer was archived, NULL while it is active;
+    # PD-C4. Set only from the application's clock, never by a column default (ADR-0002-C13).
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class CustomerContactRow(Base):

@@ -35,6 +35,7 @@ VALID_BODIES: dict[tuple[str, str], dict[str, Any]] = {
         "name": "Gospodarstwo Odmowa",
         "contacts": [{"kind": "phone", "value": "+48601000601", "primary": True}],
     },
+    ("PUT", f"{CUSTOMERS}/{{customer_id}}"): {"name": "Gospodarstwo Odmowa Edycji"},
 }
 BODIES: dict[str, dict[str, Any]] = {
     "not-json": {

@@ -9,9 +9,10 @@ import { CUSTOMERS_URL } from "../support/customers-http";
 // declared type's keys, so a name typed into the request alone cannot drift past both checks.
 
 // Every key of the type, each with a value; an excess or missing key fails type-checking.
-const everyKey: { [K in keyof Required<CustomerListQuery>]: string } = {
+const everyKey: Required<CustomerListQuery> = {
   q: "kowal",
   owner: "synthetic-subject-0002",
+  state: "archived",
 };
 
 function recordLists() {

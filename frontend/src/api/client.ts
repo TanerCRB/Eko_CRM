@@ -4,11 +4,12 @@ export type ApiResponse =
   | { kind: "ok"; status: number; body: unknown }
   | { kind: "unauthenticated" }
   | { kind: "unavailable" }
-  // `body` only on 422 (the fields it names) and 409 (EKO-3-03's NIP refusal); no other is read.
+  // `body` only on 422 (the fields it names) and 409 (EKO-3-03's NIP refusal, EKO-3-05's
+  // restore-first), told apart by the caller; no other refusal's body is read.
   | { kind: "failed"; status: number; body?: unknown };
 
 export interface RequestOptions {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PUT";
   // Sent as JSON; absent means no body and no Content-Type.
   body?: unknown;
   // "report" leaves a 401 to the caller; every other request starts a login on 401.

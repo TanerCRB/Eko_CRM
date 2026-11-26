@@ -100,7 +100,7 @@ def test_q6_contrast_the_type_not_declared_fails_and_says_so() -> None:
 
 def test_q6_the_document_names_q_and_owner_as_optional_string_query_parameters() -> None:
     parameters = {p["name"]: p for p in list_parameters(document()) if p["in"] == "query"}
-    assert sorted(parameters) == ["owner", "q"]
+    assert sorted(parameters) == ["owner", "q", "state"]
     assert not any(p.get("required") for p in parameters.values())
     assert fc.target_schema(document(), TARGET) is not None
 

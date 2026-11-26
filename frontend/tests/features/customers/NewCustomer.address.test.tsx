@@ -51,6 +51,7 @@ function savedCustomer(overrides: Partial<CustomerRecord> = {}): CustomerRecord 
     county: null,
     tax_id: null,
     contacts: [],
+    archived: false,
     ...overrides,
   };
 }

@@ -85,7 +85,9 @@ def test_k06_customer_answers_keep_their_shape(staff: Staff) -> None:
     rep = staff.login(R1, ["rep"], MARKER)
     customer_id = created_id(rep, {"name": "Ferma K06"})
     listed = rep.send("GET", CUSTOMERS).json()
-    assert listed == {"items": [{"id": customer_id, "name": "Ferma K06", "country": "PL"}]}
+    assert listed == {
+        "items": [{"id": customer_id, "name": "Ferma K06", "country": "PL", "archived": False}]
+    }
     assert "owner" not in rep.send("GET", customer_url(customer_id)).json()
 
 
