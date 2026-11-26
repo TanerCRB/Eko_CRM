@@ -11,7 +11,7 @@ them, or that only a CI-only carrier guarded.
   with it and nothing is left changed. Here a deferred constraint trigger planted for the test
   refuses the edit at its commit, after every statement ran: contacts written outside the
   customer's transaction would then stay replaced while the customer row is rolled back.
-- K-04 M-p6 (head does not re-derive or clear the state when it starts): the C37 rollback leg
+- K-04 M-p6 (head does not re-derive or clear the state when it starts): the C38 rollback leg
   needs the published previous release and runs only in CI. Here a second application is built
   and started over the same database after a customer was archived; the customer is still
   archived with its instant, and an active one is still active.
@@ -43,6 +43,7 @@ from tests.runtime.eko305.conftest import (
     snapshot,
     status_and_json,
 )
+from tests.runtime.eko306.conftest import Seeder
 from tests.support import eko302_nip as nips
 
 pytestmark = pytest.mark.runtime
@@ -223,10 +224,10 @@ def nipless_body() -> dict[str, Any]:
 
 
 @pytest.fixture
-def k06_scene(crm: Crm, clock: FakeClock) -> dict[str, Any]:
+def k06_scene(crm: Crm, clock: FakeClock, seed: Seeder) -> dict[str, Any]:
     """The K-06 scene: the target, a twin sibling of the same owner with its own NIP, a sibling
-    archived at an earlier instant, and a customer of another rep."""
-    found: dict[str, Any] = inspect.unwrap(k06.scene)(crm, clock)
+    archived at an earlier instant, a seeded sibling, and a customer of another rep."""
+    found: dict[str, Any] = inspect.unwrap(k06.scene)(crm, clock, seed)
     return found
 
 

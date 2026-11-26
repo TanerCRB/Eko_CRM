@@ -1,4 +1,4 @@
-"""EKO-3-05 K-02 (ACC-4, ACC-8, PRH-4; ADR-0003-C33 by-id clause; ADR-0003-C39): a rep's edit,
+"""EKO-3-05 K-02 (ACC-4, ACC-8, PRH-4; ADR-0003-C33 by-id clause; ADR-0003-C41): a rep's edit,
 archive or restore of another rep's customer answers exactly as the same call on a well-formed
 identifier that exists nowhere (status, body, and headers other than `Eko-Correlation-Id`), and
 leaves that customer's row and contacts byte-identical, `archived_at` included.

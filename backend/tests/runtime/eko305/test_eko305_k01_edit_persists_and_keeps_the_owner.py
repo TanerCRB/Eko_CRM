@@ -1,10 +1,13 @@
-"""EKO-3-05 K-01 (ACC-4, ACC-5; G-5 A, G-6 A, Q-3 A, Q-5; ADR-0003-C39, success half): the owner or
+"""EKO-3-05 K-01 (ACC-4, ACC-5; G-5 A, G-6 A, Q-3 A, Q-5; ADR-0003-C41, success half): the owner or
 the manager edits a customer with `PUT /api/customers/{id}`; the change is stored, a separate read
 shows exactly the values sent, and the owner stays the stored one.
 
 An edit states the whole customer under the create body rules: a stored value omitted from the
 body, or sent as `null` or `""`, reads back `null`; omitted contacts read back as none; an omitted
-country reads back `PL`. A body naming an owner is refused `extra_forbidden` and changes nothing.
+country reads back `PL`. A body naming an owner or a dataset key is refused `extra_forbidden` and
+changes nothing. A seeded customer, stored by the operator seed with its dataset key, keeps that key
+and its owner through an edit by its rep and by the manager, while the sent fields change (D-8 Y-2
+A); a customer created through the API still has no key after its edit.
 """
 
 from typing import Any
@@ -26,9 +29,12 @@ from tests.runtime.eko305.conftest import (
     found,
     phone,
     read_json,
+    seeded_customer,
     snapshot,
     status_and_json,
+    stored_row,
 )
+from tests.runtime.eko306.conftest import Seeder
 from tests.support import eko302_nip as nips
 
 pytestmark = pytest.mark.runtime
@@ -128,8 +134,44 @@ def test_k01_the_manager_edits_a_reps_customer_and_the_customer_stays_the_reps(
     assert customer_id not in found(manager, {"owner": subject})
 
 
-@pytest.mark.parametrize("key", ["owner", "owner_subject"])
-def test_k01_a_body_naming_an_owner_is_refused_and_the_customer_is_unchanged(
+SEEDED_KEY = "eko305-k01-seeded-001"
+# Only the columns an edit states; the owner, the dataset key and the archived state are not sent.
+SENT_COLUMNS = ("name", "street", "postal_code", "town", "voivodeship", "county", "nip")
+
+
+def test_k01_a_seeded_customer_edited_by_its_rep_and_by_the_manager_keeps_its_key_and_owner(
+    crm: Crm, seed: Seeder
+) -> None:
+    customer_id = seeded_customer(crm, seed, REP_A, SEEDED_KEY, STORED)
+    rep, manager = crm.login(REP_A, ["rep"]), crm.login(MANAGER, ["manager"])
+    stored = stored_row(crm, customer_id)
+    assert (stored["dataset_key"], stored["owner_subject"]) == (SEEDED_KEY, REP_A)
+
+    for editor, name in ((rep, "Gospodarstwo Po Edycji Przedstawiciela"), (manager, None)):
+        before = stored_row(crm, customer_id)
+        body = edited_body() if name is None else {**edited_body(), "name": name}
+        response = edit(editor, customer_id, body)
+        assert response.status_code == 200, response.text
+        assert "dataset_key" not in response.json()
+        after = stored_row(crm, customer_id)
+        assert (after["dataset_key"], after["owner_subject"]) == (SEEDED_KEY, REP_A)
+        # Contrast: the sent fields did change, so the key check cannot pass on a no-op edit.
+        assert [after[c] for c in SENT_COLUMNS] != [before[c] for c in SENT_COLUMNS]
+    assert read_json(rep, customer_id) == expected_record(customer_id)
+
+
+def test_k01_contrast_a_customer_created_through_the_api_has_no_dataset_key_after_its_edit(
+    crm: Crm,
+) -> None:
+    rep = crm.login(REP_A, ["rep"])
+    customer_id = customer(rep, **STORED)
+    assert stored_row(crm, customer_id)["dataset_key"] is None
+    assert edit(crm.login(MANAGER, ["manager"]), customer_id, edited_body()).status_code == 200
+    assert stored_row(crm, customer_id)["dataset_key"] is None
+
+
+@pytest.mark.parametrize("key", ["owner", "owner_subject", "dataset_key"])
+def test_k01_a_body_naming_an_owner_or_a_dataset_key_is_refused_and_nothing_changes(
     crm: Crm, key: str
 ) -> None:
     rep = crm.login(REP_A, ["rep"])

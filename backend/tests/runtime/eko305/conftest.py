@@ -1,7 +1,9 @@
 """EKO-3-05 carriers: EKO-3-01's (the shipped `create_app()` on real PostgreSQL 18 and the local
 OIDC stub, a real session per synthetic staff member), bound here by name, with the application's
 clock set to the test's frozen one, and the readers of the stored rows the change operations must
-leave alone. Every value is synthetic (ADR-0005); NIPs are built at run time (EKO-3-02 G-7 A).
+leave alone. A seeded customer is stored by EKO-3-06's operator seed itself, run in-process on the
+same server (D-8 Y-2 A). Every value is synthetic (ADR-0005); NIPs are built at run time (EKO-3-02
+G-7 A).
 """
 
 from collections.abc import Callable
@@ -11,9 +13,13 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from app.domain.customers import ContactInput, CustomerInput
+from app.seed_dataset import Record
 from tests.runtime.eko201.conftest import AppFactory, Browser, FakeClock
 from tests.runtime.eko301 import conftest as eko301
 from tests.runtime.eko301.conftest import CUSTOMERS, Crm, created_id, customer_url
+from tests.runtime.eko306 import conftest as eko306
+from tests.runtime.eko306.conftest import SEED_B, SEED_C, Seeder
 from tests.support import oidc_stub
 from tests.support.pg_instance import Postgres
 
@@ -24,15 +30,32 @@ clock = eko301.clock
 make_app = eko301.make_app
 browser_for = eko301.browser_for
 clean_customers = eko301.clean_customers
+seed = eko306.seed
 
 CORRELATION = "eko-correlation-id"
 EMPTY: dict[str, list[Any]] = {"items": []}
 NOT_FOUND = (404, {"detail": "not found"})
 NOT_PERMITTED = (403, {"detail": "not permitted"})
-# Every column of the two owned tables, `archived_at` included, read as PostgreSQL holds them.
+# Every column of the two owned tables, `dataset_key` and `archived_at` included (D-8 Y-2 A), read
+# as PostgreSQL holds them; `archived_at` stays last.
+CUSTOMER_COLUMNS = (
+    "id",
+    "name",
+    "country",
+    "owner_subject",
+    "street",
+    "postal_code",
+    "town",
+    "voivodeship",
+    "county",
+    "nip",
+    "foreign_tax_id",
+    "dataset_key",
+    "archived_at",
+)
 CUSTOMER_ROWS = (
     "SELECT id::text, name, country, owner_subject, street, postal_code, town, voivodeship, "
-    "county, nip, foreign_tax_id, archived_at FROM customer ORDER BY id"
+    "county, nip, foreign_tax_id, dataset_key, archived_at FROM customer ORDER BY id"
 )
 CONTACT_ROWS = (
     "SELECT id::text, customer_id::text, position, kind, value, note, is_primary "
@@ -146,3 +169,28 @@ def others(
 def archived_at(crm: Crm, customer_id: str) -> Any:
     [(value,)] = crm.pg.rows("SELECT archived_at FROM customer WHERE id = %s", (customer_id,))
     return value
+
+
+def stored_row(crm: Crm, customer_id: str) -> dict[str, Any]:
+    """The customer's row by column name, `dataset_key` and `owner_subject` included."""
+    return dict(zip(CUSTOMER_COLUMNS, customer_rows(crm)[customer_id], strict=True))
+
+
+def as_input(body: dict[str, Any]) -> CustomerInput:
+    """A request body as the seed's dataset states a record, before create's rules."""
+    contacts = tuple(
+        ContactInput(c["kind"], c["value"], c.get("note"), c.get("primary", False))
+        for c in body.get("contacts", [])
+    )
+    return CustomerInput(
+        **{**{k: v for k, v in body.items() if k != "contacts"}, "contacts": contacts}
+    )
+
+
+def seeded_customer(crm: Crm, seed: Seeder, owner: str, key: str, body: dict[str, Any]) -> str:
+    """One customer stored by the operator seed under `owner` with dataset key `key`, as its load
+    stores every record; the other two shares are empty."""
+    run = seed((owner, SEED_B, SEED_C), [Record(key, 0, as_input(body))])
+    assert (run.code, run.totals()["added"]) == (0, 1), run.lines
+    [(customer_id,)] = crm.pg.rows("SELECT id::text FROM customer WHERE dataset_key = %s", (key,))
+    return str(customer_id)

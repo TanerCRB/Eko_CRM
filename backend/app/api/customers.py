@@ -45,7 +45,6 @@ from app.data.database import Database
 from app.domain import customers as rules
 from app.domain.caller import Caller
 from app.domain.customers import (
-    Address,
     Contact,
     ContactKind,
     Customer,
@@ -53,7 +52,6 @@ from app.domain.customers import (
     CustomerSearch,
     CustomerSummary,
     StateFilter,
-    TaxId,
 )
 from app.domain.ownership import owner_filter
 from app.services import customers as service
@@ -115,23 +113,13 @@ class ContactIn(RequestModel):
     note: Annotated[StrictStr, Field(max_length=rules.NOTE_RAW_LIMIT)] | None = None
     primary: StrictBool = False
 
-    @field_validator("value")
+    @field_validator("value", "note")
     @classmethod
-    def _value(cls, value: str, info: ValidationInfo) -> str:
-        kind = info.data.get("kind")
+    def _judged(cls, value: str | None, info: ValidationInfo) -> str | None:
         # Without a valid kind the request is already refused for it; the value is not judged.
-        return value if kind is None else rules.contact_value(ContactKind(kind), value)
-
-    @field_validator("note")
-    @classmethod
-    def _note(cls, note: str | None) -> str | None:
-        return rules.contact_note(note)
-
-
-def _judged(info: ValidationInfo, *fields: str) -> bool:
-    """Whether the fields a country-dependent rule needs passed their own rules. When one did
-    not, the request is already refused for it, so the dependent value is not judged."""
-    return all(field in info.data for field in fields)
+        kind = info.data.get("kind")
+        judged_kind = None if kind is None else ContactKind(kind)
+        return rules.contact_field(str(info.field_name), value, judged_kind)
 
 
 class CustomerCreate(RequestModel):
@@ -160,58 +148,12 @@ class CustomerCreate(RequestModel):
     tax_id: Annotated[StrictStr, Field(max_length=rules.TAX_ID_RAW_LIMIT)] | None = None
     contacts: list[ContactIn] = Field(default_factory=list, max_length=rules.CONTACT_LIMIT)
 
-    @field_validator("name")
+    # Every field through the one composition of create's rules in `app.domain.customers`, which
+    # the operator seed uses too (EKO-3-06 A-5 A); fields are declared in `CUSTOMER_FIELDS` order.
+    @field_validator(*rules.CUSTOMER_FIELDS)
     @classmethod
-    def _name(cls, name: str) -> str:
-        return rules.customer_name(name)
-
-    @field_validator("country")
-    @classmethod
-    def _country(cls, country: str) -> str:
-        return rules.country_code(country)
-
-    @field_validator("street")
-    @classmethod
-    def _street(cls, street: str | None) -> str | None:
-        return rules.street(street)
-
-    @field_validator("town")
-    @classmethod
-    def _town(cls, town: str | None) -> str | None:
-        return rules.town(town)
-
-    @field_validator("postal_code")
-    @classmethod
-    def _postal_code(cls, code: str | None, info: ValidationInfo) -> str | None:
-        if not _judged(info, "country"):
-            return code
-        return rules.postal_code(info.data["country"], code)
-
-    @field_validator("voivodeship")
-    @classmethod
-    def _voivodeship(cls, voivodeship: str | None, info: ValidationInfo) -> str | None:
-        if not _judged(info, "country"):
-            return voivodeship
-        return rules.voivodeship(info.data["country"], voivodeship)
-
-    @field_validator("county")
-    @classmethod
-    def _county(cls, county: str | None, info: ValidationInfo) -> str | None:
-        if not _judged(info, "country"):
-            return county
-        country = info.data["country"]
-        # A foreign county is refused whatever its voivodeship; an invalid Polish voivodeship
-        # leaves the county unjudged, so only the voivodeship's error is given (G-5 A).
-        if rules.is_polish(country) and not _judged(info, "voivodeship"):
-            return county
-        return rules.county(country, info.data.get("voivodeship"), county)
-
-    @field_validator("tax_id")
-    @classmethod
-    def _tax_id(cls, tax_id: str | None, info: ValidationInfo) -> str | None:
-        if not _judged(info, "country"):
-            return tax_id
-        return rules.tax_id(info.data["country"], tax_id)
+    def _judged(cls, value: str | None, info: ValidationInfo) -> str | None:
+        return rules.customer_field(str(info.field_name), value, info.data)
 
     @model_validator(mode="after")
     def _contacts(self) -> "CustomerCreate":
@@ -219,15 +161,8 @@ class CustomerCreate(RequestModel):
         return self
 
     def draft(self) -> CustomerDraft:
-        return CustomerDraft(
-            name=self.name,
-            country=self.country,
-            contacts=tuple(_contact(c) for c in self.contacts),
-            address=Address(
-                self.street, self.postal_code, self.town, self.voivodeship, self.county
-            ),
-            tax_id=TaxId.placed(self.country, self.tax_id),
-        )
+        values = {field: getattr(self, field) for field in rules.CUSTOMER_FIELDS}
+        return rules.assembled(values, [_contact(c) for c in self.contacts])
 
 
 # The largest create body whose every field passes its raw cap: each code point at most 12 bytes

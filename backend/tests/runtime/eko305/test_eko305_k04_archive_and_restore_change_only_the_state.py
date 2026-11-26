@@ -2,10 +2,12 @@
 `archived_at`. An archived customer stays readable by identifier, leaves the default list and keeps
 every field and contact; restore brings back the row exactly as it was. A repeat archive or restore
 succeeds and leaves the row byte-identical, the first instant kept. The instant comes from the
-application's injected clock, frozen here, and no answer carries it.
+application's injected clock, frozen here, and no answer carries it. The round trip runs on a
+customer created through the API and on one the operator seed stored, whose dataset key is part of
+the row compared (D-8 Y-2 A).
 
-The C37 carrier against the published previous release is
-`tests/runtime/test_eko305_k04_c37_previous_release_over_the_archived_state.py`.
+The ADR-0004-C38 carrier against the published previous release is
+`tests/runtime/test_eko305_k04_c38_previous_release_over_the_archived_state.py`.
 """
 
 import concurrent.futures
@@ -31,8 +33,10 @@ from tests.runtime.eko305.conftest import (
     read_json,
     restore,
     search,
+    seeded_customer,
     snapshot,
 )
+from tests.runtime.eko306.conftest import Seeder
 from tests.support import eko302_nip as nips
 
 pytestmark = pytest.mark.runtime
@@ -51,6 +55,9 @@ FULL: dict[str, Any] = {
 }
 
 
+SEEDED_KEY = "eko305-k04-seeded-001"
+
+
 def full_body() -> dict[str, Any]:
     return {**FULL, "tax_id": nips.valid_nip(305401)}
 
@@ -67,11 +74,21 @@ def default_lists(crm: Crm, *browsers: Any) -> list[set[str]]:
     return [found(b, params) for b in browsers for params in (None, {"state": ""})]
 
 
+@pytest.mark.parametrize("origin", ["api", "seeded", "seeded-without-nip"])
 def test_k04_archive_changes_only_archived_at_and_restore_brings_the_row_back(
-    crm: Crm, clock: FakeClock
+    crm: Crm, clock: FakeClock, seed: Seeder, origin: str
 ) -> None:
     rep, manager = crm.login(REP_A, ["rep"]), crm.login(MANAGER, ["manager"])
-    customer_id = customer(rep, **full_body())
+    body = full_body()
+    if origin == "seeded-without-nip":
+        body.pop("tax_id")
+    key = None if origin == "api" else SEEDED_KEY
+    if key is None:
+        customer_id = customer(rep, **body)
+    else:
+        customer_id = seeded_customer(crm, seed, REP_A, key, body)
+    # The dataset key is in the compared row, just before `archived_at`.
+    assert row_of(crm, customer_id)[-2] == key
     by_id_before = read_json(rep, customer_id)
     row_before, contacts_before = row_of(crm, customer_id), contacts_of(crm, customer_id)
     counts_before = crm.counts()

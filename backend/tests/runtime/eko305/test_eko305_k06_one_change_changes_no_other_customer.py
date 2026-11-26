@@ -1,11 +1,13 @@
 """EKO-3-05 K-06 (PRH-5, CUS-9; prohibition): editing, archiving or restoring one customer changes
-no other customer. Every customer row (`archived_at` included) and every contact row other than the
-target's is compared before and after each operation.
+no other customer. Every customer row (`dataset_key` and `archived_at` included) and every contact
+row other than the target's is compared before and after each operation.
 
 The scenario holds other customers of the target's own owner, so a write that lost its per-customer
-condition but kept the scope still changes rows here: a sibling with the target's name and NIP, and
-a sibling archived at an earlier instant, both with contacts; and a customer of another rep. In
-each case the target's own row did change, so an operation that does nothing cannot pass.
+condition but kept the scope still changes rows here: a sibling with the target's name, address and
+contact values but its own NIP, a sibling archived at an earlier instant, and a sibling the
+operator seed stored with its dataset key (D-8 Y-2 A), each with contacts; and a customer of
+another rep. In each case the target's own row did change, so an operation that does nothing cannot
+pass.
 """
 
 import concurrent.futures
@@ -26,14 +28,18 @@ from tests.runtime.eko305.conftest import (
     others,
     phone,
     restore,
+    seeded_customer,
     snapshot,
+    stored_row,
 )
+from tests.runtime.eko306.conftest import Seeder
 from tests.support import eko302_nip as nips
 
 pytestmark = pytest.mark.runtime
 
 TWIN_NAME = "Gospodarstwo Bliźniak K06"
 SIBLING_NIP = nips.valid_nip(305612)
+SEEDED_KEY = "eko305-k06-seeded-001"
 
 
 def edited_body() -> dict[str, Any]:
@@ -46,7 +52,7 @@ def edited_body() -> dict[str, Any]:
 
 
 @pytest.fixture
-def scene(crm: Crm, clock: FakeClock) -> dict[str, Any]:
+def scene(crm: Crm, clock: FakeClock, seed: Seeder) -> dict[str, Any]:
     rep_a, rep_b = crm.login(REP_A, ["rep"]), crm.login(REP_B, ["rep"])
     # The sibling is the target's twin in name, address and contact values, with its own NIP: no
     # two customers hold one NIP (K-06 edge, the unique constraint of EKO-3-03).
@@ -65,6 +71,17 @@ def scene(crm: Crm, clock: FakeClock) -> dict[str, Any]:
     earlier = clock.now()
     assert archive(rep_a, archived_sibling).status_code == 200
     clock.advance(seconds=5)
+    seeded_sibling = seeded_customer(
+        crm,
+        seed,
+        REP_A,
+        SEEDED_KEY,
+        {
+            "name": "Gospodarstwo Z Zestawu K06",
+            "tax_id": nips.valid_nip(305640),
+            "contacts": [phone("+48601305641", "Notatka zestawu K06", primary=True)],
+        },
+    )
     other_rep = customer(rep_b, TWIN_NAME, contacts=[phone("+48601305631", primary=True)])
     return {
         "rep_a": rep_a,
@@ -73,6 +90,7 @@ def scene(crm: Crm, clock: FakeClock) -> dict[str, Any]:
         "sibling": sibling,
         "archived_sibling": archived_sibling,
         "earlier": earlier,
+        "seeded_sibling": seeded_sibling,
         "other_rep": other_rep,
     }
 
@@ -104,6 +122,7 @@ def test_k06_a_change_of_one_customer_changes_no_other_row(
         ), case
     assert archived_at(crm, scene["archived_sibling"]) == scene["earlier"]
     assert archived_at(crm, scene["sibling"]) is None
+    assert stored_row(crm, scene["seeded_sibling"])["dataset_key"] == SEEDED_KEY
 
 
 def test_k06_edge_a_double_submitted_edit_ends_in_one_state_and_leaves_the_siblings(

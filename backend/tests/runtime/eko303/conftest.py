@@ -263,7 +263,7 @@ def previous_tree(directory: Path) -> Path:
 
 def tree_as_of_0007(directory: Path) -> Path:
     """This backend as of revision 0007: the same files with every revision after 0007 left out,
-    so its `migrate` brings a database to 0007 and no further (X-5 A of EKO-3-05)."""
+    so its `migrate` brings a database to 0007 and no further (revision 0008: EKO-3-06)."""
     target = directory / "backend-0007"
     if target.exists():
         return target

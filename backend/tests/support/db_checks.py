@@ -6,6 +6,9 @@ from dataclasses import dataclass
 ROLES = ("eko_app", "eko_keycloak", "eko_backup")
 DATABASES = ("eko", "keycloak")
 MIGRATION_CONNECTIONS = 1
+# The operator seed: a one-off of `worker` holding at most one connection (ADR-0003-C19 as
+# restated by the EKO-3-06 addendum).
+SEED_CONNECTIONS = 1
 
 
 def c1_version(server_version_num: int) -> list[str]:
@@ -90,7 +93,8 @@ class Budget:
 
 
 def c19_violations(b: Budget) -> list[str]:
-    """ADR-0003-C19 with its 2026-10-24 addendum and the limit half of ADR-0004-C19."""
+    """ADR-0003-C19 with its 2026-10-24 addendum, as restated for the operator seed (EKO-3-06),
+    and the limit half of ADR-0004-C19."""
     problems = []
     for name, limit in (
         ("application", b.app_limit),
@@ -106,6 +110,7 @@ def c19_violations(b: Budget) -> list[str]:
         + b.worker_pool_size
         + b.worker_max_overflow
         + MIGRATION_CONNECTIONS
+        + SEED_CONNECTIONS
     )
     if app_use > b.app_limit:
         problems.append(f"application connections at most {app_use} > limit {b.app_limit}")

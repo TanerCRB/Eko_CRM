@@ -1,4 +1,4 @@
-"""EKO-3-05 K-04, ADR-0004-C37 (EKO-3-05 addendum draft; gate-1 decision Q-1 A): revision 0008 adds
+"""EKO-3-05 K-04, ADR-0004-C38 (EKO-3-05 addendum draft; gate-1 decision Q-1 A): revision 0009 adds
 the customer's archived state as an expand step, and the published previous release keeps working
 over it and over a rollback.
 
@@ -12,7 +12,7 @@ over it and over a rollback.
 
 The previous backend is found as ADR-0004-C13's previous-release half finds it
 (`tests/support/releases.py`) and run by digest. These tests run while that release's head is below
-0008 and at least 0004, the first head with customer operations: once a release holding 0008 is
+0009 and at least 0004, the first head with customer operations: once a release holding 0009 is
 published, the step lies behind the previous release and they skip, naming why. A missing release,
 an older head or a non-numeric one fails. Every customer value is synthetic (ADR-0005).
 """
@@ -44,19 +44,19 @@ from tests.support.releases import (
 
 pytestmark = pytest.mark.previous_release
 
-REVISION = "0008"
+REVISION = "0009"
 # Revision 0004 adds the customers; a release before it has no customer operation to keep working.
 OLDEST_HEAD = "0004"
 CUSTOMERS = "/api/customers"
 SEEDED: dict[str, Any] = {
     "name": "Gospodarstwo Przed Archiwum",
     "contacts": [
-        {"kind": "phone", "value": "+48601305701", "note": "Pan Testowy C37", "primary": True},
+        {"kind": "phone", "value": "+48601305701", "note": "Pan Testowy C38", "primary": True},
         {"kind": "email", "value": "przed-archiwum@farm.example.invalid"},
     ],
 }
 CONTROL: dict[str, Any] = {
-    "name": "Gospodarstwo Kontrolne C37",
+    "name": "Gospodarstwo Kontrolne C38",
     "contacts": [{"kind": "phone", "value": "+48601305702", "primary": True}],
 }
 # Every column of both owned tables, as PostgreSQL holds them, whichever revision added it.
@@ -73,9 +73,9 @@ def previous_backend() -> str:
             record_from_environment(), reach_from_environment(), os.environ.get("RELEASE_TAG")
         )
     except CannotTell as error:
-        pytest.fail(f"C37: the previous release could not be read: {error}")
+        pytest.fail(f"C38: the previous release could not be read: {error}")
     if found is None:
-        pytest.fail("C37: no published release is reachable from main")
+        pytest.fail("C38: no published release is reachable from main")
     docker("pull", "--quiet", found, timeout=600)
     return found
 
@@ -84,19 +84,19 @@ def previous_backend() -> str:
 def previous_head(previous_backend: str) -> str:
     head = image_head(previous_backend)
     if not head.isdigit():
-        pytest.fail(f"C37: the previous release's head {head!r} is not a numeric revision")
+        pytest.fail(f"C38: the previous release's head {head!r} is not a numeric revision")
     if int(head) >= int(REVISION):
         pytest.skip(f"the previous release's head is {head}: the {REVISION} step is behind it")
     if int(head) < int(OLDEST_HEAD):
         pytest.fail(
-            f"C37: the previous release's head is {head}, older than {OLDEST_HEAD}: it has no "
+            f"C38: the previous release's head is {head}, older than {OLDEST_HEAD}: it has no "
             "customer operations to keep working"
         )
     return head
 
 
 @pytest.fixture(scope="module")
-def c37_lab(
+def c38_lab(
     running: Started,
     tmp_path_factory: pytest.TempPathFactory,
     previous_backend: str,
@@ -112,7 +112,7 @@ def c37_lab(
     )  # fmt: skip
     monitor = PsqlSession(composition, name="eko-test-eko305-monitor")
     shipped = composition.inspect("backend")["Config"]["Image"]
-    lab = Lab(composition, tmp_path_factory.mktemp("eko305-c37"), shipped, prober, monitor)
+    lab = Lab(composition, tmp_path_factory.mktemp("eko305-c38"), shipped, prober, monitor)
     try:
         yield lab
     finally:
@@ -152,10 +152,10 @@ def stored(lab: Lab) -> tuple[list[list[str]], list[list[str]]]:
     return lab.sql(CUSTOMER_ROWS), lab.sql(CONTACT_ROWS)
 
 
-def test_c37_rows_the_previous_release_stored_read_back_unchanged_and_active(
-    c37_lab: Lab, previous_backend: str, previous_head: str
+def test_c38_rows_the_previous_release_stored_read_back_unchanged_and_active(
+    c38_lab: Lab, previous_backend: str, previous_head: str
 ) -> None:
-    lab = c37_lab
+    lab = c38_lab
     previous_on_its_head(lab, previous_backend, previous_head)
     session = rep_session(lab)
     seeded = created(lab, session, SEEDED)
@@ -176,10 +176,10 @@ def test_c37_rows_the_previous_release_stored_read_back_unchanged_and_active(
     ]
 
 
-def test_c37_the_previous_backend_reads_lists_and_creates_on_the_expanded_schema(
-    c37_lab: Lab, previous_backend: str, previous_head: str
+def test_c38_the_previous_backend_reads_lists_and_creates_on_the_expanded_schema(
+    c38_lab: Lab, previous_backend: str, previous_head: str
 ) -> None:
-    lab = c37_lab
+    lab = c38_lab
     previous_on_its_head(lab, previous_backend, previous_head)
     session = rep_session(lab)
     seeded = created(lab, session, SEEDED)
@@ -201,10 +201,10 @@ def test_c37_the_previous_backend_reads_lists_and_creates_on_the_expanded_schema
     assert read(lab, session, second["id"]).json()["archived"] is False
 
 
-def test_c37_rollback_leg_the_previous_backend_serves_an_archived_customer_and_changes_nothing(
-    c37_lab: Lab, previous_backend: str, previous_head: str
+def test_c38_rollback_leg_the_previous_backend_serves_an_archived_customer_and_changes_nothing(
+    c38_lab: Lab, previous_backend: str, previous_head: str
 ) -> None:
-    lab = c37_lab
+    lab = c38_lab
     previous_on_its_head(lab, previous_backend, previous_head)
     session = rep_session(lab)
     archived = created(lab, session, SEEDED)

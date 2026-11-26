@@ -4,7 +4,7 @@ by owner since EKO-3-04; edit, archive, restore and the list's state filter sinc
 Each receives the caller value and takes its scope only from `app.domain.ownership`, so the
 ownership rule is decided there and applied by `app.data.customers`; nothing here compares an
 owner (ADR-0003 addendum of EKO-3-01, section 2). A change takes the visibility scope, never the
-creation scope (EKO-3-05 Q-3 A, ADR-0003-C39): the manager changes any customer, a rep its own.
+creation scope (EKO-3-05 Q-3 A, ADR-0003-C41): the manager changes any customer, a rep its own.
 A create or an edit refused for a taken NIP (EKO-3-03; ADR-0003-C40) names the stored customer
 only to a caller that rule gives a reference.
 """

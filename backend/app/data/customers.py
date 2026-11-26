@@ -11,7 +11,8 @@ A change (EKO-3-05: edit, archive, restore) is one transaction too, and its `UPD
 scope, the identifier and the state the change needs, so the state is judged on the row the
 scoped statement locks: a change never lands on a customer whose state changed before the write
 (ADR-0003 addendum draft of EKO-3-05, Q-3 A). Contacts are replaced only through the identifier
-that scoped `UPDATE` returned. No change writes `owner_subject`.
+that scoped `UPDATE` returned. No change writes `owner_subject` or `dataset_key`, and only
+archive and restore write `archived_at` (ADR-0003-C41, D-8 Y-2 A).
 
 A taken NIP is decided by the database's unique constraint on `nip`, never by a read before the
 insert or the update (ADR-0002 *NIP uniqueness*; gate 1 of EKO-3-03; ADR-0003-C40): its
@@ -41,6 +42,7 @@ from sqlalchemy import (
     true,
     update,
 )
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.data.database import Database
@@ -103,7 +105,7 @@ def _visible(scope: VisibilityScope) -> ColumnElement[bool]:
     return CustomerRow.owner_subject == scope.subject
 
 
-# The stored state as the answers carry it: NULL is active (revision 0008, Q-4 B).
+# The stored state as the answers carry it: NULL is active (revision 0009, Q-4 B).
 ARCHIVED = CustomerRow.archived_at.is_not(None)
 # The list's state condition, joined to the scope's by AND; `both` drops only this one.
 STATE_CONDITIONS: dict[StateFilter, ColumnElement[bool]] = {
@@ -114,7 +116,8 @@ STATE_CONDITIONS: dict[StateFilter, ColumnElement[bool]] = {
 
 
 def _draft_columns(draft: CustomerDraft) -> dict[str, str | None]:
-    """The columns a customer request states: never the owner, never the archived state."""
+    """The columns a customer request states: never the owner, the dataset key or the archived
+    state, so an edit built from them leaves those three as stored (ADR-0003-C41)."""
     return {
         "name": draft.name,
         "country": draft.country,
@@ -204,6 +207,33 @@ def _is_nip_taken(error: IntegrityError) -> bool:
     )
 
 
+def _row(customer_id: uuid.UUID, scope: OwnedBy, draft: CustomerDraft) -> dict[str, object]:
+    """The customer's own columns for a new row owned by the scope's subject."""
+    return {
+        "id": customer_id,
+        "name": draft.name,
+        "country": draft.country,
+        "owner_subject": scope.subject,
+        "street": draft.address.street,
+        "postal_code": draft.address.postal_code,
+        "town": draft.address.town,
+        "voivodeship": draft.address.voivodeship,
+        "county": draft.address.county,
+        "nip": draft.tax_id.nip,
+        "foreign_tax_id": draft.tax_id.foreign,
+    }
+
+
+def _insert_contacts(
+    connection: Connection, scope: OwnedBy, customer_id: uuid.UUID, draft: CustomerDraft
+) -> None:
+    """The draft's contacts in the order given, in the transaction that just wrote their customer
+    under `scope` (ADR-0003-C35: a contact is reached only through its customer)."""
+    if not draft.contacts:
+        return
+    connection.execute(insert(CustomerContactRow), _contact_rows(customer_id, draft.contacts))
+
+
 class CustomerStore:
     def __init__(self, database: Database) -> None:
         self._engine = database.engine
@@ -223,19 +253,13 @@ class CustomerStore:
         customer_id = new_identifier()
         with self._connection() as connection:
             try:
-                connection.execute(
-                    insert(CustomerRow).values(
-                        id=customer_id, owner_subject=scope.subject, **_draft_columns(draft)
-                    )
-                )
+                connection.execute(insert(CustomerRow).values(_row(customer_id, scope, draft)))
             except IntegrityError as error:
                 if _is_nip_taken(error):
                     # Leaving the block rolls the transaction back: nothing of this create stays.
                     raise NipTaken from None
                 raise
-            if draft.contacts:
-                rows = _contact_rows(customer_id, draft.contacts)
-                connection.execute(insert(CustomerContactRow), rows)
+            _insert_contacts(connection, scope, customer_id, draft)
             connection.commit()
         return Customer(
             customer_id,
@@ -246,6 +270,34 @@ class CustomerStore:
             draft.tax_id,
             archived=False,
         )
+
+    def load(self, scope: OwnedBy, dataset_key: str, draft: CustomerDraft) -> bool:
+        """A record of the operator seed's dataset, as `create` stores it plus its dataset key;
+        False, with nothing written, when a customer with that key is already stored.
+
+        The key's unique index decides in the insert itself, never a read before it, so a
+        record already loaded is skipped whoever owns it (EKO-3-06 A-2 A, G-5 A). A NIP another
+        customer holds is `NipTaken`, as for `create`; the holder is never looked up.
+        """
+        customer_id = new_identifier()
+        statement = (
+            postgresql.insert(CustomerRow)
+            .values({**_row(customer_id, scope, draft), "dataset_key": dataset_key})
+            .on_conflict_do_nothing(index_elements=[CustomerRow.dataset_key])
+            .returning(CustomerRow.id)
+        )
+        with self._connection() as connection:
+            try:
+                added = connection.execute(statement).scalar_one_or_none()
+            except IntegrityError as error:
+                if _is_nip_taken(error):
+                    raise NipTaken from None
+                raise
+            if added is None:
+                return False
+            _insert_contacts(connection, scope, customer_id, draft)
+            connection.commit()
+        return True
 
     def find_by_nip(self, scope: VisibilityScope, nip: str) -> uuid.UUID | None:
         """The identifier, and nothing else, of the customer in the scope holding `nip`. Read
