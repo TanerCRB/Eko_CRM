@@ -1591,3 +1591,66 @@ other rule and control of this decision is unchanged.
 hand. A count is not a customer field value, and naming the NIPs would be one. Approved by the
 human at gate 1 of EKO-3-03 on 2026-11-24 (Issue #252); the text is that of
 [`EKO-3-03-nip-uniqueness-contract-step-adr0002-adr0003-adr0004-adr0005-addendum-draft-2026-11-24.md`](EKO-3-03-nip-uniqueness-contract-step-adr0002-adr0003-adr0004-adr0005-addendum-draft-2026-11-24.md).
+
+### 2026-11-25 — The operator seed: the synthetic-only declaration, the dataset, its record key and its output
+
+**Status:** Accepted 2026-11-25 (gate 1 of EKO-3-06, Issue #258).
+
+**What it adds.** From this date:
+
+- **The declaration.** An environment declares that it holds only synthetic customer data
+  through one environment variable of the `worker` service, read only in
+  `backend/app/core/settings.py`. It is not a secret. Only one exact value declares it, and any
+  other state is "not declared". The operator seed refuses an undeclared target before it writes
+  anything.
+- In a shared environment the variable is set only after the human's dated statement of
+  ADR-0005-C16 for that environment exists, and is removed when that statement is withdrawn; the
+  statement stays the record. In developer and test environments, which C16 does not cover,
+  setting it is the developer's own statement, with no dated record. Production does not set it
+  before the GDPR impact assessment.
+- **The dataset.** Every value is generated inside the repository from committed seeds by a
+  deterministic procedure. It reads no clock, environment, network, outside file or unseeded
+  random source. A committed fingerprint pins the result. Every NIP has the prefix `000` and a
+  valid checksum, computed at run time. Every e-mail address is in a reserved domain. Phones are
+  built at run time. The human accepted, at gate 1 of EKO-3-06, that a realistic name, town or
+  phone number may coincide with a real person, business or subscriber.
+- **The dataset key.** The `customer` column holding a seeded record's dataset key is "not
+  personal data" under *Classifying columns*. The key is an opaque index into the dataset,
+  derived from no field value. The API's create never writes it and no API answer carries it.
+- **The seed's output.** The seed writes under *What may appear in logs* as "any worker". It
+  names a record only by its dataset key and the rule or field that refused it, gives totals as
+  counts, and writes no customer field value, no validation error's input and no database
+  driver message.
+
+**New controls ADR-0005-C22 and C23.** This adds items and rules and restates none, so it is
+not a deviation. ADR-0005-C16 and C17 are unchanged. Every other rule and control of this
+decision is unchanged.
+
+**Why.** C-1 A has the seed refuse every environment that has not declared itself synthetic-only,
+and C16's human statement cannot be read by a program. The seed's dataset is the one place in the
+repository built to look like customer data, so its provenance must be provable, and its key
+needs a classification like every new column. Approved by the human at gate 1 of EKO-3-06 on
+2026-11-25 (Issue #258); the text is that of
+[`EKO-3-06-operator-seed-adr0003-adr0004-adr0005-addendum-draft-2026-11-25.md`](EKO-3-06-operator-seed-adr0003-adr0004-adr0005-addendum-draft-2026-11-25.md).
+
+**Residuals accepted by the human on 2026-11-25** (EKO-3-06, Security Auditor B-01 and B-02, recorded on
+Issue #258 before gate 2; [PR #260](https://github.com/TanerCRB/Eko_CRM/pull/260)):
+
+- **The declaration can be supplied per run.** Compose interpolation prefers a shell variable over
+  the environment file, and `docker compose run -e` overrides either, so a single run can carry the
+  accepted value against a target that has not declared itself. Compose cannot prevent this, and
+  the exact-value check cannot tell where the value came from. Only the operator procedure in
+  [`docs/operations/seed.md`](../../operations/seed.md) guards against it: the declaration is an
+  operator discipline that any single run can override, not a mechanism. Seeded rows stay
+  identifiable afterwards by a non-null dataset key. This is the recorded exception EKO-3-06/B-01
+  in [`exception-register.md`](../exception-register.md).
+- **Foreign tax identifiers.** The coincidence the human accepted for realistic names, towns and
+  phone numbers also covers the foreign tax identifiers of the dataset: a generated `CZ` value has
+  the form of a valid DIČ, and there is no reserved range for it.
+
+**ADR-0005-C22 and ADR-0005-C23.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0005-C22 | Against a target whose declaration variable is absent, empty, whitespace only or any value other than the accepted one, the operator seed exits non-zero, names the missing declaration, and leaves every application table byte-equal; the same target with only the accepted value set loads the dataset; no file under `backend/app/` other than `backend/app/core/settings.py` reads the variable. |
+| ADR-0005-C23 | Two seed runs into two fresh databases, at different clock instants and under different process random and hash seeds, store identical customer and contact values (identifiers and owners aside), equal to the committed fingerprint; every stored NIP begins with `000`; every stored e-mail address is in a reserved domain; `backend/app/seed_dataset.py` imports no layer but `domain`; across a full load, a re-run, every refused-record case and a refused target, no customer field value of the dataset or of an injected record appears in the seed's output or in any in-process log line, and each refused record is named by its dataset key and rule only; `POST /api/customers` stores the dataset-key column as `NULL` and no OpenAPI response schema carries it. |

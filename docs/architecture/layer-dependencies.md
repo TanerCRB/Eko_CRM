@@ -18,6 +18,8 @@ ADR-0003 (identity and access; the `auth` rule in the inner rows is ADR-0001's a
 | `auth` | `backend/app/auth/**` | `app.auth` | services, api, integrations | ADR-0003: verifies the identity server's assertion and the browser session, builds the caller as a domain value; Keycloak is not an integration |
 | `api` | `backend/app/api/**` | `app.api` | — | ADR-0001: the outermost backend layer |
 | `worker` | `backend/app/worker.py` | — | api, auth | ADR-0006 *Background work*: the worker's entry point, outside the layer directories, does not depend on api or auth; ADR-0003: only api and main.py depend on auth |
+| `seed` | `backend/app/seed.py` | — | api, auth, integrations | ADR-0004 addendum of 2026-11-25 (EKO-3-06): the operator seed's entry point, a one-off of `worker`, outside the layer directories; ADR-0003: only api and main.py depend on auth |
+| `seed_dataset` | `backend/app/seed_dataset.py` | — | services, data, api, integrations, auth, core | ADR-0005 addendum of 2026-11-25 (EKO-3-06): the committed synthetic dataset depends on domain only, so it reads no clock and no environment |
 | `fe-api` | `frontend/src/api/**` | `@/api` | fe-components, fe-features | ADR-0001: the typed client knows no UI |
 | `fe-components` | `frontend/src/components/**` | `@/components` | fe-api, fe-features | ADR-0001: presentational components don't fetch |
 | `fe-features` | `frontend/src/features/**` | `@/features` | — | ADR-0001: screens compose the client and the components |
