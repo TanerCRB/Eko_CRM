@@ -907,7 +907,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   above). Follow-ups: #216 (the manager owner selector and the comment fix), EKO-3-05 (the
   active/archived filter).
 
-- [ ] **EKO-3-06** — Provide a seed script with synthetic customers (#258).
+- [x] **EKO-3-06** — Provide a seed script with synthetic customers (#258).
   *Done when:* server tests prove: an operator script loads a synthetic dataset (several reps, about 200
   customers each, per-rep owner) into an environment declared synthetic-only; every loaded customer
   satisfies CUS-2..CUS-5 and CUS-8 by the same rules as customer create, with no duplicate NIP; an
@@ -919,6 +919,49 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   later); creating Keycloak accounts; duplicate warnings (EKO-3-09); archived, edited or reassigned seeded
   customers (EKO-3-05, EKO-3-07); visits, notes, actions; a clean or reset mode; a UI.
   After EKO-3-03.
+  **Done 2026-11-26:** merged in [PR #260](https://github.com/TanerCRB/Eko_CRM/pull/260) as `b9b06b7` on 2026-11-26 by the human, from the
+  operator's account (TanerCRB; the repository has one account); code verified at `04b878f` (QA PROOF HOLDS at
+  the developer checkpoint `80a44b4`, QA's three contrast tests committed in the QA checkpoint `83d70e2`;
+  Invariant Guardian and Reviewer PASS and Security Auditor PASS WITH RESERVATIONS at `098802a`; fix round 1 on
+  CI red at `66c8f5b`, two static change-set tests failing on two runtime test files only — a mode branch in
+  the C22 runtime test and a secret-name literal mapping in the C19 test — fixed in the checkpoint `04b878f`
+  with production code unchanged, and QA re-verified PROOF HOLDS there); the PR head `c8fed18` adds cost-register
+  rows only. Mechanism: `python -m app.seed <subject> <subject> <subject>` (`backend/app/seed.py`), run as
+  `docker compose run --rm --no-deps worker …` (`docs/operations/seed.md`), refuses to start unless the
+  `worker` variable `APP_SYNTHETIC_DATA_ONLY` (`compose.yaml`, unset by default) is exactly `declared`
+  (`SeedSettings`, `backend/app/core/settings.py`), unless exactly three distinct owner-form subjects are named,
+  and unless the schema is at its head or a recorded descendant; it loads the committed dataset `seed-v1`
+  (`backend/app/seed_dataset.py`, three shares of 200, `000` NIPs, reserved e-mail domains, pinned by a SHA-256
+  fingerprint) through create's own `domain` composition (`backend/app/domain/customers.py`, shared with
+  `CustomerCreate`), each customer owned through `operator_creation_scope` (`backend/app/domain/ownership.py`),
+  with `CustomerStore.load` (`backend/app/data/customers.py`) inserting by `ON CONFLICT (dataset_key) DO NOTHING`
+  on revision `0008_customer_dataset_key` on `0007` (the nullable `customer.dataset_key` and its unique
+  index, "not personal data"), one transaction per record and at most one connection; the application engine
+  is created with `hide_parameters=True` (`backend/app/data/database.py`). Tests: `backend/tests/runtime/eko306/`
+  (K-01..K-07, ADR-0003-C19, ADR-0005-C23 and QA's three `test_eko306_qa_*.py`),
+  `backend/tests/runtime/test_eko306_c22_declaration_reaches_the_one_off.py`, `backend/tests/unit/test_eko306_*.py`,
+  `backend/tests/static/test_eko306_*.py` (rows in `architecture/capabilities.md`). Gate 1 (2026-11-25, every
+  recommendation accepted): G-1 A..G-7 A, A-1 A..A-8 A; the ADR-0003, ADR-0004 and ADR-0005 addenda of
+  2026-11-25 are appended in this commit to
+  [`ADR-0003-identity-and-access.md`](architecture/decisions/ADR-0003-identity-and-access.md),
+  [`ADR-0004-deployment-and-recovery.md`](architecture/decisions/ADR-0004-deployment-and-recovery.md) and
+  [`ADR-0005-personal-data.md`](architecture/decisions/ADR-0005-personal-data.md) from
+  [`EKO-3-06-operator-seed-adr0003-adr0004-adr0005-addendum-draft-2026-11-25.md`](architecture/decisions/EKO-3-06-operator-seed-adr0003-adr0004-adr0005-addendum-draft-2026-11-25.md)
+  (one declared deviation: ADR-0003's owner rule and ADR-0003-C19 restated, new control ADR-0003-C39; new
+  controls ADR-0004-C37, ADR-0005-C22 and C23). The tests pinned to the shipped head moved from `0007` to
+  `0008` (test revisions re-based, `t_planted_0008` renamed `t_planted_0009`). Gate 2 (2026-11-26, every
+  recommendation accepted): infrastructure A-01, A-02 and backend A-01..A-09 accepted and recorded as amendment
+  lines under K-01..K-05 and K-07 of #258 (scope re-locked, fingerprint `73415c2d`); backend A-01 (the raw caps
+  on the seed path) and A-08 (a storage failure mid-run) were accepted with a test owed for each, which the
+  merge preceded, so they are owed by #262. QA ran 53 mutations: two survived the developer suite (the driver
+  message on a NIP refusal, the per-subset re-run count) and are killed by QA's contrast tests; two were
+  equivalent and are not evidence. CI: all nine checks green at `c8fed18`. Findings carried on: Reviewer R-01
+  (a non-NIP integrity refusal stops the seed as storage unavailable), #259; Security Auditor B-01 (the
+  declaration can be supplied per run by a shell variable or `-e`), the recorded exception EKO-3-06/B-01,
+  blocking again 2026-12-31 (`architecture/exception-register.md`), its residual stated in the ADR-0005
+  addendum; Security Auditor B-02 (foreign tax identifiers), added to the coincidence residual in the same
+  addendum. EKO-3-05 also adds a revision `0008` and must re-parent it onto `0008_customer_dataset_key`.
+  Follow-ups: #259 (R-01), #262 (the tests owed for A-01 and A-08).
 
 - [x] **EKO-3-08** — Let the manager narrow the customer list to one rep (#216).
   *Done when:* server tests prove: each login stores the caller's display-name copy by subject (updated, not

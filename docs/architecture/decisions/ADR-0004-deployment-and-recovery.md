@@ -2188,3 +2188,39 @@ shape. Here no release has ever written it. Publishing an intermediate release o
 letter would create such a release. Approved by the human at gate 1 of EKO-3-03 on
 2026-11-24 (Issue #252); the text is that of
 [`EKO-3-03-nip-uniqueness-contract-step-adr0002-adr0003-adr0004-adr0005-addendum-draft-2026-11-24.md`](EKO-3-03-nip-uniqueness-contract-step-adr0002-adr0003-adr0004-adr0005-addendum-draft-2026-11-24.md).
+
+### 2026-11-25 — The operator seed: a one-off of `worker`, bound by *Migrations*
+
+**Status:** Accepted 2026-11-25 (gate 1 of EKO-3-06, Issue #258).
+
+**What it adds.** From this date:
+
+- The operator seed is `python -m app.seed`, shipped in the backend image. In an environment it
+  runs only as a one-off container of the `worker` service, with that service's environment,
+  removed when it ends and starting no other service:
+  `docker compose run --rm --no-deps worker python -m app.seed <subject> <subject> <subject>`.
+  Its exact text is kept in the operator documentation. No service is added; ADR-0004-C1 is
+  unchanged.
+- *Migrations* binds the seed as it binds `backend` and any worker. It never runs
+  `alembic upgrade`. At start it refuses, writing nothing, every revision other than its code's
+  head and a lineage-recorded descendant of it, and it never waits for the migration advisory
+  lock.
+- The seed holds at most one database connection.
+- In a shared environment the IT department runs it only where the declaration of ADR-0005's
+  addendum of the same date is set.
+
+**New control ADR-0004-C37.** This adds rules and restates none, so it is not a deviation. Every
+other rule and control of this decision is unchanged.
+
+**Why.** The seed writes product data outside a request. Run as a one-off of `backend`, it would
+receive the OIDC client secret and the session key it never needs. A new service would change
+the composition's service list. *Migrations* names `backend` "and any worker", and the seed must
+not load into a schema without the constraints its rules rely on (`uq_customer_nip`). Approved by
+the human at gate 1 of EKO-3-06 on 2026-11-25 (Issue #258); the text is that of
+[`EKO-3-06-operator-seed-adr0003-adr0004-adr0005-addendum-draft-2026-11-25.md`](EKO-3-06-operator-seed-adr0003-adr0004-adr0005-addendum-draft-2026-11-25.md).
+
+**ADR-0004-C37.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0004-C37 | The operator seed started against a database at a revision older than its code's head, or at one it cannot place, exits non-zero and leaves every application table and the schema byte-equal; a seed run at head leaves `alembic_version`, `schema_revision_lineage` and the schema dump unchanged; `docker compose config --services` is unchanged by this task. |

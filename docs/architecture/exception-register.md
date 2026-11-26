@@ -175,3 +175,7 @@ Accepted at gate 2 of EKO-3-03 in [PR #256](https://github.com/TanerCRB/Eko_CRM/
 
 - Exception EKO-3-03/weakening-1 — owner: @TanerCRB — reason: the K-04 commit gate's `# type: ignore[union-attr]` on the checked-out DBAPI connection's rollback in `backend/tests/runtime/eko303/conftest.py`, which fixes a hang in which the pool returned an unrolled-back connection — blocks again: 2026-12-31
 - Exception EKO-3-03/weakening-2 — owner: @TanerCRB — reason: the K-05 previous-release test skips once the previous release's head is already 0007 or later (G-7 A, the both-bases pattern of EKO-3-02/weakening-2), and fails rather than skips on 0005 or 0006 — blocks again: 2026-12-31
+
+Accepted at gate 2 of EKO-3-06 in [PR #260](https://github.com/TanerCRB/Eko_CRM/pull/260) (Security Auditor B-01, decided by the human on 2026-11-25 and recorded on #258; the residual is stated in the ADR-0005 addendum of 2026-11-25).
+
+- Exception EKO-3-06/B-01 — owner: @TanerCRB — reason: the synthetic-only declaration can also be supplied per run by a shell variable or -e, which Compose cannot prevent, so only the operator procedure in docs/operations/seed.md guards it (accepted by the human on 2026-11-25; the residual goes into the ADR-0005 addendum at gate 3) — blocks again: 2026-12-31

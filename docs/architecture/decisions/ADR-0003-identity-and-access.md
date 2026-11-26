@@ -1284,3 +1284,54 @@ Approved by the human at gate 1 of EKO-3-03 on 2026-11-24 (Issue #252); the text
 | Control | Acceptance criterion |
 |---|---|
 | ADR-0003-C38 | A test stores a customer with NIP N for rep A. A create with N by rep B, and by rep B for B's own customer holding M, answers 409 with equal status, body and headers other than `Eko-Correlation-Id`, and the body holds no identifier, subject, field value, count or NIP. The same create by a caller holding `rep` and `manager` answers the same status and body plus `existing_customer_id`, which `GET /api/customers/<id>` resolves to the stored customer under that caller. A caller holding `manager` without `rep` gets 403 whether N is taken or not, and nothing is stored. Of two overlapping creates with N, one is stored and the other gets the 409. |
+
+### 2026-11-25 — Customers loaded by the operator seed: the owner the operator names; ADR-0003-C19 restated
+
+**Status:** Accepted 2026-11-25, as a declared deviation (gate 1 of EKO-3-06, Issue #258).
+
+**What it adds.** The addenda of 2026-11-17 and 2026-11-20 decide the owner of a customer a
+caller creates. They do not decide the owner of a customer that no caller creates. From this
+date:
+
+- The operator seed (`backend/app/seed.py`, ADR-0004 addendum of the same date) creates
+  customers owned by subjects the operator names. A named subject is judged on the owner form of
+  the addendum of 2026-11-20 alone, never on whether an account holds it, and is stored as
+  received.
+- The creation scope for such a subject is built by one function of
+  `backend/app/domain/ownership.py`, the operator creation scope. Only `backend/app/seed.py`
+  imports it. No module under `backend/app/api/` or `backend/app/auth/`, nor
+  `backend/app/main.py` or `backend/app/worker.py`, reaches it.
+- The seed builds no caller value and assumes no role. It calls no Keycloak interface and neither
+  reads nor writes the display-name copy.
+
+**What it restates.**
+
+- The addendum of 2026-11-17, *Owner*: "Every customer has one owner, the subject identifier of
+  the caller that created it, taken from the caller value and stored as received" reads: "...
+  taken from the caller value, or, for a customer the operator seed loads, the subject the
+  operator names for it, and stored as received". "A request value never sets it" is unchanged.
+- The addendum of 2026-11-20: "`OwnedBy` and `AllRecords` are built only by the `domain`
+  function of *Where it is enforced*, from the caller value" reads: "... from the caller value,
+  except the operator creation scope, which builds an `OwnedBy` from a subject the operator names
+  and is reached only from the operator seed". The addendum of 2026-11-22's "stay built only
+  from a caller value" is read the same way. ADR-0003-C36 is unchanged.
+- ADR-0003-C19 is restated (table below).
+
+**New control ADR-0003-C39.** Every other rule and control of this decision is unchanged. The
+closed system-read list, the session-exempt, role-free and non-CRM lists are unchanged.
+
+**Why.** SEED-1 needs customers that real reps' logins see (C-2 A), and no rep is logged in when
+the operator loads them. Making up a caller for each subject would put into the process a
+caller value that no identity server asserted, which *Roles* forbids. A scope built from an
+operator value and reachable from one entry point keeps every request path deciding from the
+verified token. Restating an accepted rule and control is a declared deviation, following the
+addenda of 2026-11-20 (C33) and 2026-11-22 (C35). Approved by the human at gate 1 of EKO-3-06 on
+2026-11-25 (Issue #258); the text is that of
+[`EKO-3-06-operator-seed-adr0003-adr0004-adr0005-addendum-draft-2026-11-25.md`](EKO-3-06-operator-seed-adr0003-adr0004-adr0005-addendum-draft-2026-11-25.md).
+
+**ADR-0003-C39 and ADR-0003-C19 (restated).**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0003-C39 | Under `backend/app/`, the operator creation scope function of `backend/app/domain/ownership.py` is imported only by `backend/app/seed.py`; a fixture import of it from a module under `backend/app/api/`, `backend/app/auth/`, from `backend/app/main.py` or `backend/app/worker.py` fails the check; a seed run with three named subjects stores each share with exactly its named subject as `customer.owner_subject`, refuses a subject outside the owner form before any write, succeeds with Keycloak unreachable, and leaves `staff_display_name` byte-equal. |
+| ADR-0003-C19 (restated) | On the PostgreSQL server, Keycloak's database role and the application's database role each have a connection limit greater than zero, Keycloak's configured `db-pool-max-size` does not exceed its role's limit, the backend's configured workers × (pool size + max overflow) plus the background jobs' pools plus one migration connection plus one connection of the operator seed does not exceed the application role's limit, and the two limits together are below `max_connections` minus `superuser_reserved_connections`; a seed run holds at most one connection to the application database. |
