@@ -1,7 +1,8 @@
 """K-07 / ADR-0002-C2: no test-only revision reaches the image that ships.
 
 The shipped image is the one the repository's normal build produced for the lab. Its tree is
-exactly {0001, 0002, 0003, 0004, 0005, 0006, 0007}, each on the one before (0007: EKO-3-03);
+exactly {0001, 0002, 0003, 0004, 0005, 0006, 0007, 0008}, each on the one before (0007: EKO-3-03;
+0008: EKO-3-06);
 `0002` creates schema_revision_lineage; every variant the EKO-1-11 tests use differs from it only
 by files added under /app/migrations/versions/, so those tests run the shipped env.py, app/ and
 entry points. A one-head check is the wrong guard here: a test revision chained onto the head keeps
@@ -105,12 +106,12 @@ def test_adr0002_c2_contrast_a_variant_replacing_env_py_is_found(
     assert f"changed: {ENV_PY}" in violations
 
 
-def test_adr0002_c2_contrast_a_planted_0008_keeps_one_head_but_fails_the_tree_check(
+def test_adr0002_c2_contrast_a_planted_0009_keeps_one_head_but_fails_the_tree_check(
     lab: Lab,
 ) -> None:
-    image = lab.variant("planted_0008", ("t_planted_0008.py",))
+    image = lab.variant("planted_0009", ("t_planted_0009.py",))
     heads = lab.image_command(image, "alembic", "heads")
-    assert dc.c2_heads(heads.stdout, ["0008"]) == []
+    assert dc.c2_heads(heads.stdout, ["0009"]) == []
     history = lab.image_command(image, "alembic", "history")
     files = lab.image_python(image, LIST_VERSIONS, "/app/migrations/versions").split()
     assert mc.shipped_tree_violations(mc.history_edges(history.stdout), files) != []

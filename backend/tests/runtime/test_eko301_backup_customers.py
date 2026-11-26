@@ -75,7 +75,7 @@ def test_eko301_c17_no_identifier_issued_twice_after_a_restore(
 ) -> None:
     backup_lab.lab.at_head()
     [[revision]] = backup_lab.sql("SELECT version_num FROM alembic_version")
-    assert revision == "0007"
+    assert revision == "0008"
     before = [backup_lab.plant_customer(OWNER, contacts=n) for n in (2, 0, 1)]
     names_before = set_names(backup_lab.double)
     result = backup_lab.run()

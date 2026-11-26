@@ -70,3 +70,13 @@ def owner_filter(raw: str) -> str | None:
     if not OWNER_SUBJECT.fullmatch(raw):
         raise ValueError(f"not an owner subject: 1 to {OWNER_LIMIT} printable ASCII characters")
     return raw
+
+
+def operator_creation_scope(subject: str) -> OwnedBy:
+    """The creation scope of a customer the operator seed loads: owned by the subject the operator
+    names, stored as received (ADR-0003 addendum of EKO-3-06, a declared deviation; C39). The
+    subject is judged on the owner form alone, never on whether an account holds it, and no
+    caller or role is involved. Only `app.seed` may call this."""
+    if not OWNER_SUBJECT.fullmatch(subject):
+        raise ValueError(f"not an owner subject: 1 to {OWNER_LIMIT} printable ASCII characters")
+    return OwnedBy(subject)

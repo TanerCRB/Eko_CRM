@@ -8,7 +8,7 @@ a fixed message that never repeats the value (ADR-0005: no personal data in a me
 
 import re
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from uuid import UUID
@@ -352,3 +352,194 @@ class CustomerSummary:
     id: UUID
     name: str
     country: str
+
+
+# The composition of create's rules, held once here and used by `CustomerCreate` and the operator
+# seed alike (EKO-3-06, gate 1 A-5 A). The fields in the order their rules judge them: a
+# country-dependent rule sees only the fields before it that passed their own rules.
+CUSTOMER_FIELDS = (
+    "name",
+    "country",
+    "street",
+    "postal_code",
+    "town",
+    "voivodeship",
+    "county",
+    "tax_id",
+)
+CONTACTS_FIELD = "contacts"
+# The raw caps, on the value as sent before any other rule (EKO-3-01 fix round 1, R-01 A). The API
+# enforces them on the wire first; here they keep every other caller of the rules as strict.
+RAW_LIMITS = {
+    "name": NAME_RAW_LIMIT,
+    "country": 2,
+    "street": STREET_RAW_LIMIT,
+    "postal_code": POSTAL_CODE_RAW_LIMIT,
+    "town": TOWN_RAW_LIMIT,
+    "voivodeship": REGION_RAW_LIMIT,
+    "county": REGION_RAW_LIMIT,
+    "tax_id": TAX_ID_RAW_LIMIT,
+    "value": VALUE_RAW_LIMIT,
+    "note": NOTE_RAW_LIMIT,
+}
+
+Judged = Mapping[str, str | None]
+
+
+def _capped(field: str, raw: str | None) -> None:
+    limit = RAW_LIMITS[field]
+    if raw is not None and len(raw) > limit:
+        raise ValueError(f"at most {limit} characters as sent")
+
+
+def _required(raw: str | None, message: str) -> str:
+    if raw is None:
+        raise ValueError(message)
+    return raw
+
+
+def customer_field(field: str, raw: str | None, judged: Judged) -> str | None:
+    """One field of a create, judged by its rule. `judged` holds the fields before it in
+    `CUSTOMER_FIELDS` that passed their own rules; a rule needing one that did not returns the
+    value unjudged, since the record is already refused for that one (EKO-3-02 G-5 A)."""
+    _capped(field, raw)
+    if field == "name":
+        return customer_name(_required(raw, "a name is required"))
+    if field == "country":
+        return country_code(_required(raw, "not a country code of the list"))
+    if field == "street":
+        return street(raw)
+    if field == "town":
+        return town(raw)
+    country = judged.get("country")
+    if country is None:
+        return raw
+    if field == "postal_code":
+        return postal_code(country, raw)
+    if field == "voivodeship":
+        return voivodeship(country, raw)
+    if field == "county":
+        # A foreign county is refused whatever its voivodeship; an invalid Polish voivodeship
+        # leaves the county unjudged, so only the voivodeship's error is given (G-5 A).
+        if is_polish(country) and "voivodeship" not in judged:
+            return raw
+        return county(country, judged.get("voivodeship"), raw)
+    if field == "tax_id":
+        return tax_id(country, raw)
+    raise LookupError(f"not a customer field: {field}")
+
+
+def contact_kind(raw: str) -> ContactKind:
+    if raw not in {kind.value for kind in ContactKind}:
+        raise ValueError("not a contact kind")
+    return ContactKind(raw)
+
+
+def contact_field(field: str, raw: str | None, kind: ContactKind | None) -> str | None:
+    """A contact's value or note, judged by its rule; without a valid kind the value is not
+    judged, since the contact is already refused for its kind."""
+    _capped(field, raw)
+    if field == "value":
+        value = _required(raw, "a contact value is required")
+        return value if kind is None else contact_value(kind, value)
+    if field == "note":
+        return contact_note(raw)
+    raise LookupError(f"not a contact field: {field}")
+
+
+def assembled(values: Judged, contacts: Sequence[Contact]) -> CustomerDraft:
+    """The draft of judged values: the address parts together, the tax ID placed by the country."""
+    country = _required(values["country"], "not a country code of the list")
+    return CustomerDraft(
+        name=_required(values["name"], "a name is required"),
+        country=country,
+        contacts=tuple(contacts),
+        address=Address(
+            values.get("street"),
+            values.get("postal_code"),
+            values.get("town"),
+            values.get("voivodeship"),
+            values.get("county"),
+        ),
+        tax_id=TaxId.placed(country, values.get("tax_id")),
+    )
+
+
+@dataclass(frozen=True)
+class ContactInput:
+    """A contact's values as given, before any rule."""
+
+    kind: str
+    value: str
+    note: str | None = None
+    primary: bool = False
+
+
+@dataclass(frozen=True)
+class CustomerInput:
+    """A customer's values as given, before any rule; the country defaults as create's does."""
+
+    name: str
+    country: str = DEFAULT_COUNTRY
+    street: str | None = None
+    postal_code: str | None = None
+    town: str | None = None
+    voivodeship: str | None = None
+    county: str | None = None
+    tax_id: str | None = None
+    contacts: tuple[ContactInput, ...] = ()
+
+
+class CustomerRefused(Exception):
+    """Values create's rules refuse. It names the refused fields only, never a value (ADR-0005)."""
+
+    def __init__(self, fields: tuple[str, ...]) -> None:
+        super().__init__()
+        self.fields = fields
+
+
+def _contact(given: ContactInput, refused: list[str]) -> Contact | None:
+    """The contact as create would judge it, or None with each refused field appended."""
+    before = len(refused)
+    kind: ContactKind | None = None
+    value: str | None = None
+    note: str | None = None
+    try:
+        kind = contact_kind(given.kind)
+    except ValueError:
+        refused.append(f"{CONTACTS_FIELD}.kind")
+    try:
+        value = contact_field("value", given.value, kind)
+    except ValueError:
+        refused.append(f"{CONTACTS_FIELD}.value")
+    try:
+        note = contact_field("note", given.note, kind)
+    except ValueError:
+        refused.append(f"{CONTACTS_FIELD}.note")
+    if len(refused) > before or kind is None or value is None:
+        return None
+    return Contact(kind, value, note, given.primary)
+
+
+def customer_draft(given: CustomerInput) -> CustomerDraft:
+    """The draft create would store for these values, or `CustomerRefused` naming every field a
+    rule refused (a contact's as `contacts.<field>`, the list's own bounds as `contacts`); the
+    same rules, in the same order, as `CustomerCreate`."""
+    judged: dict[str, str | None] = {}
+    refused: list[str] = []
+    for field in CUSTOMER_FIELDS:
+        try:
+            judged[field] = customer_field(field, getattr(given, field), judged)
+        except ValueError:
+            refused.append(field)
+    contacts = [c for c in (_contact(given_one, refused) for given_one in given.contacts) if c]
+    if len(given.contacts) > CONTACT_LIMIT:
+        refused.append(CONTACTS_FIELD)
+    elif len(contacts) == len(given.contacts):
+        try:
+            check_contacts(contacts)
+        except ValueError:
+            refused.append(CONTACTS_FIELD)
+    if refused:
+        raise CustomerRefused(tuple(dict.fromkeys(refused)))
+    return assembled(judged, contacts)
