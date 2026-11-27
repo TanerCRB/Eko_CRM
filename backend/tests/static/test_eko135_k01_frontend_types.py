@@ -22,6 +22,7 @@ AUTH = "frontend/src/api/auth.ts"
 CUSTOMERS = "frontend/src/api/customers.ts"
 REFERENCE = "frontend/src/api/reference.ts"
 REPS = "frontend/src/api/reps.ts"
+VISITS = "frontend/src/api/visits.ts"
 Document = dict[str, Any]
 Plant = Callable[[Document], None]
 
@@ -125,6 +126,13 @@ def test_eko135_k01_checked_set_is_g_c() -> None:
         (REPS, "RepEntry", "RepEntry"),
         # EKO-3-03 (Issue #252, design point 6): the NIP-taken refusal.
         (CUSTOMERS, "NipTakenProblem", "POST /api/customers 409"),
+        # EKO-4-01 (Issue #268, K-06): the visits client.
+        (VISITS, "WallTimeInput", "WallTimeIn"),
+        (VISITS, "VisitInput", "VisitCreate"),
+        (VISITS, "VisitCustomer", "VisitCustomerOut"),
+        (VISITS, "Visit", "VisitOut"),
+        (VISITS, "VisitList", "VisitList"),
+        (VISITS, "VisitPeriodQuery", "GET /api/visits/period query"),
     }
 
 

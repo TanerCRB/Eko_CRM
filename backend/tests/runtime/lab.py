@@ -26,13 +26,16 @@ from tests.runtime.conftest import BUILT_SERVICES, Composition
 from tests.support.repo import REPO_ROOT
 
 REVISIONS = Path(__file__).parent / "revisions"
-SHIPPED_HEAD = "0009"
-SHIPPED_TREE = ("0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009")
+SHIPPED_HEAD = "0010"
+SHIPPED_TREE = (
+    "0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010",
+)  # fmt: skip
 # The tables of the shipped revisions after 0002 (0003: sessions and login transactions; 0004:
 # customers and contacts, the contact table first for its foreign key; 0006: the staff
-# display-name copy).
+# display-name copy; 0010: visits, before the customer table for their foreign key).
 LATER_TABLES = (
     "app_session",
+    "visit",
     "login_transaction",
     "customer_contact",
     "customer",

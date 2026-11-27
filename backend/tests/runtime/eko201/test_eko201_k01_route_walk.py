@@ -57,13 +57,33 @@ def protected_operations(app: FastAPI) -> list[tuple[str, str]]:
 VALID_BODIES: dict[tuple[str, str], dict[str, Any]] = {
     ("POST", "/api/customers"): {"json": {"name": "Gospodarstwo Trasa"}},
     ("PUT", "/api/customers/{customer_id}"): {"json": {"name": "Gospodarstwo Trasa"}},
+    ("GET", "/api/visits/period"): {"params": {"first": "2026-11-30", "last": "2026-11-30"}},
 }
 CUSTOMER_PARAMETER = "{customer_id}"
+# EKO-4-01: a visit's identifier in its path, and the create that names an owned customer.
+VISIT_PARAMETER = "{visit_id}"
+VISIT_CREATE = ("POST", "/api/visits")
 
 
-def call(browser: Browser, method: str, path: str, customer_id: str | None = None) -> int:
-    concrete = path.replace(CUSTOMER_PARAMETER, customer_id or str(uuid.uuid4()))
-    return browser.send(method, concrete, **VALID_BODIES.get((method, path), {})).status_code
+def visit_body(customer_id: str) -> dict[str, Any]:
+    at = {"date": "2026-11-30", "time": "10:00"}
+    return {"json": {"customer_id": customer_id, "start": at, "end": {**at, "time": "11:00"}}}
+
+
+def call(
+    browser: Browser,
+    method: str,
+    path: str,
+    customer_id: str | None = None,
+    visit_id: str | None = None,
+) -> int:
+    concrete = path.replace(CUSTOMER_PARAMETER, customer_id or str(uuid.uuid4())).replace(
+        VISIT_PARAMETER, visit_id or str(uuid.uuid4())
+    )
+    valid = VALID_BODIES.get((method, path), {})
+    if (method, path) == VISIT_CREATE:
+        valid = visit_body(customer_id or str(uuid.uuid4()))
+    return browser.send(method, concrete, **valid).status_code
 
 
 def existing_customer(browser: Browser) -> str:
@@ -252,10 +272,15 @@ def test_k01_every_protected_operation_answers_per_session_state(
         elif scenario in {"refused", "unreachable"}:
             clock.advance(**EXPIRED)
             stub.refresh_mode = "refuse" if scenario == "refused" else "error"
-        owned = None
-        if scenario == "valid" and CUSTOMER_PARAMETER in path:
+        owned = visit = None
+        needs_customer = CUSTOMER_PARAMETER in path or VISIT_PARAMETER in path
+        if scenario == "valid" and (needs_customer or (method, path) == VISIT_CREATE):
             owned = existing_customer(browser)
-        status = call(browser, method, path, owned)
+        if scenario == "valid" and VISIT_PARAMETER in path and owned is not None:
+            made = browser.send("POST", "/api/visits", **visit_body(owned))
+            assert made.status_code == 201, made.text
+            visit = made.json()["id"]
+        status = call(browser, method, path, owned, visit)
         if scenario == "valid":
             assert status not in {401, 403, 404, 405, 503}, (method, path, status)
             assert status < 400, (method, path, status)

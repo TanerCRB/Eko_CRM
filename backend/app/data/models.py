@@ -165,6 +165,35 @@ class CustomerContactRow(Base):
     is_primary: Mapped[bool] = mapped_column(Boolean)
 
 
+class VisitRow(Base):
+    """A planned visit (VIS-1 app side); an owned table whose owner is its own `owner_subject`,
+    never its customer's (ADR-0003-C42). Revision 0010. Read and written only through
+    `app.data.visits`, under a scope.
+
+    `id` is a UUIDv4 the application generates: no sequence, identity or default, so a restore
+    cannot make an identifier be issued twice (ADR-0006 *Visit identifiers are never reused*).
+    No column holds a state: Planned and Held are derived from `ends_at` at read time.
+    """
+
+    __tablename__ = "visit"
+    __table_args__ = (
+        CheckConstraint("ends_at > starts_at", name="ends_after_start"),
+        # The day, week and all-visits lists: the owner's visits by start.
+        Index("ix_visit_owner_subject_starts_at", "owner_subject", "starts_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    # Exactly one customer (VIS-1); no cascading action (A-4 A), so no customer row is deleted
+    # under a visit.
+    customer_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("customer.id"), index=True)
+    # The planning rep's subject, stored as received and compared exactly (ADR-0003).
+    owner_subject: Mapped[str] = mapped_column(Text(collation="C"))
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # The visit's own address (PD-C2), trimmed NFC; NULL shows the customer's (G-8 A).
+    own_address: Mapped[str | None] = mapped_column(Text)
+
+
 __all__ = [
     "AppSession",
     "Base",
@@ -173,4 +202,5 @@ __all__ = [
     "LoginTransaction",
     "SchemaRevisionLineage",
     "StaffDisplayNameRow",
+    "VisitRow",
 ]

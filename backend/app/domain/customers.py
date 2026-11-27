@@ -130,6 +130,11 @@ def _text(raw: str) -> str:
     return unicodedata.normalize("NFC", raw)
 
 
+def stored_text(raw: str) -> str:
+    """The text rule of `_text`, for another record's values (EKO-4-01: a visit's own address)."""
+    return _text(raw)
+
+
 def customer_name(raw: str) -> str:
     """Trimmed, then NFC; required and at most `NAME_LIMIT` characters (G-1 A)."""
     name = _text(raw.strip())

@@ -62,7 +62,7 @@ def test_k02_c2_contrast_a_second_head_fails(tmp_path: Path) -> None:
 def test_k02_c2_the_repository_has_one_head_and_the_check_reads_it() -> None:
     config = Config(str(REPO_ROOT / "backend" / "alembic.ini"))
     heads = ScriptDirectory.from_config(config).get_heads()
-    assert heads == ["0009"]
+    assert heads == ["0010"]
     assert dc.c2_heads("0007 (head)\n", ["0007"]) == []
     assert dc.c2_heads("0007 (head)\n", []) != []
 

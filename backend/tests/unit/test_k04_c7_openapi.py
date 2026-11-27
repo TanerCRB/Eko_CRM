@@ -49,6 +49,9 @@ def test_k04_c23_api_prefix_holds_exactly_health_the_four_auth_routes_and_custom
         "/api/health",
         "/api/reference/voivodeships",
         "/api/reps",
+        "/api/visits",
+        "/api/visits/period",
+        "/api/visits/{visit_id}",
     ]
     # EKO-3-01 (decision H6-B A on Issue #195): the three customer operations; EKO-3-05 (Q-5 on
     # Issue #253) adds edit, archive and restore.
@@ -59,3 +62,7 @@ def test_k04_c23_api_prefix_holds_exactly_health_the_four_auth_routes_and_custom
     assert sorted(paths["/api/reference/voivodeships"]) == ["get"]
     # EKO-3-08 (G-4 A on Issue #216): the manager's list of reps.
     assert sorted(paths["/api/reps"]) == ["get"]
+    # EKO-4-01 (Issue #268): plan a visit, read it, list all and a period.
+    assert sorted(paths["/api/visits"]) == ["get", "post"]
+    assert sorted(paths["/api/visits/period"]) == ["get"]
+    assert sorted(paths["/api/visits/{visit_id}"]) == ["get"]

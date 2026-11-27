@@ -48,6 +48,7 @@ def test_adr0004_c13_migrate_command_refusal_contrast_upgrade_head_applies(lab: 
         "0007",
         "0008",
         "0009",
+        "0010",
         "t_next",
     }
     assert lab.comparison_dump() != before

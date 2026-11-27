@@ -18,15 +18,16 @@ from sqlalchemy import Connection, delete, exists, func, not_, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.data.database import Database
-from app.data.models import CustomerRow, StaffDisplayNameRow
+from app.data.models import CustomerRow, StaffDisplayNameRow, VisitRow
 from app.data.sessions import StorageUnavailable
 from app.domain.staff import Rep
 
 logger = logging.getLogger(__name__)
 
 # ADR-0005 addendum of EKO-3-08: the columns whose subject keeps a copy. A column holding a staff
-# subject is named `*_subject` and is added here in the release that adds it (ADR-0005-C20).
-REFERENCE_SET = (CustomerRow.owner_subject,)
+# subject is named `*_subject` and is added here in the release that adds it (ADR-0005-C20);
+# EKO-4-01 adds the visit owner (its ADR-0005 addendum, section 5).
+REFERENCE_SET = (CustomerRow.owner_subject, VisitRow.owner_subject)
 
 
 @contextmanager
