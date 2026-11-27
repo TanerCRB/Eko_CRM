@@ -33,6 +33,15 @@ function stubListApi(byTerm: Record<string, ListSource>, session?: OlderSessionI
     if (method !== "GET" || url.pathname !== CUSTOMERS_URL) {
       throw new Error(`Unexpected request ${method} ${href}`);
     }
+    // EKO-3-10: an empty default list's archived-existence request is answered apart, as no
+    // archived customer, so `lists` keeps only the requests the search sends.
+    if (url.search === "?state=archived") {
+      const noArchived: CustomerList = { items: [] };
+      return new Response(JSON.stringify(noArchived), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
     lists.push(url);
     const source = byTerm[url.searchParams.get("q") ?? ""];
     if (source === undefined) {

@@ -46,6 +46,10 @@ function stubScreenApi(
       } else if (url.pathname === REPS_URL) {
         repsReads.push(href);
         reply = typeof reps === "function" ? await reps() : reps;
+      } else if (url.pathname === CUSTOMERS_URL && url.search === "?state=archived") {
+        // EKO-3-10: an empty default list's archived-existence request is answered apart, as no
+        // archived customer, so `lists` keeps only the requests the owner selector sends.
+        reply = { status: 200, body: { items: [] } };
       } else if (url.pathname === CUSTOMERS_URL) {
         lists.push(url);
         const key = `${url.searchParams.get("q") ?? ""}|${url.searchParams.get("owner") ?? ""}`;

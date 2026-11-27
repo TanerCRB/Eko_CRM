@@ -1011,21 +1011,95 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   loses the count line), #243. Follow-ups: #243, #247 (owner-only no-match wording, A-16), #249 (the
   C20/C21 rename), #242 (the session read's 500 on a lone-surrogate name, pre-existing).
 
-- [ ] **EKO-3-05** — Let users edit, archive and restore customers (#253).
+- [x] **EKO-3-05** — Let users edit, archive and restore customers (#253).
   *Done when:* server tests prove: a rep edits their own customer and the manager any customer, with
-  CUS-2..CUS-5 and CUS-8 re-validated exactly as on create, the owner unchanged, and a NIP edit
-  accepted without a uniqueness check (as create until EKO-3-03); a rep archives and restores their own
+  CUS-2..CUS-5 and CUS-8 re-validated exactly as on create, the owner unchanged, and an edit to a NIP
+  another customer holds (active or archived) refused exactly as EKO-3-03's create, also when two saves
+  race, while keeping the customer's own NIP is accepted; a rep archives and restores their own
   customer (hidden from the active list, readable by id, restored with every field unchanged) and the
   manager any customer; the list filters active/archived/both and combines with search and owner
   filter; a rep acting on another rep's customer (edit, archive or restore) gets the same answer as for
-  an id that does not exist; editing, archiving or restoring changes no other customer; nothing is
-  deleted; the SPA Customers screen carries edit, archive (with confirmation), restore and the filter.
+  an id that does not exist; editing, archiving or restoring changes no other customer and never
+  writes or clears a seeded customer's dataset key, and a seed run over a seeded customer that was
+  edited and archived adds nothing and changes nothing; nothing is deleted; the previous release keeps
+  working over the archived-state step `0009` and a rollback; the SPA Customers screen carries edit,
+  archive (with confirmation), restore and the filter.
   **Out of scope (explicit):** effect on visits and actions (EKO-4-06; Google removal EKO-5-02);
-  duplicate-NIP blocking and warnings on edit (EKO-3-03; no release with real data before it); owner
-  change and reassignment (EKO-3-07); concurrent-edit conflict handling; erasure; duplicate handling of
-  archived customers (EKO-3-03); archived-customer retention period (GDPR impact assessment); real data.
-  After EKO-3-04.
+  duplicate warnings on edit, and whether an archived customer's phone or e-mail counts for them
+  (CUS-7, EKO-3-09); owner change and reassignment (EKO-3-07); concurrent-edit conflict handling;
+  erasure; archived-customer retention period (GDPR impact assessment); seeding archived customers,
+  or a change that makes a seeded customer stop counting as seeded; real data.
+  After EKO-3-04, EKO-3-03 and EKO-3-06.
+  **Done 2026-11-26:** merged in [PR #261](https://github.com/TanerCRB/Eko_CRM/pull/261) as `b007270` on 2026-11-26 by the human, from the
+  operator's account (TanerCRB; the repository has one account); code verified at `519eb99`, the developer
+  checkpoint after the rebase onto EKO-3-06 (D-7, D-8; QA PROOF HOLDS, undecidable K-07, and Invariant
+  Guardian, Reviewer and Security Auditor PASS there, round 2, QA adding no file); round 1 had verified
+  `6c315c9` (QA PROOF HOLDS at the checkpoint `43c7ece`, QA's three test files committed on top; the three
+  other evaluators PASS at `6c315c9`) before EKO-3-06 merged first and its revision `0008` collided with
+  this task's; the PR head `f3ec736` adds cost-register rows only. Mechanism: revision
+  `0009_customer_archived_at` on `0008` (`backend/migrations/versions/0009_customer_archived_at.py`)
+  only adds the nullable `customer.archived_at` (`timestamptz`, no default, NULL meaning active, PD-C4);
+  `PUT /api/customers/{customer_id}` (`customer_edit`, body create's `CustomerCreate`, the whole customer
+  with its contacts replaced in the customer's transaction), `POST …/{customer_id}/archive` and
+  `/restore` (`customer_archive`, `customer_restore`, no body, idempotent, the instant from the injected
+  clock through `get_clock` in `backend/app/api/dependencies.py`) in `backend/app/api/customers.py` and
+  `backend/app/services/customers.py`; each change is one `UPDATE … WHERE id AND scope AND <state
+  condition>` under the visibility scope in `CustomerStore.edit`, `archive` and `restore`
+  (`backend/app/data/customers.py`), with `_unchanged` telling a missing from an archived customer under
+  the same scope, so another rep's customer answers 404 whatever its state, an archived one's edit 409
+  `{"detail":"restore it first"}`, and only a `uq_customer_nip` violation of the edit's own `UPDATE` the
+  EKO-3-03 NIP-taken 409 (the reference only through `reference_scope`); no change names `owner_subject`
+  or `dataset_key`, and the seed's `load` never names `archived_at`; `GET /api/customers?state=`
+  (`StateFilter` in `backend/app/domain/customers.py`, `STATE_CONDITIONS`; empty or absent is `active`)
+  joins the state to the scope by AND, and `CustomerOut` and `CustomerItem` gain a required `archived`.
+  The SPA (`frontend/src/features/customers/CustomerForm.tsx`, shared with create, `EditCustomer.tsx`,
+  `CustomerDetail.tsx`, `CustomerList.tsx`; `frontend/src/api/customers.ts` `editCustomer`,
+  `archiveCustomer`, `restoreCustomer`) edits in the customer screen, tells the two 409s apart by exact
+  `detail`, archives through `ConfirmDialog`, restores and filters by "Status klienta". Tests:
+  `backend/tests/runtime/eko305/` (K-01..K-06 and QA's `test_eko305_qa_mutation_contrasts.py`),
+  `backend/tests/runtime/test_eko305_k04_c38_previous_release_over_the_archived_state.py`,
+  `backend/tests/unit/test_eko305_k04_c38_previous_release_both_bases.py`,
+  `backend/tests/static/test_eko305_k04_archived_state_revision.py`,
+  `backend/tests/static/test_eko305_qa_k07_put_contract.py`,
+  `frontend/tests/features/customers/k07-eko305-*.test.tsx` (rows in `architecture/capabilities.md`).
+  Gate 1 (the human accepted every recommendation each time): D-1 on 2026-11-24 (G-1 A..G-6 A, repeat
+  archive and restore A, Q-1 A, Q-2 A, Q-3 A, Q-4 B, Q-5 as proposed, Q-6 A); the implementation stops
+  D-2 (S-1 A, S-2 A, S-3), D-3 (W-1 A, F-1 A) and D-4 (S-F1 A, S-F2 A); D-5 and D-6 after EKO-3-03 merged
+  first (X-1..X-5 A, re-approved 2026-11-25); D-7 and D-8 after EKO-3-06 merged first (Y-1 A: controls
+  ADR-0003-C41 and ADR-0004-C38, revision `0009`; Y-2 A: the dataset-key and seed clauses; 2026-11-26).
+  The ADR-0003 and ADR-0004 addenda are appended in this commit to
+  [`ADR-0003-identity-and-access.md`](architecture/decisions/ADR-0003-identity-and-access.md) and
+  [`ADR-0004-deployment-and-recovery.md`](architecture/decisions/ADR-0004-deployment-and-recovery.md) from
+  [`EKO-3-05-changing-customers-archived-state-adr0003-adr0004-addendum-draft-2026-11-24.md`](architecture/decisions/EKO-3-05-changing-customers-archived-state-adr0003-adr0004-addendum-draft-2026-11-24.md)
+  (one declared deviation: ADR-0003-C33 restated; new controls ADR-0003-C40, C41 and ADR-0004-C38). Gate 2
+  (2026-11-26, every recommendation accepted): K-07's two human-judged texts (the G-1 A notices and the
+  D-3 F-1 A restore-first message) accepted; U-01 accepted, the local analogues enough for the mutation
+  half of ADR-0004-C38 as with EKO-3-03's row 73; backend round-1 A-01, round-4 A-01..A-03 and frontend
+  A-01..A-11 accepted and recorded as amendment lines under K-01, K-04 and K-07 of #253 (scope re-locked,
+  fingerprint `37f52f77`); frontend A-07 (an archive or restore answered with the opposite state on the
+  detail screen is a failure) and A-10 (clicking the state already pressed sends nothing) have no test,
+  owed by #266; Guardian G-01 (this entry stated the pre-EKO-3-03 edit contract) resolved by this entry;
+  the exception EKO-3-05/weakening-1 and its date 2026-12-31 confirmed. QA ran 73 mutations in round 1
+  (base `43c7ece`) and 36 in round 2 (base `519eb99`, every mechanism the merge or D-8 touched; the other
+  round-1 results carried on unchanged code): M-i2 and M-k2 survived the developer suite and are killed
+  by QA's contrast tests, M-t and M-v were killed only after QA's scenario fixes; M-c survived as a
+  redundant layer (redone as M-c2, killed), M-i gave no clean result and M-n2 was equivalent, none of
+  them evidence. CI: all nine checks green at `f3ec736`; both runtime jobs ran
+  `pytest -m "runtime or previous_release" tests/runtime` (1527 passed, 119 deselected each), the three
+  ADR-0004-C38 legs passing in both. Findings carried on: Reviewer R-01 (a rep or manager with only
+  archived customers is told they have no customers yet, which can lead to a NIP-less customer stored
+  twice), #265; the recorded exception EKO-3-05/weakening-1, blocking again 2026-12-31
+  (`architecture/exception-register.md`). Follow-ups: #265 (R-01), #266 (the tests owed for frontend
+  A-07 and A-10).
 
+- [ ] **EKO-3-10** — Stop telling a user with only archived customers that they have no customers (#265).
+  *Done when:* a test proves that a user whose customers are all archived, opening the default
+  (active) Customers list, is not shown the first-customer text and is pointed at the Archiwum /
+  Wszyscy state filter; a contrast test proves that a user with no customers at all still gets the
+  first-customer text; the other empty states and every other caller's data are unchanged.
+  **Out of scope (explicit):** archive/restore/filter semantics (EKO-3-05, no defect there); duplicate
+  prevention and NIP handling (EKO-3-03, EKO-3-09); redesign of the Customers screen or other empty
+  states. After EKO-3-05.
 ## EKO-4 — Visits, notes and actions
 
 - [ ] **EKO-4-01** — Let a rep plan visits and see their agenda (#268).
