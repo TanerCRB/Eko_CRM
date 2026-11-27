@@ -341,7 +341,11 @@ describe("K-07: in the SPA a rep creates a customer with contacts and sees the s
   });
 
   it("edge: the list shows an empty state when there are no customers", async () => {
-    stubCustomerApi({ [`GET ${CUSTOMERS_URL}`]: emptyList });
+    // EKO-3-10: the empty default list asks whether anything is archived; here nothing is.
+    stubCustomerApi({
+      [`GET ${CUSTOMERS_URL}`]: emptyList,
+      [`GET ${CUSTOMERS_URL}?state=archived`]: emptyList,
+    });
     render(<App />);
     expect(await screen.findByText("Nie masz jeszcze klientów")).toBeVisible();
     expect(screen.queryByRole("list", { name: "Lista klientów" })).not.toBeInTheDocument();

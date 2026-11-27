@@ -14,9 +14,15 @@ type StateFilter = NonNullable<CustomerListQuery["state"]>;
 
 // The answer remembers the term, owner and state it was asked for, so the empty state speaks of
 // those and not of whatever the controls hold while the next answer is on its way.
+// `archivedInScope` keeps only whether the archived answer held anything, never its items (K-06).
 type ListState =
   | { kind: "loading" }
-  | (ListResult & { term: string; owner: string; filter: StateFilter | undefined });
+  | (ListResult & {
+      term: string;
+      owner: string;
+      filter: StateFilter | undefined;
+      archivedInScope: boolean;
+    });
 
 // `owner` is a rep's subject, "" for every owner the caller may see; `filter` is undefined until
 // the user picks a state, and is then sent as picked.
@@ -63,11 +69,29 @@ export function CustomerList() {
     if (request.filter !== undefined) {
       query.state = request.filter;
     }
+    const asked = { term: request.term, owner: request.owner, filter: request.filter };
+    const isDefault =
+      request.term === "" && request.owner === "" && (request.filter ?? "active") === "active";
     void listCustomers(query).then((result) => {
       // An answer to a request since replaced is dropped, so a late older answer never wins.
-      if (current) {
-        setState({ ...result, term: request.term, owner: request.owner, filter: request.filter });
+      if (!current) {
+        return;
       }
+      if (!isDefault || result.kind !== "listed" || result.customers.length > 0) {
+        setState({ ...result, ...asked, archivedInScope: false });
+        return;
+      }
+      // EKO-3-10 G-1 B: the first-customer text needs the server's word that nothing is archived
+      // in the caller's scope; until then the screen stays loading, and a failure is a failure.
+      void listCustomers({ state: "archived" }).then((archived) => {
+        if (current) {
+          setState(
+            archived.kind === "listed"
+              ? { ...result, ...asked, archivedInScope: archived.customers.length > 0 }
+              : { kind: "failed", ...asked, archivedInScope: false },
+          );
+        }
+      });
     });
     return () => {
       current = false;
@@ -221,10 +245,17 @@ export function CustomerList() {
       ) : null}
       {state.kind === "listed" && state.customers.length === 0 ? (
         state.term === "" && state.owner === "" && (state.filter ?? "active") === "active" ? (
-          <EmptyState
-            title={messages.customer.emptyTitle}
-            explanation={messages.customer.emptyExplanation}
-          />
+          state.archivedInScope ? (
+            <EmptyState
+              title={messages.customer.noActiveTitle}
+              explanation={messages.customer.noActiveExplanation}
+            />
+          ) : (
+            <EmptyState
+              title={messages.customer.emptyTitle}
+              explanation={messages.customer.emptyExplanation}
+            />
+          )
         ) : (
           <EmptyState
             title={messages.customer.noMatchTitle}

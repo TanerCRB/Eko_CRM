@@ -1091,3 +1091,12 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   twice), #265; the recorded exception EKO-3-05/weakening-1, blocking again 2026-12-31
   (`architecture/exception-register.md`). Follow-ups: #265 (R-01), #266 (the tests owed for frontend
   A-07 and A-10).
+
+- [ ] **EKO-3-10** — Stop telling a user with only archived customers that they have no customers (#265).
+  *Done when:* a test proves that a user whose customers are all archived, opening the default
+  (active) Customers list, is not shown the first-customer text and is pointed at the Archiwum /
+  Wszyscy state filter; a contrast test proves that a user with no customers at all still gets the
+  first-customer text; the other empty states and every other caller's data are unchanged.
+  **Out of scope (explicit):** archive/restore/filter semantics (EKO-3-05, no defect there); duplicate
+  prevention and NIP handling (EKO-3-03, EKO-3-09); redesign of the Customers screen or other empty
+  states. After EKO-3-05.

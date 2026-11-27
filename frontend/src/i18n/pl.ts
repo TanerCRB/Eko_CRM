@@ -147,6 +147,9 @@ export const messages = {
     bothFilter: "Wszyscy",
     archivedMark: "Zarchiwizowany",
     noMatchStateExplanation: "Zmień filtr statusu lub wyszukiwanie.",
+    // EKO-3-10 G-2 A: no count and no name of an archived customer.
+    noActiveTitle: "Brak aktywnych klientów",
+    noActiveExplanation: "Zarchiwizowanych klientów zobaczysz po wybraniu filtru Archiwum lub Wszyscy.",
   },
   loginFailed: {
     title: "Logowanie nie powiodło się",
