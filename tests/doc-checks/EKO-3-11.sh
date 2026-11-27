@@ -5,9 +5,29 @@
 #
 #   bash tests/doc-checks/EKO-3-11.sh --pr <pr-body.md>                  # BASE...CHECKPOINT
 #   bash tests/doc-checks/EKO-3-11.sh --pr <pr-body.md> --head <rev>     # BASE...<rev>, e.g. the PR head
+#   bash tests/doc-checks/EKO-3-11.sh --pr <pr-body.md> --head <rev> --base origin/main
+#                                                                        # after main was merged in
 #   bash tests/doc-checks/EKO-3-11.sh --self-test                        # built-in contrasts, offline
 #
 #   gh pr view <n> --json body --jq .body > pr-body.md                   # the body the run expects
+#
+# The range. Without --base it starts at the pinned BASE, and a range holding a merge commit is
+# refused (exit 2): after "Merge main into the branch" BASE...HEAD would attribute main's files to
+# the task. With --base <rev> it starts at M = git merge-base <rev> <head>, the last main commit
+# merged in when <rev> is origin/main (run `git fetch origin main` first). M is accepted only when
+# BASE is an ancestor of M, M is an ancestor of refs/remotes/origin/main, and the checkpoint is
+# not an ancestor of M. So --base can only move the start along main's own history: the diff
+# M...HEAD is the head tree against a main tree, and a task change - including one made while
+# resolving the merge - disappears from it only if main itself already holds it. A base on the
+# branch, the head itself, or a commit main never had is refused. The one thing trusted is the
+# local origin/main ref.
+#
+# Git configuration. Every git call reading the range runs with the user's diff-shaping
+# configuration overridden through GIT_CONFIG_COUNT (command scope, above the system, global and
+# repository files; GIT_CONFIG_PARAMETERS, GIT_EXTERNAL_DIFF and GIT_DIFF_OPTS are unset), and the
+# diff calls also pass --no-color --no-ext-diff --no-textconv and fixed prefixes and algorithm.
+# The weakening check inherits the same environment. An M of a production file whose diff yields
+# no parsed hunk fails closed, and so does a line opening "@@" that does not parse.
 #
 # Output. One line per sub-check, "ok   <name> — <detail>" or "FAIL <name> — <why>".
 # Exit codes: 0 = every sub-check passed, 1 = at least one failed, 2 = the check could not run (a
@@ -27,11 +47,18 @@
 #   mechanism   every -U0 hunk of an M of CustomerDetail.tsx lies inside the body of `change`
 #               (strictly between `const change = async (which: Change) => {` and its `  };`), and
 #               of CustomerList.tsx inside the body of `function chooseState` (up to its `  }`),
-#               on the base side at BASE's line numbers and on the head side at HEAD's.
+#               on the base side at the range start's line numbers and on the head side at HEAD's.
+#               An M with no parsed hunk (a mode-only change, or a diff git printed differently)
+#               fails closed.
 #   red-run     every M entry has a red-run record in the PR body, and every record stands for an
 #               M entry. A record is one line
 #                 - Red run — K-0n — <frontend/tests/...test.tsx>::<test name> — failed on: <assertion>
-#               whose test file is an A entry of the range containing the quoted test name at HEAD,
+#               whose test file is an A entry of the range under frontend/tests/ ending .test.tsx
+#               and declares the test at HEAD: a line that, after indentation (so also inside a
+#               describe), opens it("<test name>" or test("<test name>" (or single quotes), the
+#               closing quote followed by "," or ")". Any other quoted literal - a button label, a
+#               describe title, a name that is only a prefix - is not a test (it.each, .only and
+#               .skip forms are not accepted either),
 #               whose assertion text is not empty, and whose criterion matches the file: K-01 or
 #               K-02 for CustomerDetail.tsx, K-03 or K-04 for CustomerList.tsx. A line opening
 #               "- Red run" that does not parse fails. No M entry => no record allowed.
@@ -61,22 +88,45 @@ S_WEAK='EKO-3-11 K-05 weakening scripts/weakening-check.sh exits 0'
 
 die() { echo "EKO-3-11 doc-check: $* — the check did not run" >&2; exit 2; }
 
-PR=""; HEAD_REV=""; MODE=run
+MAIN_REF='refs/remotes/origin/main'
+
+PR=""; HEAD_REV=""; BASE_REV=""; MODE=run
 while [ $# -gt 0 ]; do
   case "$1" in
-    --pr|--head)
-      [ $# -ge 2 ] || die "$1 needs a value"
-      case "$1" in --pr) PR="$2" ;; --head) HEAD_REV="$2" ;; esac
+    --pr|--head|--base)
+      [ $# -ge 2 ] && [ -n "$2" ] || die "$1 needs a value"
+      case "$1" in --pr) PR="$2" ;; --head) HEAD_REV="$2" ;; --base) BASE_REV="$2" ;; esac
       shift 2 ;;
     --self-test) MODE=self; shift ;;
-    *) die "unknown argument '$1' (usage: $0 --pr <file> [--head <rev>] | --self-test)" ;;
+    *) die "unknown argument '$1' (usage: $0 --pr <file> [--head <rev>] [--base <rev>] | --self-test)" ;;
   esac
 done
 if [ "$MODE" = run ]; then
   [ -n "$PR" ] && [ -r "$PR" ] || die "--pr needs a readable file"
-elif [ -n "$PR$HEAD_REV" ]; then
+elif [ -n "$PR$HEAD_REV$BASE_REV" ]; then
   die "--self-test takes no other argument"
 fi
+
+# neutralize_git — override, for this shell and its children, the configuration that changes what
+# git diff prints. GIT_CONFIG_COUNT entries are command scope: they win over every config file.
+NEUTRAL_CFG=(color.ui=never color.diff=never diff.noprefix=false diff.mnemonicPrefix=false
+  diff.srcPrefix=a/ diff.dstPrefix=b/ core.quotePath=true diff.relative=false diff.algorithm=myers
+  diff.indentHeuristic=true diff.interHunkContext=0 diff.renames=true diff.suppressBlankEmpty=false
+  core.autocrlf=false)
+neutralize_git() {
+  local i="${GIT_CONFIG_COUNT:-0}" kv
+  [[ "$i" =~ ^[0-9]+$ ]] || i=0
+  unset GIT_CONFIG_PARAMETERS GIT_EXTERNAL_DIFF GIT_DIFF_OPTS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+  for kv in "${NEUTRAL_CFG[@]}"; do
+    export "GIT_CONFIG_KEY_$i=${kv%%=*}" "GIT_CONFIG_VALUE_$i=${kv#*=}"
+    i=$((i + 1))
+  done
+  export GIT_CONFIG_COUNT="$i"
+}
+neutralize_git
+# the flags every diff of the range carries, on top of the environment above
+DIFF_FLAGS=(--no-color --no-ext-diff --no-textconv --no-relative --src-prefix=a/ --dst-prefix=b/
+  --diff-algorithm=myers --indent-heuristic --inter-hunk-context=0)
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)" || die "cannot enter the repository root"
 TOP="$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null)" || die "not a git repository"
@@ -90,7 +140,8 @@ qgit() { git -c core.autocrlf=false -c advice.detachedHead=false -c user.name=qa
 # ---- helpers -------------------------------------------------------------------------------------
 
 # blob <repo> <rev> <path> — the file at <rev>, carriage returns removed.
-blob() { git -C "$1" show "$2:$3" 2>/dev/null | tr -d '\r'; }
+# cat-file is plumbing: no colour, no textconv, no external driver.
+blob() { git -C "$1" cat-file blob "$2:$3" 2>/dev/null | tr -d '\r'; }
 
 # span <repo> <rev> <path> — "start end": the line of the function's opening line and of its
 # closing line; empty when either is missing.
@@ -117,7 +168,8 @@ inside() {
 # plan_entry_only <repo> <base> <head> — docs/PLAN.md only gains the EKO-3-11 entry.
 plan_entry_only() {
   local d="$WORK/plan.diff" added
-  git -C "$1" diff -U0 "$2...$3" -- docs/PLAN.md | tr -d '\r' > "$d"
+  git -C "$1" diff -U0 "${DIFF_FLAGS[@]}" "$2...$3" -- docs/PLAN.md > "$d.raw" 2>/dev/null || return 1
+  tr -d '\r' < "$d.raw" > "$d"
   [ "$(grep -c '^@@' "$d")" -eq 1 ] || return 1
   ! grep -E '^-' "$d" | grep -qvE '^--- ' || return 1
   added="$(grep -E '^\+' "$d" | grep -vE '^\+\+\+ ')"
@@ -131,13 +183,52 @@ plan_entry_only() {
 
 NAMES=""
 read_names() {
-  NAMES="$(git -C "$1" diff --name-status -M "$2...$3" 2> "$WORK/names.err")" || die "git diff $2...$3 failed: $(tail -n 1 "$WORK/names.err")"
+  NAMES="$(git -C "$1" diff --name-status -M --no-color --no-ext-diff --no-relative "$2...$3" 2> "$WORK/names.err")" || die "git diff $2...$3 failed: $(tail -n 1 "$WORK/names.err")"
 }
 
 # m_entries — the production paths with an M entry, one per line.
 m_entries() { awk -F'\t' '$1 == "M" && ($2 == "'"$DETAIL"'" || $2 == "'"$LIST"'") { print $2 }' <<< "$NAMES"; }
 # a_test <path> — the path is an A entry under frontend/tests/.
 a_test() { awk -F'\t' -v p="$1" '$1 == "A" && $2 == p { f = 1 } END { exit !f }' <<< "$NAMES" && [[ "$1" == frontend/tests/* ]]; }
+
+# declares_test <repo> <rev> <file> <name> — a line of the file, indentation removed, opens
+# it("<name>" or test("<name>" (either quote), the closing quote followed by "," or ")".
+declares_test() {
+  blob "$1" "$2" "$3" | TNAME="$4" awk '
+    BEGIN { n = ENVIRON["TNAME"]; ln = length(n) }
+    {
+      l = $0; sub(/^[ \t]+/, "", l)
+      if (substr(l, 1, 3) == "it(") r = substr(l, 4)
+      else if (substr(l, 1, 5) == "test(") r = substr(l, 6)
+      else next
+      q = substr(r, 1, 1)
+      if (q != "\"" && q != "\047") next
+      after = substr(r, ln + 3, 1)
+      if (substr(r, 2, ln) == n && substr(r, ln + 2, 1) == q && (after == "," || after == ")")) { f = 1; exit }
+    }
+    END { exit !f }'
+}
+
+# resolve_base <repo> <pinned base> <checkpoint> <--base value or empty> <head sha> <main ref> —
+# sets RBASE to the commit the range starts from, or sets RERR and returns 1 ("The range" above).
+RBASE=""; RERR=""
+resolve_base() {
+  local repo="$1" pinned="$2" cp="$3" arg="$4" head="$5" main="$6" mb
+  RBASE=""; RERR=""
+  if [ -z "$arg" ]; then
+    if [ -n "$(git -C "$repo" rev-list --merges "$pinned..$head" 2>/dev/null)" ]; then
+      RERR="the range $pinned..$head holds a merge commit; rerun with --base origin/main"; return 1
+    fi
+    RBASE="$pinned"; return 0
+  fi
+  git -C "$repo" rev-parse --verify --quiet "$arg^{commit}" > /dev/null || { RERR="--base $arg is not a commit"; return 1; }
+  mb="$(git -C "$repo" merge-base "$arg" "$head" 2>/dev/null)" || { RERR="--base $arg has no merge base with $head"; return 1; }
+  git -C "$repo" merge-base --is-ancestor "$pinned" "$mb" || { RERR="the merge base $mb of --base $arg does not contain BASE $pinned"; return 1; }
+  git -C "$repo" rev-parse --verify --quiet "$main^{commit}" > /dev/null || { RERR="$main is missing (git fetch origin main)"; return 1; }
+  git -C "$repo" merge-base --is-ancestor "$mb" "$main" || { RERR="the merge base $mb of --base $arg is not on $main"; return 1; }
+  ! git -C "$repo" merge-base --is-ancestor "$cp" "$mb" || { RERR="the merge base $mb of --base $arg already holds the checkpoint $cp"; return 1; }
+  RBASE="$mb"
+}
 
 check_paths() {
   local repo="$1" base="$2" head="$3" st p rest bad="" n=0 note=""
@@ -170,20 +261,27 @@ check_paths() {
 }
 
 check_mechanism() {
-  local repo="$1" base="$2" head="$3" p bs be hs he os oc ns nc bad="" hunks=0 line
+  local repo="$1" base="$2" head="$3" p bs be hs he os oc ns nc bad="" hunks=0 ph line d="$WORK/mech.diff"
   while IFS= read -r p; do
     [ -n "$p" ] || continue
     read -r bs be <<< "$(span "$repo" "$base" "$p")"
     read -r hs he <<< "$(span "$repo" "$head" "$p")"
     [ -n "${bs:-}" ] && [ -n "${be:-}" ] || { bad="$bad$p: the function is not found at the base; "; continue; }
     [ -n "${hs:-}" ] && [ -n "${he:-}" ] || { bad="$bad$p: the function is not found at the head; "; continue; }
+    git -C "$repo" diff -U0 "${DIFF_FLAGS[@]}" "$base...$head" -- "$p" > "$d" 2>/dev/null || { bad="$bad$p: git diff failed; "; continue; }
+    ph=0
     while IFS= read -r line; do
-      [[ "$line" =~ ^@@\ -([0-9]+)(,([0-9]+))?\ \+([0-9]+)(,([0-9]+))?\ @@ ]] || continue
+      line="${line%$'\r'}"
+      case "$line" in @@*) ;; *) continue ;; esac
+      [[ "$line" =~ ^@@\ -([0-9]+)(,([0-9]+))?\ \+([0-9]+)(,([0-9]+))?\ @@ ]] || { bad="$bad$p: unparsed hunk header; "; continue; }
       os="${BASH_REMATCH[1]}"; oc="${BASH_REMATCH[3]:-1}"; ns="${BASH_REMATCH[4]}"; nc="${BASH_REMATCH[6]:-1}"
-      hunks=$((hunks + 1))
+      ph=$((ph + 1))
       inside "$os" "$oc" "$bs" "$be" || bad="$bad$p: base lines $os,$oc outside $bs-$be; "
       inside "$ns" "$nc" "$hs" "$he" || bad="$bad$p: head lines $ns,$nc outside $hs-$he; "
-    done < <(git -C "$repo" diff -U0 "$base...$head" -- "$p")
+    done < "$d"
+    # an M entry is a change; a diff that shows none of it cannot be placed, so it fails closed
+    [ "$ph" -gt 0 ] || bad="$bad$p: M entry with no parsed hunk (fails closed); "
+    hunks=$((hunks + ph))
   done <<< "$(m_entries)"
   WHY="$hunks production hunk(s)"
   [ -z "$bad" ] || { WHY="${bad%; }"; return 1; }
@@ -208,7 +306,8 @@ check_red_run() {
     if ! [[ "$k" =~ ^K-0[1-4]$ ]] || [ "$ref" = "$rest" ] || [ "$file" = "$ref" ] || [ -z "$name" ] \
        || [[ "$failed" != "failed on: "?* ]]; then bad="${bad}malformed record '$line'; "; continue; fi
     if ! a_test "$file"; then bad="$bad$k record names $file, not a test file this range adds; "; continue; fi
-    if ! blob "$repo" "$head" "$file" | grep -qF -- "\"$name\""; then bad="$bad$k record names '$name', not a test in $file; "; continue; fi
+    if [[ "$file" != *.test.tsx ]]; then bad="$bad$k record names $file, not a .test.tsx file; "; continue; fi
+    if ! declares_test "$repo" "$head" "$file" "$name"; then bad="$bad$k record names '$name', not a test in $file (no it()/test() declares it); "; continue; fi
     case "$k" in
       K-01|K-02) if [ "$m_detail" -eq 1 ]; then have_detail=1; else bad="$bad$k record without an M of $DETAIL; "; fi ;;
       K-03|K-04) if [ "$m_list" -eq 1 ]; then have_list=1; else bad="$bad$k record without an M of $LIST; "; fi ;;
@@ -306,25 +405,84 @@ fx_good() {
 REC_K01='- Red run — K-01 — frontend/tests/features/customers/eko311-new.test.tsx::claim one — failed on: expect(alert) found nothing'
 REC_K03='- Red run — K-03 — frontend/tests/features/customers/eko311-new.test.tsx::claim one — failed on: expect(lists).toEqual([])'
 
+# hostile_env — user configuration that reshapes or empties git diff output: colour forced, an
+# external diff driver printing nothing, no prefixes, another algorithm, merged hunks, renames off.
+hostile_env() {
+  local ext="$WORK/ext-diff.sh"
+  printf '%s\n' '#!/bin/sh' 'exit 0' > "$ext" && chmod +x "$ext"
+  printf '%s\n' '[color]' '	ui = always' '	diff = always' '[diff]' "	external = $ext" '	noprefix = true' \
+    '	mnemonicPrefix = true' '	algorithm = patience' '	interHunkContext = 40' '	renames = false' \
+    '	relative = true' '[core]' '	quotePath = false' > "$WORK/hostile.gitconfig"
+  export GIT_CONFIG_GLOBAL="$WORK/hostile.gitconfig" GIT_EXTERNAL_DIFF="$ext" \
+    GIT_CONFIG_PARAMETERS="'color.diff=always' 'diff.noprefix=true'" \
+    GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=color.ui GIT_CONFIG_VALUE_0=always
+}
+
+# st_judge <name> <want> <head> <checkpoint> <--base value or empty> — runs the check the way the
+# runner does (range resolution, then the four sub-checks); under ST_HOSTILE=1 hostile_env is set
+# first and neutralized after, as a user's environment would be at the script's start.
+ST_HOSTILE=0
+st_judge() {
+  local name="$1" want="${2%%|*}" has="" head="$3" cp="$4" arg="$5" got
+  case "$2" in *"|"*) has="${2#*|}" ;; esac
+  st_total=$((st_total + 1))
+  rm -f "$WORK/st.keys"
+  (
+    if [ "$ST_HOSTILE" = 1 ]; then hostile_env; neutralize_git; fi
+    if resolve_base "$FX" "$FXBASE" "$cp" "$arg" "$head" "$MAIN_REF"; then
+      run_all "$FX" "$RBASE" "$head" "$WORK/st-body.md"
+    else
+      FAILED_KEYS=range; echo "FAIL range — $RERR"
+    fi
+    echo "$FAILED_KEYS" > "$WORK/st.keys"
+  ) > "$WORK/st.out" 2>&1
+  got="$(cat "$WORK/st.keys" 2>/dev/null || echo '<the run died>')"
+  if [ "$got" = "$want" ] && { [ -z "$has" ] || grep -qF -- "$has" "$WORK/st.out"; }; then
+    echo "ok   self-test $name — failed: ${want:-none}${has:+ (reports '$has')}"
+  else
+    echo "FAIL self-test $name — expected failed '${want:-none}'${has:+ reporting '$has'}, got '${got:-none}'"; sed 's/^/       /' "$WORK/st.out"
+    st_fail=$((st_fail + 1))
+  fi
+}
+
+fx_reset() { qgit -C "$FX" checkout --quiet --force "$FXBASE" && qgit -C "$FX" clean --quiet -fdx || die "self-test: cannot reset the fixture"; }
+
 # st_case <name> <want> <shell edit after fx_good> <pr body lines...> — <want> is "<failed keys>"
 # or "<failed keys>|<text the report must hold>", so a case fails for its own reason, not another.
 st_case() {
-  local name="$1" want="${2%%|*}" has="" edit="$3" head
-  case "$2" in *"|"*) has="${2#*|}" ;; esac
+  local name="$1" want="$2" edit="$3" head
   shift 3
-  st_total=$((st_total + 1))
-  qgit -C "$FX" checkout --quiet --force "$FXBASE" && qgit -C "$FX" clean --quiet -fdx || die "self-test: cannot reset the fixture"
+  fx_reset
   ( cd "$FX" && fx_good && eval "$edit" ) || die "self-test: the edit for '$name' failed"
   qgit -C "$FX" add -A && qgit -C "$FX" commit --quiet --allow-empty -m "$name" || die "self-test: commit for '$name' failed"
   head="$(git -C "$FX" rev-parse HEAD)"
   printf '%s\n' '## Summary' 'Tests only.' "$@" > "$WORK/st-body.md"
-  run_all "$FX" "$FXBASE" "$head" "$WORK/st-body.md" > "$WORK/st.out"
-  if [ "$FAILED_KEYS" = "$want" ] && { [ -z "$has" ] || grep -qF -- "$has" "$WORK/st.out"; }; then
-    echo "ok   self-test $name — failed: ${want:-none}${has:+ (reports '$has')}"
-  else
-    echo "FAIL self-test $name — expected failed '${want:-none}'${has:+ reporting '$has'}, got '${FAILED_KEYS:-none}'"; sed 's/^/       /' "$WORK/st.out"
-    st_fail=$((st_fail + 1))
-  fi
+  st_judge "$name" "$want" "$head" "$head" ""
+}
+
+# st_merge_case <name> <want> <none|main|task> <shell edit amended into the merge> <pr body lines...>
+# — main gains a line above `change` in CustomerDetail.tsx and a backend file; the branch makes the
+# K-01 fix (its checkpoint), then takes "Merge main"; origin/main points at main's commit. The range
+# starts at: none = no --base; main = --base origin/main; task = --base <the checkpoint>.
+st_merge_case() {
+  local name="$1" want="$2" choice="$3" edit="$4" mainc task head arg=""
+  shift 4
+  fx_reset
+  ( cd "$FX" && sl '1a\  const fromMain = 0;' "$DETAIL" && printf 'print(3)\n' > backend/app/other.py ) || die "self-test: main edit failed"
+  qgit -C "$FX" add -A && qgit -C "$FX" commit --quiet -m main || die "self-test: main commit failed"
+  mainc="$(git -C "$FX" rev-parse HEAD)"
+  qgit -C "$FX" checkout --quiet --force "$FXBASE" || die "self-test: checkout failed"
+  ( cd "$FX" && fx_good && eval "$ST_DFIX" ) || die "self-test: task edit failed"
+  qgit -C "$FX" add -A && qgit -C "$FX" commit --quiet -m task || die "self-test: task commit failed"
+  task="$(git -C "$FX" rev-parse HEAD)"
+  qgit -C "$FX" merge --quiet --no-edit -m "Merge main" "$mainc" > /dev/null || die "self-test: the merge failed"
+  ( cd "$FX" && eval "$edit" ) || die "self-test: the merge edit for '$name' failed"
+  qgit -C "$FX" add -A && qgit -C "$FX" commit --quiet --amend --no-edit || die "self-test: amend failed"
+  head="$(git -C "$FX" rev-parse HEAD)"
+  qgit -C "$FX" update-ref "$MAIN_REF" "$mainc" || die "self-test: update-ref failed"
+  case "$choice" in main) arg=origin/main ;; task) arg="$task" ;; esac
+  printf '%s\n' '## Summary' 'Tests only.' "$@" > "$WORK/st-body.md"
+  st_judge "$name" "$want" "$head" "$task" "$arg"
 }
 
 sl() { sed -i "$1" "$2"; }
@@ -333,6 +491,7 @@ self_test() {
   local dfix lfix fd="frontend/src/features/customers" ft="frontend/tests/features/customers"
   dfix="sl '5s/=== (which === \"archive\")/!== (which === \"restore\")/' '$DETAIL'"
   lfix="sl '4s/?? \"active\"/|| \"active\"/' '$LIST'"
+  ST_DFIX="$dfix"
   fx_init
   # the passing outcomes
   st_case 'no defect: only new tests and bookkeeping pass' '' ':'
@@ -379,6 +538,40 @@ self_test() {
     "$dfix" "${REC_K01%% — failed on:*}"
   st_case 'red-run: twins with one record fail' "red-run|M $LIST without a K-03/K-04 red-run record" \
     "$dfix && $lfix" "$REC_K01"
+  # R-01: the record must name an it()/test() declaration in an added .test.tsx file
+  st_case 'red-run R-01: a record naming a button label in the test file fails' 'red-run|not a test in' \
+    "$dfix && printf '%s\n' 'const label = \"Archiwizuj klienta\";' >> $ft/eko311-new.test.tsx" \
+    "${REC_K01/claim one/Archiwizuj klienta}"
+  st_case 'red-run R-01: a record naming a describe title fails' 'red-run|not a test in' \
+    "$dfix && printf '%s\n' 'describe(\"K-01 group\", () => {' '  it(\"claim two\", () => {});' '});' >> $ft/eko311-new.test.tsx" \
+    "${REC_K01/claim one/K-01 group}"
+  st_case 'red-run R-01: a record naming only a prefix of a test name fails' 'red-run|not a test in' \
+    "$dfix && printf '%s\n' 'const prefix = \"claim\";' >> $ft/eko311-new.test.tsx" "${REC_K01/claim one/claim}"
+  st_case 'red-run R-01: a record naming an it() inside describe passes' '' \
+    "$dfix && printf '%s\n' 'describe(\"K-01 group\", () => {' '  it(\"claim two\", () => {});' '});' >> $ft/eko311-new.test.tsx" \
+    "${REC_K01/claim one/claim two}"
+  st_case 'red-run R-01: a record naming an added non-test file fails' 'red-run|not a .test.tsx file' \
+    "$dfix && printf '%s\n' 'it(\"claim one\", () => {});' > $ft/eko311-helper.ts" \
+    "${REC_K01/eko311-new.test.tsx::/eko311-helper.ts::}"
+  # R-02: user configuration cannot empty or reshape the diffs, and an M with no hunk fails closed
+  ST_HOSTILE=1
+  st_case 'R-02 hostile config: a K-01 fix hunk outside change still fails mechanism' \
+    "mechanism|$DETAIL: base lines 2,1 outside 3-9" "$dfix && sl '2s/before = 1/before = 3/' '$DETAIL'" "$REC_K01"
+  st_case 'R-02 hostile config: a deleted test case still fails paths and weakening' \
+    "paths weakening|M $ft/k07-eko305-list-state.test.tsx" "sl '4,6d' $ft/k07-eko305-list-state.test.tsx"
+  st_case 'R-02 hostile config: a K-01 record and a hunk inside change still pass' '' "$dfix" "$REC_K01"
+  ST_HOSTILE=0
+  st_case 'R-02: a mode-only M of CustomerDetail.tsx (no hunk) fails mechanism closed' \
+    "mechanism|$DETAIL: M entry with no parsed hunk" "git update-index --chmod=+x '$DETAIL'" "$REC_K01"
+  # R-03: a branch that took a merge from main
+  st_merge_case 'R-03 merged main, --base origin/main: main files are not the task, the fix passes' '' main ':' "$REC_K01"
+  st_merge_case 'R-03 merged main, no --base: the run refuses the merge range' 'range|holds a merge commit' none ':' "$REC_K01"
+  st_merge_case 'R-03 merged main, --base at the checkpoint: refused, a base off main cannot hide the task' \
+    'range|is not on refs/remotes/origin/main' task ':' "$REC_K01"
+  st_merge_case 'R-03 merged main, --base origin/main: a backend file added in the merge commit fails paths' \
+    'paths|A backend/app/evil.py' main "printf 'print(4)\n' > backend/app/evil.py" "$REC_K01"
+  st_merge_case 'R-03 merged main, --base origin/main: the fix without its record fails red-run' \
+    "red-run|M $DETAIL without a K-01/K-02 red-run record" main ':'
   echo "EKO-3-11 self-test: $((st_total - st_fail)) of $st_total passed"
   [ "$st_fail" -eq 0 ]
 }
@@ -396,9 +589,11 @@ done
 HEAD_SHA="$(git -C "$TOP" rev-parse "$HEAD_REV^{commit}")"
 git -C "$TOP" merge-base --is-ancestor "$BASE_SHA" "$HEAD_SHA" || die "$BASE_SHA is not an ancestor of $HEAD_SHA"
 git -C "$TOP" merge-base --is-ancestor "$CHECKPOINT_SHA" "$HEAD_SHA" || die "$CHECKPOINT_SHA is not an ancestor of $HEAD_SHA"
+resolve_base "$TOP" "$BASE_SHA" "$CHECKPOINT_SHA" "$BASE_REV" "$HEAD_SHA" "$MAIN_REF" || die "$RERR"
+[ "$RBASE" != "$HEAD_SHA" ] || die "the range $RBASE...$HEAD_SHA is empty"
 
-echo "EKO-3-11 doc-check: range $BASE_SHA...$HEAD_SHA"
-run_all "$TOP" "$BASE_SHA" "$HEAD_SHA" "$PR"
+echo "EKO-3-11 doc-check: range $RBASE...$HEAD_SHA${BASE_REV:+ (--base $BASE_REV)}"
+run_all "$TOP" "$RBASE" "$HEAD_SHA" "$PR"
 n_fail=$(wc -w <<< "$FAILED_KEYS")
 echo "EKO-3-11 doc-check: $((4 - n_fail)) passed, $n_fail failed"
 [ "$n_fail" -eq 0 ]
