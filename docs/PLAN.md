@@ -1119,3 +1119,14 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   CI: all nine checks green at `2021832`; all nine green again at `51e2a3d` (the two runtime jobs completed after the merge, which the human made while they were still running).
   Findings carried on: none. Observation (QA, not a finding): jsdom tests can exceed their `findBy` or
   test timeouts under machine load, also in files this task did not touch; no Issue opened.
+
+- [ ] **EKO-3-11** — Add the tests owed for EKO-3-05 frontend assumptions A-07 and A-10 (#266).
+  *Done when:* a frontend test fails when the customer detail screen treats any 200 answer to an
+  archive or restore as success (an opposite-state answer is shown as a failure, the stated state
+  unchanged; a matching answer still succeeds), and a frontend test fails when the early return in
+  `chooseState` is removed (clicking the already pressed state-filter value sends no request; a
+  different value sends one); QA records a mutation killed by each; no file under `backend/` or
+  `frontend/src/` changes and no existing test changes.
+  **Out of scope (explicit):** any production change (a defect found becomes its own Issue); changing
+  the accepted A-07 / A-10 behaviour; other EKO-3-05 assumptions; EKO-3-10 A-03; the jsdom load-timeout
+  observation. After EKO-3-05.
