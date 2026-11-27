@@ -1092,7 +1092,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   (`architecture/exception-register.md`). Follow-ups: #265 (R-01), #266 (the tests owed for frontend
   A-07 and A-10).
 
-- [ ] **EKO-3-10** — Stop telling a user with only archived customers that they have no customers (#265).
+- [x] **EKO-3-10** — Stop telling a user with only archived customers that they have no customers (#265).
   *Done when:* a test proves that a user whose customers are all archived, opening the default
   (active) Customers list, is not shown the first-customer text and is pointed at the Archiwum /
   Wszyscy state filter; a contrast test proves that a user with no customers at all still gets the
@@ -1100,3 +1100,22 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** archive/restore/filter semantics (EKO-3-05, no defect there); duplicate
   prevention and NIP handling (EKO-3-03, EKO-3-09); redesign of the Customers screen or other empty
   states. After EKO-3-05.
+  **Done 2026-11-27:** merged in [PR #269](https://github.com/TanerCRB/Eko_CRM/pull/269) as `7d36253` on 2026-11-27 by the human, from the
+  operator's account (TanerCRB; the repository has one account); code verified at `1c2091d` (QA PROOF
+  HOLDS, and Invariant Guardian, Reviewer and Security Auditor PASS there, QA adding no file); the PR head
+  `51e2a3d` adds cost-register rows and the merge of `main` after #267 (a `docs/PLAN.md` conflict only).
+  Mechanism: when the default list (no term, no owner, Aktywni) answers empty,
+  `frontend/src/features/customers/CustomerList.tsx` sends one `listCustomers({ state: "archived" })`
+  through the existing typed client and keeps only whether it holds an item; if it does, the screen says
+  "Brak aktywnych klientów" and points at Archiwum / Wszyscy (`customer.noActiveTitle`,
+  `customer.noActiveExplanation` in `frontend/src/i18n/pl.ts`); no backend production code, no API
+  contract change, capabilities row 61 unchanged. Gate 1 (2026-11-26): G-1 B (a second scoped request),
+  G-2 A (the wording), G-3 A (a failed check shows the list-failed alert with retry). Gate 2: the
+  gate-2 message was not posted before the merge; on 2026-11-27, after it, the human accepted backend
+  A-01, A-02 and frontend A-03, A-04, recorded as amendment lines under K-03 and K-05 of #265 (scope
+  re-locked, fingerprint `28fdfe2f`); A-03 (a 422 to the check shows the list-failed alert) has no test,
+  the contract cannot produce that answer. QA ran 13 mutations (EKO-3-10/M-01..M-13, base `1c2091d`),
+  all killed. Tests: frontend 357 → 387, runtime 1519 → 1525, default backend suite unchanged at 3291.
+  CI: all nine checks green at `2021832`; all nine green again at `51e2a3d` (the two runtime jobs completed after the merge, which the human made while they were still running).
+  Findings carried on: none. Observation (QA, not a finding): jsdom tests can exceed their `findBy` or
+  test timeouts under machine load, also in files this task did not touch; no Issue opened.
