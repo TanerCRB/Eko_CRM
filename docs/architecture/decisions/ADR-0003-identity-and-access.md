@@ -1409,3 +1409,52 @@ rule holds. Restating an accepted control is a declared deviation, following the
 | ADR-0003-C40 | A test stores customer X with NIP N for rep A, and customers Y of rep A and Z of rep B, neither holding N. Rep A's edit of Y setting N and rep B's edit of Z setting N answer 409 with status, body and headers other than `Eko-Correlation-Id` equal to each other and to EKO-3-03's refused create, and the body holds no identifier, subject, field value, count or NIP; the edit of Y setting N by a caller holding `manager` with `rep`, and by one holding `manager` without `rep`, answers the same status and body plus `existing_customer_id`, which `GET /api/customers/<id>` resolves to X under that caller; after each refused edit the edited customer's row and contacts are byte-identical; an edit of X that keeps N succeeds; with X archived the same edit of Y is still refused; with Y archived the owner's edit setting N answers `{"detail":"restore it first"}`, and a rep's edit of another rep's customer setting N answers the missing-identifier 404; of two overlapping edits setting N on two customers, one is stored and the other gets the 409. |
 | ADR-0003-C41 | For every operation that changes an owned record named by identifier (at this date: edit, archive and restore of a customer): a caller holding `manager`, with or without `rep`, changes a customer of any owner; a caller holding `rep` without `manager` changes its own; administrator-only and role-less callers get 403 and nothing changes; a rep's change of another owner's customer, active or archived, and with a body whose NIP another customer holds, answers equal to the same change on a well-formed identifier that exists nowhere (status, body, headers other than `Eko-Correlation-Id`), gives no state-dependent or NIP-taken answer, and leaves that customer's row and contacts byte-identical; after any change by any caller the owner and the dataset key are the stored ones, shown on a customer that holds a dataset key; a seed run over a seeded customer that was edited and archived adds nothing and leaves its row and contacts byte-identical; the scope is applied in the statement that writes the row, so removing it from that statement alone, with any scoped read kept, fails a test or is recorded as a redundant layer by QA. |
 | ADR-0003-C33 (restated) | As in the addendum text above: with no filter other than the default state, a rep gets exactly its own active customers and the manager all active customers; with the every-state value, exactly its own and all customers; a searched or filtered list answers only records of the caller's scope that the search or filter selects, for every state value; and a rep's answer to a search or filter that selects only another owner's records equals its answer to one that selects nothing (status, body, and headers other than `Eko-Correlation-Id`). |
+
+### 2026-11-26 — Visits as owned records; a create that names another owned record; values of a customer shown through a visit
+
+**Status:** Accepted 2026-11-26 (gate 1 of EKO-4-01, Issue #268).
+
+**What it adds.** The addendum of 2026-11-17 has a later task adding an owned record name its
+tables and owner rule at its gate 1. It decides the scope of the record a create makes, not of an
+owned record that create refers to. From this date:
+
+- The visit table is an owned table. Its owner is `visit.owner_subject`, the subject of the
+  caller that planned the visit, stored as received; a request value never sets it. Visibility of
+  a visit is decided by that column, never by its customer's owner: a caller holding `rep`
+  without `manager` reads only the visits it owns, a caller holding `manager` every visit. The
+  customer's archived state narrows no visit read or list.
+- Creating a visit needs `rep` (`creation_scope`). The customer it names is looked up under
+  `OwnedBy` the caller's subject for every caller, a caller holding `manager` included; the
+  visibility scope never decides which customer a visit may be planned for.
+- On a create the answers come in this order, each judged only when the ones before it passed:
+  the access decision; the body alone (422), the wall-time resolution and the end after the
+  start included; `creation_scope` (403); the customer under the own-records scope (404 when it
+  selects nothing); for a caller whose visibility scope is all records, a customer inside that
+  scope but not its own (403 `not permitted`); the customer's archived state (409
+  `restore it first`). A refused create stores nothing. The state is judged on the row the scoped
+  statement selected, in the transaction that inserts the visit.
+- A visit answer may carry its customer's identifier, name and current address. They are read
+  under the visit's scope and returned only through a visit the caller may read. EKO-3-07 decides
+  at its gate 1 whether a past visit that keeps its original owner still shows them.
+- No function is added to the closed system-read list.
+
+**New control ADR-0003-C42** (table below). Every other rule and control of this decision is
+unchanged; the session-exempt, role-free and non-CRM lists are unchanged, and no visit operation
+is marked non-CRM.
+
+**Why.** ACC-5 forbids the manager to create another user's visits and ACC-7 limits a rep to its
+own customers; a customer looked up under the visibility scope would let a `rep`+`manager`
+account plan for any customer. CUS-10 keeps a past visit's original owner after reassignment, so
+the visit's own owner, not its customer's, decides who reads it. A state answer before the scope
+would tell a rep that another rep's customer exists (ACC-8). This adds rules and restates none,
+so it is not a deviation. Approved by the human at gate 1 of EKO-4-01 on 2026-11-26 (Issue #268);
+the text is that of
+[`EKO-4-01-visit-ownership-adr0003-adr0005-addendum-draft-2026-11-26.md`](EKO-4-01-visit-ownership-adr0003-adr0005-addendum-draft-2026-11-26.md).
+In the ADR-0003-C42 row the draft's alternative "(under A-2 B: the missing-customer 404)" is left out,
+because the human accepted A-2 A.
+
+**ADR-0003-C42.**
+
+| Control | Acceptance criterion |
+|---|---|
+| ADR-0003-C42 | With customers and visits of reps A and B stored: a caller holding `rep` without `manager` creates a visit only for a customer it owns, and the stored owner is its subject whatever owner the request names; naming another owner's customer, active or archived, answers equal to naming a well-formed customer identifier that exists nowhere (status, body, headers other than `Eko-Correlation-Id`) and stores nothing; naming its own archived customer answers 409 `{"detail":"restore it first"}` and stores nothing; a caller holding `manager` without `rep` gets 403 and nothing is stored; a caller holding `rep` and `manager` creates visits for its own customers, and naming another owner's customer answers 403 `{"detail":"not permitted"}` and stores nothing; a body failing validation gets its 422 whoever owns the named customer; every visit read and list answers a caller holding `rep` without `manager` exactly the visits whose `owner_subject` is its subject, a visit it owns on a customer another subject owns included, and a caller holding `manager` every visit; another owner's visit by identifier answers equal to a well-formed visit identifier that exists nowhere; archiving a customer changes no visit list; the visit table is an owned table of the ADR-0003-C35 check, and removing the owner condition from the statement of the visit read, the visit list or the customer lookup of the create fails a test. |

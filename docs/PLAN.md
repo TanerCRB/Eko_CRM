@@ -1159,7 +1159,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
 
 ## EKO-4 — Visits, notes and actions
 
-- [ ] **EKO-4-01** — Let a rep plan visits and see their agenda (#268).
+- [x] **EKO-4-01** — Let a rep plan visits and see their agenda (#268).
   *Done when:* server and frontend tests prove: a visit belongs to one customer and one owner (the
   planning rep); a rep can plan only for own customers (contrast: another rep customer answers as
   non-existent, the manager is denied); a visit is Planned until its end instant and Held afterwards,
@@ -1170,5 +1170,43 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   day and a five-day strip from `warsaw.ts`; no Google call is made and the customer record is unchanged.
   **Out of scope (explicit):** Google sync (EKO-5); move, cancel, Moved (EKO-4-02); notes and actions
   (EKO-4-03, EKO-4-04); archive and reassignment effects on visits (EKO-4-06, EKO-3-07); manager
-  planning; recurring visits (later); dashboard.
+  planning; recurring visits (later); dashboard; a free-text visit purpose, an idempotent create,
+  paging of the visit lists, a next visit in the customer views and a backend "today" (ADR-0002-C14)
+  (added at gate 1, 2026-11-26).
   After EKO-3-01.
+  **Done 2026-11-28:** merged in [PR #271](https://github.com/TanerCRB/Eko_CRM/pull/271) as `79acda6` on 2026-11-28 by the human, from the operator's
+  account (TanerCRB; the repository has one account); verified at `8adda5b`, the merge of main into
+  the branch after EKO-3-11's gate 3, with `backend/` and `frontend/src/` identical to the first
+  verified commit `736ca6e` (the QA checkpoint; the developer checkpoint `ab2146f` is QA's mutation
+  base); the PR head `0a1ff1f` adds cost-register rows only. Tests: backend
+  `backend/tests/runtime/eko401/` (K-01..K-05, K-07, with QA's `test_eko401_qa_contrasts.py`; 120
+  tests), `backend/tests/runtime/test_eko401_k01_visit_identifiers_after_a_restore.py` and
+  `test_eko401_k04_warsaw_zone_in_the_image.py` (both run live by QA),
+  `backend/tests/unit/test_eko401_k03_wall_time_resolver.py`, `test_eko401_k03_visit_body_bound.py`,
+  `test_eko401_k04_warsaw_ranges.py`, `test_eko401_qa_k01_identifiers_in_a_fresh_process.py`,
+  `backend/tests/static/test_eko401_k01_visit_table_revision.py`,
+  `test_eko401_adr0003_c42_visit_is_an_owned_table.py`, and the `visit.owner_subject` case of
+  `backend/tests/runtime/eko308/test_eko308_k05_display_name_retention.py` (ADR-0005-C21); frontend
+  `frontend/tests/time/warsaw.test.ts`, `warsaw-qa-zone-at-import.test.ts`,
+  `frontend/tests/api/visits.test.ts` and `frontend/tests/features/visits/` (`MyDay`, `VisitSchedule`,
+  `PlanVisit`, `k07-spa-requests`, `qa-guards-and-markup`; K-06 and the K-07 SPA line), 73 tests under
+  `TZ=America/New_York`; the six visit pairs in `backend/tests/support/frontend_contract.py`. Gate 1
+  (2026-11-26): every recommendation accepted (G-1..G-4, G-6..G-8 and G-10 A, the G-5 foundation risk
+  accepted, G-9 needing no decision; A-1..A-7 A); the Definition of done identifier line corrected
+  under A-1 A (UUIDv4 from the application, no sequence); the addendum draft accepted (A-5 A) and
+  appended to ADR-0003 (new control ADR-0003-C42) and ADR-0005 with this entry. Gate 2 (2026-11-28):
+  all 20 developer assumptions (backend A-01..A-10, frontend A-01..A-10) accepted and written into the
+  criteria of #268 as amendment lines (scope re-locked, fingerprint `24e16633`); the edits to existing
+  tests the developers stopped on (the planted `/api/visits` path renamed in the eko110 and eko115
+  tests, `visit` added to the eko306 `TRUNCATE`, the six visit pairs added to the eko135 pin) judged
+  one by one by the Guardian. QA ran 50 mutations (EKO-4-01/M-01..M-23b, M-F01..M-F15; base
+  `ab2146f`), all killed by the final suite; 8 survived the developers' suites (M-02, M-04r, M-05,
+  M-22b, M-F02b, M-F05, M-F06, M-F13) and are killed by QA's four test files; M-04 was a run that did
+  not happen, redone as M-04r. Verdicts: QA PROOF HOLDS (at `ab2146f`), Invariant Guardian PASS (at
+  `736ca6e`, and at `8adda5b` on the merge of main), Reviewer PASS (2 Low), Security Auditor PASS
+  (risk classes auth, personal-data, pipeline, schema). CI: green on every job at `16aca82`, the
+  branch before the merge of main, the composition runtime job after one re-run of an environmental
+  failure; at the merged head `0a1ff1f` every job green, the two runtime jobs
+  completing after the merge (2026-11-28). Recorded exceptions: none. Findings carried on: Reviewer R-01 (My day keeps an ended
+  visit as the next visit while the screen stays open) and R-02 (a `rep`+`manager` caller is offered
+  other reps' customers when planning). Follow-ups: #275 (R-01), #276 (R-02).
