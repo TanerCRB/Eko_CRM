@@ -1654,3 +1654,29 @@ Issue #258 before gate 2; [PR #260](https://github.com/TanerCRB/Eko_CRM/pull/260
 |---|---|
 | ADR-0005-C22 | Against a target whose declaration variable is absent, empty, whitespace only or any value other than the accepted one, the operator seed exits non-zero, names the missing declaration, and leaves every application table byte-equal; the same target with only the accepted value set loads the dataset; no file under `backend/app/` other than `backend/app/core/settings.py` reads the variable. |
 | ADR-0005-C23 | Two seed runs into two fresh databases, at different clock instants and under different process random and hash seeds, store identical customer and contact values (identifiers and owners aside), equal to the committed fingerprint; every stored NIP begins with `000`; every stored e-mail address is in a reserved domain; `backend/app/seed_dataset.py` imports no layer but `domain`; across a full load, a re-run, every refused-record case and a refused target, no customer field value of the dataset or of an injected record appears in the seed's output or in any in-process log line, and each refused record is named by its dataset key and rule only; `POST /api/customers` stores the dataset-key column as `NULL` and no OpenAPI response schema carries it. |
+
+### 2026-11-26 — The visit owner in the reference set; the visit's customer reference under *Erasure*
+
+**Status:** Accepted 2026-11-26 (gate 1 of EKO-4-01, Issue #268).
+
+**What it adds.** From this date:
+
+- The reference set of the addendum of 2026-11-22 is exactly `customer.owner_subject` and
+  `visit.owner_subject`. ADR-0005-C21 holds for each of them.
+- `visit.customer_id` is `NOT NULL`, with a foreign key to the customer and no cascading action.
+  A visit holds no copy of a customer value: its customer values are that reference and its own
+  address (PD-C2), which is nullable. *Erasure*'s strip of a visit is the removal of those two.
+  Whether a stripped visit row is kept stays the erasure feature's decision; if it keeps one, it
+  carries the expand step that lets the reference be empty.
+- Visit identifiers are UUIDv4 values the application issues, with no sequence, identity or
+  database default (ADR-0006 *Visit identifiers are never reused*); the request-line rule of the
+  addendum of 2026-11-02 holds unchanged.
+
+Every rule and control of this decision is unchanged; no category is added.
+
+**Why.** The addendum of 2026-11-22 has the task that adds a `_subject` column name it at its
+gate 1; recording the set keeps its "at this date" sentence from going stale. A visit that copied
+the customer's address would hold a second customer value for *Erasure* to find. This adds no
+rule beyond the two it applies, so it is not a deviation. Approved by the human at gate 1 of
+EKO-4-01 on 2026-11-26 (Issue #268); the text is that of
+[`EKO-4-01-visit-ownership-adr0003-adr0005-addendum-draft-2026-11-26.md`](EKO-4-01-visit-ownership-adr0003-adr0005-addendum-draft-2026-11-26.md).
