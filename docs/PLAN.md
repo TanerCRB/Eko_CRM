@@ -1092,7 +1092,7 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   (`architecture/exception-register.md`). Follow-ups: #265 (R-01), #266 (the tests owed for frontend
   A-07 and A-10).
 
-- [ ] **EKO-3-10** — Stop telling a user with only archived customers that they have no customers (#265).
+- [x] **EKO-3-10** — Stop telling a user with only archived customers that they have no customers (#265).
   *Done when:* a test proves that a user whose customers are all archived, opening the default
   (active) Customers list, is not shown the first-customer text and is pointed at the Archiwum /
   Wszyscy state filter; a contrast test proves that a user with no customers at all still gets the
@@ -1100,6 +1100,63 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   **Out of scope (explicit):** archive/restore/filter semantics (EKO-3-05, no defect there); duplicate
   prevention and NIP handling (EKO-3-03, EKO-3-09); redesign of the Customers screen or other empty
   states. After EKO-3-05.
+  **Done 2026-11-27:** merged in [PR #269](https://github.com/TanerCRB/Eko_CRM/pull/269) as `7d36253` on 2026-11-27 by the human, from the
+  operator's account (TanerCRB; the repository has one account); code verified at `1c2091d` (QA PROOF
+  HOLDS, and Invariant Guardian, Reviewer and Security Auditor PASS there, QA adding no file); the PR head
+  `51e2a3d` adds cost-register rows and the merge of `main` after #267 (a `docs/PLAN.md` conflict only).
+  Mechanism: when the default list (no term, no owner, Aktywni) answers empty,
+  `frontend/src/features/customers/CustomerList.tsx` sends one `listCustomers({ state: "archived" })`
+  through the existing typed client and keeps only whether it holds an item; if it does, the screen says
+  "Brak aktywnych klientów" and points at Archiwum / Wszyscy (`customer.noActiveTitle`,
+  `customer.noActiveExplanation` in `frontend/src/i18n/pl.ts`); no backend production code, no API
+  contract change, capabilities row 61 unchanged. Gate 1 (2026-11-26): G-1 B (a second scoped request),
+  G-2 A (the wording), G-3 A (a failed check shows the list-failed alert with retry). Gate 2: the
+  gate-2 message was not posted before the merge; on 2026-11-27, after it, the human accepted backend
+  A-01, A-02 and frontend A-03, A-04, recorded as amendment lines under K-03 and K-05 of #265 (scope
+  re-locked, fingerprint `28fdfe2f`); A-03 (a 422 to the check shows the list-failed alert) has no test,
+  the contract cannot produce that answer. QA ran 13 mutations (EKO-3-10/M-01..M-13, base `1c2091d`),
+  all killed. Tests: frontend 357 → 387, runtime 1519 → 1525, default backend suite unchanged at 3291.
+  CI: all nine checks green at `2021832`; all nine green again at `51e2a3d` (the two runtime jobs completed after the merge, which the human made while they were still running).
+  Findings carried on: none. Observation (QA, not a finding): jsdom tests can exceed their `findBy` or
+  test timeouts under machine load, also in files this task did not touch; no Issue opened.
+
+- [x] **EKO-3-11** — Add the tests owed for EKO-3-05 frontend assumptions A-07 and A-10 (#266).
+  *Done when:* a frontend test fails when the customer detail screen treats any 200 answer to an
+  archive or restore as success (an opposite-state answer is shown as a failure, the stated state
+  unchanged; a matching answer still succeeds), and a frontend test fails when the early return in
+  `chooseState` is removed (clicking the already pressed state-filter value sends no request; a
+  different value sends one); QA records a mutation killed by each; tests are added first and, only if
+  one shows the code does not behave as accepted, a minimal fix in `frontend/src/` limited to the
+  mechanism the failing test names is made (test seen failing before the fix); otherwise no file under
+  `frontend/src/` changes; no file under `backend/` changes and no existing test changes.
+  **Out of scope (explicit):** any production change other than that minimal fix; any backend change;
+  changing the accepted A-07 / A-10 behaviour; other EKO-3-05 assumptions; EKO-3-10 A-03; the jsdom
+  load-timeout observation. After EKO-3-05.
+  **Done 2026-11-27:** merged in [PR #272](https://github.com/TanerCRB/Eko_CRM/pull/272) as `5a4ae72` on 2026-11-27 by the human, from the operator's
+  account (TanerCRB; the repository has one account); verified at `f9aea95`, the QA checkpoint of fix
+  round 1 (the developer checkpoint `9d00ea9` unchanged); the PR head `5f4cce5` adds cost-register rows
+  only. No defect was found: every new test passed against the unchanged production code, so no file
+  under `frontend/src/` or `backend/` changed and the PR carries no red-run record. Tests:
+  `frontend/tests/features/customers/eko311-k01-k02-archive-restore-opposite-answer.test.tsx` (K-01,
+  K-02; A-07, with the answer's name differing, G-4 A) and
+  `eko311-k03-k04-pressed-state-sends-nothing.test.tsx` (K-03, K-04; A-10);
+  `tests/doc-checks/EKO-3-11.sh` carries K-05 (G-3 A); frontend suite 387 → 398. Gate 1 (2026-11-27):
+  fast lane, the Architect skipped (G-1 A); a minimal production fix allowed if a new test showed a
+  defect (G-2 B, chosen against the recommendation, so the Product Owner and the Analyst rewrote the
+  scope, re-locked as `aef2e176`); the doc-check for K-05 (G-3 A); a distinct name in the A-07 answers
+  (G-4 A). Gate 2 (2026-11-27): developer A-01..A-04 and QA A-05..A-09 accepted and recorded as
+  amendment lines under K-03, K-04 and K-05 of #266 (scope re-locked, fingerprint `012bd1e2`); A-09 (the
+  doc-check's `--base` path trusts the local origin/main ref) has no test, a trust boundary stated in
+  the script header. QA ran 9 mutations (EKO-3-11/M-01..M-09, base `9d00ea9`), all killed, the
+  one-sided and narrower variants separating K-01 from K-02 and K-03 from K-04; the doc-check's
+  self-test holds 36 planted cases. Fix round 1 (the human's choice, no STOP): the Reviewer's three Low
+  findings in the doc-check (R-01 the red-run test-name match, R-02 a vacuous mechanism check under
+  user git config, R-03 a false red after a merge from main) fixed by QA; the Guardian and the Reviewer
+  PASS on the fix diff. Verdicts: QA PROOF HOLDS (twice), Invariant Guardian PASS (twice), Reviewer
+  PASS (3 Low, then none); Security Auditor not run (no risk class). CI: green at `5f4cce5` (frontend,
+  backend, layer check, process-ci; the image and runtime jobs skipped by the change filter). Findings
+  carried on: none. Follow-up: #273 (three doc-check guards no self-test case turns red, Reviewer round 2).
+
 ## EKO-4 — Visits, notes and actions
 
 - [ ] **EKO-4-01** — Let a rep plan visits and see their agenda (#268).
