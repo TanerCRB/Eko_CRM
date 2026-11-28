@@ -410,7 +410,9 @@ def test_eko110_k06_real_document_against_itself_and_a_removal() -> None:
     real = api.real_app().openapi()
     assert oc.breaking_changes(copy.deepcopy(real), real) == []
     previous = copy.deepcopy(real)
-    previous["paths"]["/api/visits"] = {"get": {"responses": {"200": {"description": "ok"}}}}
+    previous["paths"]["/api/eko110-planted-removal"] = {
+        "get": {"responses": {"200": {"description": "ok"}}}
+    }
     assert oc.breaking_changes(previous, real) != []
     widened = copy.deepcopy(real)
     status = widened["components"]["schemas"]["HealthStatus"]["properties"]["status"]
@@ -483,10 +485,14 @@ def test_eko110_k06_supplied_previous_release_reports_a_comparison(tmp_path: Pat
     assert code == 0 and COMPARED.search(output) and "compared nothing" not in output, output
 
     extra = copy.deepcopy(real)
-    extra["paths"]["/api/visits"] = {"get": {"responses": {"200": {"description": "ok"}}}}
+    extra["paths"]["/api/eko110-planted-removal"] = {
+        "get": {"responses": {"200": {"description": "ok"}}}
+    }
     previous.write_text(json.dumps(extra), encoding="utf-8")
     code, output = run_main("--previous", str(previous))
-    assert code == 1 and COMPARED.search(output) and "GET /api/visits" in output, output
+    assert code == 1 and COMPARED.search(output) and "GET /api/eko110-planted-removal" in output, (
+        output
+    )
 
 
 @pytest.mark.parametrize(

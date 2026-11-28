@@ -61,6 +61,23 @@ def reference_scope(caller: Caller) -> AllRecords | None:
     return None
 
 
+def visit_creation_scope(caller: Caller) -> OwnedBy:
+    """Planning a visit needs `rep`, and the visit's owner is the caller (ADR-0003-C42). The
+    customer the create names is looked up under this same scope, the caller's own records, for
+    every caller, `manager` included: the visibility scope never decides which customer a visit
+    may be planned for (ACC-5, ACC-7)."""
+    return creation_scope(caller)
+
+
+def not_permitted_scope(caller: Caller) -> AllRecords | None:
+    """For a caller whose visibility scope is all records, the scope a visit create refused for a
+    customer outside its own records looks that customer up under, so a customer it can read is
+    answered 403 `not permitted`, not the missing customer's 404 (gate 1 A-2 A). Nothing for any
+    other caller, which is never told whether such a customer exists."""
+    scope = visibility_scope(caller)
+    return scope if isinstance(scope, AllRecords) else None
+
+
 def owner_filter(raw: str) -> str | None:
     """A request's owner filter: a subject as sent, never trimmed, folded or normalised, so it is
     compared byte-wise; `""` is no filter (G-5 A). It is judged on its form alone, never on

@@ -12,7 +12,8 @@ from app.data.staff import REFERENCE_SET
 from tests.support import retention_checks as rc
 
 # Adding a column is the release that adds it, named at its gate 1 (ADR-0005 addendum of EKO-3-08).
-HELD = frozenset({"customer.owner_subject"})
+# EKO-4-01 adds `visit.owner_subject` (gate 1 A-5 A, the accepted ADR-0005 addendum, section 5).
+HELD = frozenset({"customer.owner_subject", "visit.owner_subject"})
 
 
 def test_c20_the_code_reference_set_is_the_set_held_here() -> None:

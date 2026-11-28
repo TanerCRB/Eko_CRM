@@ -15,8 +15,9 @@ import ast
 import re
 from collections.abc import Mapping
 
-OWNED_MODELS = frozenset({"CustomerRow", "CustomerContactRow"})
-OWNED_TABLES = frozenset({"customer", "customer_contact"})
+# EKO-4-01 (ADR-0003-C42): the visit table is an owned table, its owner its own `owner_subject`.
+OWNED_MODELS = frozenset({"CustomerRow", "CustomerContactRow", "VisitRow"})
+OWNED_TABLES = frozenset({"customer", "customer_contact", "visit"})
 SCOPE_TYPES = frozenset({"VisibilityScope", "OwnedBy", "AllRecords"})
 SCOPE_PARAMETER = "scope"
 # ADR-0003 addendum of EKO-3-08 (Q-2 A): the closed system-read list, `path:function`. Adding an

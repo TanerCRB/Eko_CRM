@@ -5,6 +5,7 @@ is 180 x 24 h after the last login between UTC instants, inclusive). The worker'
 referenced one is kept, and a deactivated account changes neither its copy nor its customers.
 """
 
+import uuid
 from collections.abc import Callable
 from datetime import timedelta
 
@@ -39,9 +40,31 @@ def own_a_customer(staff: Staff, subject: str) -> None:
     created_id(staff.login(subject, ["rep"], "Olga Testowa"), {"name": "Ferma K05"})
 
 
+def own_a_visit(staff: Staff, subject: str) -> None:
+    """A visit `subject` owns, on a customer a subject with no copy owns: only the visit refers to
+    `subject` (EKO-4-01, ADR-0005-C21 for `visit.owner_subject`). Planted through SQL, since no
+    operation plans a visit on another owner's customer."""
+    staff.login(subject, ["rep"], "Olga Testowa")
+    customer_id, visit_id = str(uuid.uuid4()), str(uuid.uuid4())
+    staff.pg.rows(
+        "INSERT INTO customer (id, name, country, owner_subject) "
+        "VALUES (%s, 'Ferma K05 wizyta', 'PL', %s) RETURNING id",
+        (customer_id, NO_COPY),
+    )
+    staff.pg.rows(
+        "INSERT INTO visit (id, customer_id, owner_subject, starts_at, ends_at) "
+        "VALUES (%s, %s, %s, '2026-11-30T09:00:00Z', '2026-11-30T10:00:00Z') RETURNING id",
+        (visit_id, customer_id, subject),
+    )
+
+
+# A subject that never logs in, so it holds no copy.
+NO_COPY = "5a1e0308-0000-4000-8000-0000000000e1"
+
 # Each column of the reference set and how a test makes a record that refers to a subject there.
 REFERRING: dict[str, Callable[[Staff, str], None]] = {
     "customer.owner_subject": own_a_customer,
+    "visit.owner_subject": own_a_visit,
 }
 
 

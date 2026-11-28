@@ -97,9 +97,11 @@ def test_eko115_k06_2_one_release_reports_a_comparison() -> None:
 
 def test_eko115_k06_2_a_removed_operation_fails_against_the_release() -> None:
     previous = api.real_app().openapi()
-    previous["paths"]["/api/visits"] = {"get": {"responses": {"200": {"description": "ok"}}}}
+    previous["paths"]["/api/eko110-planted-removal"] = {
+        "get": {"responses": {"200": {"description": "ok"}}}
+    }
     code, output = run(record("v1.2.0"), None, previous)
-    assert code == 1 and "GET /api/visits: operation removed" in output, output
+    assert code == 1 and "GET /api/eko110-planted-removal: operation removed" in output, output
 
 
 def test_eko115_k06_2_the_release_being_built_is_excluded() -> None:

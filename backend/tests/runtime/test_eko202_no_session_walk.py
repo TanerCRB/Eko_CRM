@@ -35,7 +35,7 @@ EXEMPT = frozenset({"/api/auth/login", "/api/auth/callback", "/api/health"})
 # The product's operations: EKO-2-02 added none; EKO-3-01 adds the three customer operations
 # (decision H6-B A on Issue #195); EKO-3-02 the voivodeship reference (Q-3 A on Issue #208);
 # EKO-3-08 the manager's list of reps (G-4 A on Issue #216); EKO-3-05 customer edit, archive and
-# restore (Q-5 on Issue #253).
+# restore (Q-5 on Issue #253); EKO-4-01 visit create, read, list and period list (Issue #268).
 PRODUCT = frozenset(
     {
         ("GET", "/api/health"),
@@ -52,6 +52,10 @@ PRODUCT = frozenset(
         ("POST", "/api/customers/{customer_id}/restore"),
         ("GET", "/api/reference/voivodeships"),
         ("GET", "/api/reps"),
+        ("POST", "/api/visits"),
+        ("GET", "/api/visits"),
+        ("GET", "/api/visits/period"),
+        ("GET", "/api/visits/{visit_id}"),
     }
 )
 HIDDEN = "/api/eko202-hidden"

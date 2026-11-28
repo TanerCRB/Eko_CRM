@@ -36,6 +36,12 @@ VALID_BODIES: dict[tuple[str, str], dict[str, Any]] = {
         "contacts": [{"kind": "phone", "value": "+48601000601", "primary": True}],
     },
     ("PUT", f"{CUSTOMERS}/{{customer_id}}"): {"name": "Gospodarstwo Odmowa Edycji"},
+    # EKO-4-01: a valid visit body; its customer exists nowhere, which no refused caller reaches.
+    ("POST", "/api/visits"): {
+        "customer_id": "5a1e0401-0000-4000-8000-00000000c034",
+        "start": {"date": "2026-11-30", "time": "10:00"},
+        "end": {"date": "2026-11-30", "time": "11:00"},
+    },
 }
 BODIES: dict[str, dict[str, Any]] = {
     "not-json": {

@@ -31,6 +31,8 @@ from app.api.customers import router as customers_router
 from app.api.health import router as health_router
 from app.api.reference import router as reference_router
 from app.api.reps import router as reps_router
+from app.api.visits import LARGEST_VISIT_BODY
+from app.api.visits import router as visits_router
 from app.auth.crypto import Sealer
 from app.auth.gate import (
     AccessFirstRoute,
@@ -48,6 +50,7 @@ from app.data.database import Database
 from app.data.sessions import SessionStore, StorageUnavailable
 from app.domain.customers import CustomerArchived, CustomerNotFound, NipTaken
 from app.domain.ownership import NotPermitted
+from app.domain.visits import VisitNotFound
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +71,8 @@ ROUTE_LIMIT = 256
 CORRELATION_HEADER = b"eko-correlation-id"
 # The most bytes an `/api/` request body may carry (fix round 1, R-01 A): the largest create body
 # whose fields pass their raw caps is `LARGEST_CREATE_BODY` (1 842 656 bytes), rounded up to
-# 2 MiB; `create_app()` refuses to build if a body route ever needs more.
+# 2 MiB; `create_app()` refuses to build if a body route ever needs more (the visit create
+# since EKO-4-01, `LARGEST_VISIT_BODY`).
 REQUEST_BODY_LIMIT = 2 * 1024 * 1024
 BODY_TOO_LARGE = "request body too large"
 # A 422 names at most this many errors, each string in it at most this long: one per unknown key
@@ -285,7 +289,8 @@ async def _not_found(request: Request, exc: Exception) -> Response:
 
 
 async def _restore_first(request: Request, exc: Exception) -> Response:
-    # Only a customer inside the caller's scope reaches this (EKO-3-05 G-4 A, D-2 S-2 A).
+    # Only a customer inside the caller's scope reaches this (EKO-3-05 G-4 A, D-2 S-2 A), its own
+    # records' for a visit create (EKO-4-01 G-1 A, ADR-0003-C42).
     return _problem(409, "restore it first")
 
 
@@ -393,9 +398,12 @@ def create_app() -> FastAPI:
         app.include_router(customers_router, prefix="/api")
         app.include_router(reference_router, prefix="/api")
         app.include_router(reps_router, prefix="/api")
+        app.include_router(visits_router, prefix="/api")
         _check_access_first(app)
         if LARGEST_CREATE_BODY > REQUEST_BODY_LIMIT:
             raise RuntimeError("the request body limit refuses a valid customer")
+        if LARGEST_VISIT_BODY > REQUEST_BODY_LIMIT:
+            raise RuntimeError("the request body limit refuses a valid visit")
         auth.public_routes = _public_routes(app)
         _check_lists()
         app.state.role_free_routes = _listed_routes(app, ROLE_FREE_OPERATIONS)
@@ -407,6 +415,7 @@ def create_app() -> FastAPI:
         app.add_exception_handler(StorageUnavailable, _unavailable)
         app.add_exception_handler(NotPermitted, _role_refused)
         app.add_exception_handler(CustomerNotFound, _not_found)
+        app.add_exception_handler(VisitNotFound, _not_found)
         app.add_exception_handler(CustomerArchived, _restore_first)
         app.add_exception_handler(NipTaken, _nip_taken)
         install_request_handling(app)

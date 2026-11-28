@@ -1156,3 +1156,19 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   PASS (3 Low, then none); Security Auditor not run (no risk class). CI: green at `5f4cce5` (frontend,
   backend, layer check, process-ci; the image and runtime jobs skipped by the change filter). Findings
   carried on: none. Follow-up: #273 (three doc-check guards no self-test case turns red, Reviewer round 2).
+
+## EKO-4 — Visits, notes and actions
+
+- [ ] **EKO-4-01** — Let a rep plan visits and see their agenda (#268).
+  *Done when:* server and frontend tests prove: a visit belongs to one customer and one owner (the
+  planning rep); a rep can plan only for own customers (contrast: another rep customer answers as
+  non-existent, the manager is denied); a visit is Planned until its end instant and Held afterwards,
+  derived and never stored; times are stored as instants and selected by Europe/Warsaw day ranges,
+  including the 23-hour and 25-hour days; nonexistent and ambiguous DST local times are rejected with
+  their reason; a per-visit address overrides the customer address without changing it; a rep reads
+  only own visits and the manager reads all; the My day screen shows the next visit, the agenda of the
+  day and a five-day strip from `warsaw.ts`; no Google call is made and the customer record is unchanged.
+  **Out of scope (explicit):** Google sync (EKO-5); move, cancel, Moved (EKO-4-02); notes and actions
+  (EKO-4-03, EKO-4-04); archive and reassignment effects on visits (EKO-4-06, EKO-3-07); manager
+  planning; recurring visits (later); dashboard.
+  After EKO-3-01.

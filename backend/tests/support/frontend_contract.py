@@ -34,6 +34,7 @@ CLIENT = "frontend/src/api/client.ts"
 COUNTRY_FILE = "frontend/src/api/countries.ts"
 REFERENCE = "frontend/src/api/reference.ts"
 REPS = "frontend/src/api/reps.ts"
+VISITS = "frontend/src/api/visits.ts"
 REQUEST, RESPONSE = "request", "response"
 # EKO-3-04 (Q-6 A): the query parameters a frontend type says it sends. Judged as a request, except
 # that an optional parameter it does not send passes: a query parameter left out is just absent.
@@ -77,6 +78,14 @@ CHECKED: tuple[Pair, ...] = (
     # EKO-3-08 (Issue #216, G-4 A): the manager's list of reps.
     Pair(REPS, "RepList", "RepList", RESPONSE),
     Pair(REPS, "RepEntry", "RepEntry", RESPONSE),
+    # EKO-4-01 (Issue #268, K-06): the visits client. Its result unions are not exported, and its
+    # 422 is the shared HTTPValidationError, already checked as `ValidationProblem`.
+    Pair(VISITS, "WallTimeInput", "WallTimeIn", REQUEST),
+    Pair(VISITS, "VisitInput", "VisitCreate", REQUEST),
+    Pair(VISITS, "VisitCustomer", "VisitCustomerOut", RESPONSE),
+    Pair(VISITS, "Visit", "VisitOut", RESPONSE),
+    Pair(VISITS, "VisitList", "VisitList", RESPONSE),
+    Pair(VISITS, "VisitPeriodQuery", "GET /api/visits/period query", QUERY),
 )
 
 # K-03: exported types with no schema behind them, keyed by file and name. Adding one is an edit

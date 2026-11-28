@@ -45,6 +45,7 @@ def test_adr0004_c13_migrate_revision_check_b_previous_release_on_a_descendant(l
         "0007",
         "0008",
         "0009",
+        "0010",
         "t_next",
     }
     before = lab.comparison_dump()
@@ -61,6 +62,7 @@ def test_adr0004_c13_migrate_revision_check_b_previous_release_on_a_descendant(l
         "0007",
         "0008",
         "0009",
+        "0010",
         "t_next",
     }
     lab.composition.compose("up", "-d", "--no-deps", "--force-recreate", "backend")
@@ -131,7 +133,18 @@ def test_adr0004_c13_migrate_revision_check_ancestor_is_upgraded_with_its_lineag
     code, logs = lab.run_migrate()
     assert code == 0, logs
     assert lab.versions() == [SHIPPED_HEAD]
-    assert lab.lineage() == {"0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009"}
+    assert lab.lineage() == {
+        "0001",
+        "0002",
+        "0003",
+        "0004",
+        "0005",
+        "0006",
+        "0007",
+        "0008",
+        "0009",
+        "0010",
+    }
     # The contrast of (d): the comparison sees a change when there is one.
     assert lab.comparison_dump() != before
 

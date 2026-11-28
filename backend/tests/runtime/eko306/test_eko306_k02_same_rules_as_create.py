@@ -51,7 +51,7 @@ def side_database(pg: Postgres) -> str:
 @pytest.fixture
 def side(pg: Postgres, side_database: str) -> Iterator[str]:
     with connect_to(pg, side_database) as connection:
-        connection.execute("TRUNCATE customer_contact, customer")
+        connection.execute("TRUNCATE visit, customer_contact, customer")
     yield side_database
 
 
