@@ -1210,3 +1210,17 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   completing after the merge (2026-11-28). Recorded exceptions: none. Findings carried on: Reviewer R-01 (My day keeps an ended
   visit as the next visit while the screen stays open) and R-02 (a `rep`+`manager` caller is offered
   other reps' customers when planning). Follow-ups: #275 (R-01), #276 (R-02).
+
+- [ ] **EKO-4-02** — Let the owner move and cancel visits (#279).
+  *Done when:* server and frontend tests prove: changing the start of a Planned visit sets Moved at
+  most once, and changing place or duration, or naming the same start, does not; deleting asks
+  reschedule (Moved) or cancel (Cancelled) and removes no row; a Held visit can be marked "did not
+  happen" and becomes Cancelled; a Cancelled visit cannot be moved or cancelled again; only the
+  owner of the visit can move or cancel (contrast: the manager is denied, another rep visit answers
+  as non-existent); Planned and Held stay derived; visits stored by EKO-4-01 read as before; no
+  Google call is made and the customer record is unchanged.
+  **Out of scope (explicit):** changes from Google and Awaiting decision (EKO-5-03, EKO-5-04);
+  mirroring to Google and Unsynchronised (EKO-5-02); notes (EKO-4-03); archive and reassignment
+  effects on visits (EKO-4-06, EKO-3-07); restoring a Cancelled visit; a visit description field;
+  recurring visits (later); dashboard; follow-ups #275 and #276 (not absorbed).
+  After EKO-4-01.
