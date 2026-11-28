@@ -1157,6 +1157,18 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   backend, layer check, process-ci; the image and runtime jobs skipped by the change filter). Findings
   carried on: none. Follow-up: #273 (three doc-check guards no self-test case turns red, Reviewer round 2).
 
+- [ ] **EKO-3-09** — Warn about likely duplicate customers without leaking data (#254).
+  *Done when:* server tests prove: a create or an edit that matches another customer in the caller's scope on
+  phone, e-mail, or name in the same town (ignoring case and edge spaces) is saved unchanged and carries a
+  warning (CUS-7); a rep is warned only about their own customers and a rep's save matching only another rep's
+  customer is byte-equal to a save with no match (PRH-4, ACC-8); the manager is warned company-wide with a
+  reference that opens the matched customer; a customer never matches itself; a refused save carries no
+  warning; no value of either customer reaches a log; a save with no match behaves as before; the SPA create
+  and edit forms show the warning without blocking.
+  **Out of scope (explicit):** duplicate NIP (EKO-3-03); merging, reassignment; a pre-save lookup endpoint;
+  fuzzy matching; matching on other fields; sweeps, seed and import warnings; real data.
+  After EKO-3-03 and EKO-3-05.
+
 ## EKO-4 — Visits, notes and actions
 
 - [ ] **EKO-4-01** — Let a rep plan visits and see their agenda (#268).
