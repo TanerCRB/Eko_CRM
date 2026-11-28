@@ -1120,13 +1120,39 @@ Identifiers: `EKO-<block>-<nn>`, e.g. `EKO-1-01`.
   Findings carried on: none. Observation (QA, not a finding): jsdom tests can exceed their `findBy` or
   test timeouts under machine load, also in files this task did not touch; no Issue opened.
 
-- [ ] **EKO-3-11** — Add the tests owed for EKO-3-05 frontend assumptions A-07 and A-10 (#266).
+- [x] **EKO-3-11** — Add the tests owed for EKO-3-05 frontend assumptions A-07 and A-10 (#266).
   *Done when:* a frontend test fails when the customer detail screen treats any 200 answer to an
   archive or restore as success (an opposite-state answer is shown as a failure, the stated state
   unchanged; a matching answer still succeeds), and a frontend test fails when the early return in
   `chooseState` is removed (clicking the already pressed state-filter value sends no request; a
-  different value sends one); QA records a mutation killed by each; no file under `backend/` or
-  `frontend/src/` changes and no existing test changes.
-  **Out of scope (explicit):** any production change (a defect found becomes its own Issue); changing
-  the accepted A-07 / A-10 behaviour; other EKO-3-05 assumptions; EKO-3-10 A-03; the jsdom load-timeout
-  observation. After EKO-3-05.
+  different value sends one); QA records a mutation killed by each; tests are added first and, only if
+  one shows the code does not behave as accepted, a minimal fix in `frontend/src/` limited to the
+  mechanism the failing test names is made (test seen failing before the fix); otherwise no file under
+  `frontend/src/` changes; no file under `backend/` changes and no existing test changes.
+  **Out of scope (explicit):** any production change other than that minimal fix; any backend change;
+  changing the accepted A-07 / A-10 behaviour; other EKO-3-05 assumptions; EKO-3-10 A-03; the jsdom
+  load-timeout observation. After EKO-3-05.
+  **Done 2026-11-27:** merged in [PR #272](https://github.com/TanerCRB/Eko_CRM/pull/272) as `5a4ae72` on 2026-11-27 by the human, from the operator's
+  account (TanerCRB; the repository has one account); verified at `f9aea95`, the QA checkpoint of fix
+  round 1 (the developer checkpoint `9d00ea9` unchanged); the PR head `5f4cce5` adds cost-register rows
+  only. No defect was found: every new test passed against the unchanged production code, so no file
+  under `frontend/src/` or `backend/` changed and the PR carries no red-run record. Tests:
+  `frontend/tests/features/customers/eko311-k01-k02-archive-restore-opposite-answer.test.tsx` (K-01,
+  K-02; A-07, with the answer's name differing, G-4 A) and
+  `eko311-k03-k04-pressed-state-sends-nothing.test.tsx` (K-03, K-04; A-10);
+  `tests/doc-checks/EKO-3-11.sh` carries K-05 (G-3 A); frontend suite 387 → 398. Gate 1 (2026-11-27):
+  fast lane, the Architect skipped (G-1 A); a minimal production fix allowed if a new test showed a
+  defect (G-2 B, chosen against the recommendation, so the Product Owner and the Analyst rewrote the
+  scope, re-locked as `aef2e176`); the doc-check for K-05 (G-3 A); a distinct name in the A-07 answers
+  (G-4 A). Gate 2 (2026-11-27): developer A-01..A-04 and QA A-05..A-09 accepted and recorded as
+  amendment lines under K-03, K-04 and K-05 of #266 (scope re-locked, fingerprint `012bd1e2`); A-09 (the
+  doc-check's `--base` path trusts the local origin/main ref) has no test, a trust boundary stated in
+  the script header. QA ran 9 mutations (EKO-3-11/M-01..M-09, base `9d00ea9`), all killed, the
+  one-sided and narrower variants separating K-01 from K-02 and K-03 from K-04; the doc-check's
+  self-test holds 36 planted cases. Fix round 1 (the human's choice, no STOP): the Reviewer's three Low
+  findings in the doc-check (R-01 the red-run test-name match, R-02 a vacuous mechanism check under
+  user git config, R-03 a false red after a merge from main) fixed by QA; the Guardian and the Reviewer
+  PASS on the fix diff. Verdicts: QA PROOF HOLDS (twice), Invariant Guardian PASS (twice), Reviewer
+  PASS (3 Low, then none); Security Auditor not run (no risk class). CI: green at `5f4cce5` (frontend,
+  backend, layer check, process-ci; the image and runtime jobs skipped by the change filter). Findings
+  carried on: none. Follow-up: #273 (three doc-check guards no self-test case turns red, Reviewer round 2).
